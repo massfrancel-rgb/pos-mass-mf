@@ -316,7 +316,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17f';
+const APP_VER = '2026-10-17g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1023,25 +1023,67 @@ function siguienteNumero(tp, pto){
   return pref + pad(max + 1, tp === 'F' ? 9 : 6);
 }
 
+/** Datos del cliente dentro de Cobrar: se escriben directo; la cédula/RUC busca al cliente si ya existe */
 function selectorCliente(cont, actual, onSel){
-  const pintar = (cli) => {
-    cont.innerHTML = '<div class="card" style="padding:10px 12px"><div class="row"><div class="grow"><div style="font-weight:700">' + h(cli ? cli.nombre : CONSUMIDOR.nombre) + '</div>' +
-      '<div class="small muted">' + h(cli ? [cli.ruc, cli.tel].filter(Boolean).join(' · ') : CONSUMIDOR.ruc) + '</div></div>' +
-      (cli ? '<button class="btn sm" data-c="cf">Consumidor final</button>' : '') + '<button class="btn sm" data-c="bus">' + ic('search') + 'Cliente</button></div>' +
-      '<div class="hide" data-box style="margin-top:10px"><div class="row"><input class="in grow" data-q placeholder="Nombre, cédula/RUC o teléfono"><button class="btn sm" data-c="nuevo">' + ic('plus') + 'Nuevo</button></div><div class="list" data-l></div></div></div>';
-    qs('[data-c="bus"]', cont).onclick = () => { qs('[data-box]', cont).classList.toggle('hide'); qs('[data-q]', cont).focus(); buscar(''); };
-    const cf = qs('[data-c="cf"]', cont); if (cf) cf.onclick = () => { onSel(null); pintar(null); };
-    qs('[data-c="nuevo"]', cont).onclick = () => editarCliente(null, (nc) => { onSel(nc); pintar(nc); }, qs('[data-q]', cont).value);
-    qs('[data-q]', cont).oninput = (e) => buscar(e.target.value);
+  const C0 = actual ? Object.assign({}, actual) : { id: '', ruc: '', nombre: '', tel: '', correo: '', dir: '' };
+  cont.innerHTML = '<div class="card" style="padding:12px"><div class="row" style="margin-bottom:8px"><b class="grow">Datos del cliente</b>' +
+    '<span class="badge" data-est></span><button class="btn sm" type="button" data-c="cf">Consumidor final</button><button class="btn sm" type="button" data-c="bus">' + ic('search') + 'Buscar</button></div>' +
+    '<div class="hide" data-box style="margin-bottom:10px"><input class="in" data-q placeholder="Buscar por nombre, cédula/RUC o teléfono"><div class="list" data-l style="max-height:220px;overflow:auto"></div></div>' +
+    '<div class="grid2"><label class="f">Cédula / RUC<input class="in" data-k="ruc" inputmode="numeric" maxlength="13" placeholder="9999999999999"></label>' +
+    '<label class="f">Nombre del cliente<input class="in" data-k="nombre" placeholder="CONSUMIDOR FINAL"></label>' +
+    '<label class="f">Teléfono / WhatsApp<input class="in" data-k="tel" inputmode="tel"></label>' +
+    '<label class="f">Correo<input class="in" data-k="correo" type="email" inputmode="email"></label></div>' +
+    '<label class="f" style="margin-top:10px">Dirección<input class="in" data-k="dir"></label></div>';
+  const campos = ['ruc', 'nombre', 'tel', 'correo', 'dir'];
+  let cur = C0;
+  const est = qs('[data-est]', cont);
+  const llenar = (c) => { cur = Object.assign({ id: '', ruc: '', nombre: '', tel: '', correo: '', dir: '' }, c || {}); campos.forEach((k) => { qs('[data-k="' + k + '"]', cont).value = cur[k] || ''; }); estado(); emitir(); };
+  const estado = () => {
+    const vacio = campos.every((k) => !String(cur[k] || '').trim());
+    est.className = 'badge ' + (vacio ? '' : cur.id ? 'ok' : 'gold');
+    est.textContent = vacio ? 'Consumidor final' : cur.id ? 'Cliente registrado' : 'Cliente nuevo';
   };
+  const emitir = () => { const vacio = campos.every((k) => !String(cur[k] || '').trim()); onSel(vacio ? null : Object.assign({}, cur)); };
+  qsa('[data-k]', cont).forEach((inp) => {
+    inp.addEventListener('input', () => {
+      const k = inp.dataset.k; cur[k] = k === 'nombre' ? inp.value.toUpperCase() : inp.value.trim();
+      if (k === 'nombre') { const p = inp.selectionStart; inp.value = cur.nombre; inp.setSelectionRange(p, p); }
+      if (k === 'ruc') {
+        const r = cur.ruc.replace(/\D/g, '');
+        const ex = (r.length === 10 || r.length === 13) && vivos('cli').find((c) => c.ruc === r);
+        if (ex) { llenar({ id: ex.id, ruc: ex.ruc, nombre: ex.nombre, tel: ex.tel, correo: ex.correo, dir: ex.dir }); toast('Cliente encontrado: ' + ex.nombre); return; }
+        if (cur.id) { const o = S.cli.get(cur.id); if (!o || o.ruc !== r) cur.id = ''; }
+      }
+      estado(); emitir();
+    });
+  });
+  qs('[data-c="cf"]', cont).onclick = () => llenar(null);
+  qs('[data-c="bus"]', cont).onclick = () => { qs('[data-box]', cont).classList.toggle('hide'); qs('[data-q]', cont).focus(); buscar(''); };
+  qs('[data-q]', cont).oninput = (e) => buscar(e.target.value);
   const buscar = (q) => {
     const w = norm(q).split(' ').filter(Boolean);
-    const l = vivos('cli').filter((c) => { const hay = norm([c.nombre, c.ruc, c.tel].join(' ')); return w.every((x) => hay.includes(x)); }).sort((a, b) => a.nombre.localeCompare(b.nombre)).slice(0, 25);
+    const l = vivos('cli').filter((c) => { const hay = norm([c.nombre, c.ruc, c.tel].join(' ')); return w.every((x) => hay.includes(x)); }).sort((a2, b2) => a2.nombre.localeCompare(b2.nombre)).slice(0, 25);
     const box = qs('[data-l]', cont);
-    box.innerHTML = l.length ? l.map((c) => '<div class="li" data-id="' + h(c.id) + '"><div class="grow"><div class="t">' + h(c.nombre) + '</div><div class="s">' + h([c.ruc, c.tel].filter(Boolean).join(' · ')) + '</div></div></div>').join('') : '<div class="empty small">Sin clientes. Usa “Nuevo”.</div>';
-    box.onclick = (e) => { const d = e.target.closest('[data-id]'); if (!d) return; const c = S.cli.get(d.dataset.id); const sel = { id: c.id, ruc: c.ruc, nombre: c.nombre, tel: c.tel, correo: c.correo, dir: c.dir }; onSel(sel); pintar(sel); };
+    box.innerHTML = l.length ? l.map((c) => '<div class="li" data-id="' + h(c.id) + '"><div class="grow"><div class="t">' + h(c.nombre) + '</div><div class="s">' + h([c.ruc, c.tel, c.correo].filter(Boolean).join(' · ')) + '</div></div></div>').join('') : '<div class="empty small">Sin coincidencias. Escribe los datos abajo y se guardará como cliente nuevo.</div>';
+    box.onclick = (e) => { const d = e.target.closest('[data-id]'); if (!d) return; const c = S.cli.get(d.dataset.id); qs('[data-box]', cont).classList.add('hide'); llenar({ id: c.id, ruc: c.ruc, nombre: c.nombre, tel: c.tel, correo: c.correo, dir: c.dir }); };
   };
-  pintar(actual);
+  llenar(C0);
+}
+/** Crea o actualiza el cliente escrito en Cobrar. Devuelve los datos para el documento. */
+async function guardarClienteVenta(c){
+  if (!c) return null;
+  const d = { ruc: String(c.ruc || '').replace(/\D/g, ''), nombre: String(c.nombre || '').trim().toUpperCase(), tel: String(c.tel || '').trim(), correo: String(c.correo || '').trim(), dir: String(c.dir || '').trim() };
+  if (d.ruc === CONSUMIDOR.ruc) return null;
+  if (d.ruc && !/^\d{10}(\d{3})?$/.test(d.ruc)) throw new Error('La cédula tiene 10 dígitos y el RUC 13.');
+  if (!d.nombre) throw new Error('Escribe el nombre del cliente.');
+  if (d.correo && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.correo)) throw new Error('El correo no es válido.');
+  let rec = (c.id && S.cli.get(c.id)) || (d.ruc && vivos('cli').find((x) => x.ruc === d.ruc)) || null;
+  if (rec) {
+    const cambia = ['ruc', 'nombre', 'tel', 'correo', 'dir'].some((k) => d[k] && d[k] !== (rec[k] || ''));
+    rec = Object.assign({}, rec, Object.fromEntries(Object.entries(d).filter(([, v]) => v)), { _d: 0 });
+    if (cambia) await put('cli', rec);
+  } else { rec = Object.assign({ id: uid('cl') }, d); await put('cli', rec); }
+  return { id: rec.id, ruc: rec.ruc, nombre: rec.nombre, tel: rec.tel, correo: rec.correo, dir: rec.dir };
 }
 
 function abrirCobro(){
@@ -1097,7 +1139,8 @@ function abrirCobro(){
   let cli = CART.cli;
   selectorCliente(m.q('#cCli'), cli, (c) => { cli = c; CART.cli = c; guardarCart(); });
   const guardar = async (imprimir) => {
-    if (fp === 'cr' && tp !== 'P' && !cli) return toast('Para vender a crédito elige o crea el cliente.', true);
+    if (fp === 'cr' && tp !== 'P' && !cli) return toast('Para vender a crédito escribe los datos del cliente.', true);
+    try { cli = await guardarClienteVenta(cli); } catch (e) { return toast(e.message, true); }
     if (tp !== 'P' && !cfg().sinStock) {
       const falta = CART.it.filter((x) => stockDe(x.p) < x.q);
       if (falta.length) return toast('Sin stock suficiente: ' + falta.map((x) => x.n).slice(0, 2).join(', '), true);
@@ -1227,7 +1270,7 @@ function verDocumento(v, recien){
   const m = modal({ title: DOC[v.tp] + ' ' + v.num, wide: true, body:
     (recien ? '<div class="note ok" style="margin-bottom:12px"><b>✓ ' + DOC[v.tp] + ' guardada.</b> ' + (v.fp === 'ef' && v.rec > v.tot ? 'Cambio: <b>' + money(v.rec - v.tot) + '</b>' : '') + '</div>' : '') +
     (v.an ? '<div class="note warn" style="margin-bottom:12px">Anulado el ' + fechaTxt(v.an.f) + ' por ' + h(nomVend(v.an.v)) + (v.an.m ? ': ' + h(v.an.m) : '') + '</div>' : '') +
-    '<div class="grid2" style="margin-bottom:12px"><div><div class="small muted">Cliente</div><b>' + h(nomCli(v)) + '</b><div class="small">' + h(v.cli ? [v.cli.ruc, v.cli.tel].filter(Boolean).join(' · ') : CONSUMIDOR.ruc) + '</div></div>' +
+    '<div class="grid2" style="margin-bottom:12px"><div><div class="small muted">Cliente</div><b>' + h(nomCli(v)) + '</b><div class="small">' + h(v.cli ? [v.cli.ruc, v.cli.tel, v.cli.correo].filter(Boolean).join(' · ') : CONSUMIDOR.ruc) + '</div>' + (v.cli && v.cli.dir ? '<div class="small muted">' + h(v.cli.dir) + '</div>' : '') + '</div>' +
     '<div><div class="small muted">Fecha · Vendedor</div><b>' + fechaTxt(v.f) + ' ' + horaTxt(v.ts) + '</b><div class="small">' + h(nomVend(v.v)) + ' · ' + h(FPAGO[v.fp] || '') + (v.ref ? ' · ' + h(v.ref) : '') + (v.venc ? ' · vence ' + fechaTxt(v.venc) : '') + '</div></div></div>' +
     (v.sri ? '<p class="small" style="margin:0 0 8px">Factura SRI: <b>' + h(v.sri) + '</b></p>' : '') +
     '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Descripción</th><th class="n">P. unit.</th><th class="n">Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
@@ -1297,7 +1340,7 @@ async function pdfA4(v){
   if (v.an) { doc.setTextColor(180, 40, 20); doc.setFont('helvetica', 'bold'); doc.text('ANULADO', W - Mg - 31, y + 24.5, { align: 'center' }); }
   y += 33;
   const cli = v.cli || CONSUMIDOR;
-  const filas = [['Cliente', cli.nombre], ['Cédula / RUC', cli.ruc], ['Teléfono', cli.tel], ['Dirección', cli.dir],
+  const filas = [['Cliente', cli.nombre], ['Cédula / RUC', cli.ruc], ['Teléfono', cli.tel], ['Correo', cli.correo], ['Dirección', cli.dir],
     ['Vendedor', nomVend(v.v)], ['Forma de pago', (FPAGO[v.fp] || '') + (v.fp === 'cr' ? ' · ' + v.pl + ' días, vence ' + fechaTxt(v.venc) : '') + (v.ref ? ' · ' + v.ref : '')],
     v.sri ? ['Factura SRI', v.sri] : null].filter((f) => f && f[1]);
   doc.setFillColor(243, 233, 207); const alto = 5 + Math.ceil(filas.length / 2) * 5.5;
