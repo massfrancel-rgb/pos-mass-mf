@@ -1,2 +1,2 @@
-# POS MASS MF
+# Punto de Venta MASS FERRETERÍA
 Punto de venta de MASS FERRETERÍA para vendedores (ventas, facturas, pedidos, compras, inventario con escáner, Excel y reportes).
