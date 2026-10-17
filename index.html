@@ -282,6 +282,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
 .th.big{width:100%;height:220px;border-radius:12px}
 .th.sm{width:38px;height:38px}
 .pcell{display:flex;gap:10px;align-items:center}
+.fotobox .th.big{max-width:320px;margin:0 auto}
 .stockchip{font-size:12.5px;font-weight:700;border-radius:7px;padding:1px 7px;background:var(--ok-bg);color:var(--ok-fg);white-space:nowrap}
 .stockchip.lo{background:var(--gold-soft);color:var(--gold-ink)}
 .stockchip.no{background:var(--warn-bg);color:var(--warn-fg)}
@@ -316,7 +317,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17h';
+const APP_VER = '2026-10-17i';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -447,14 +448,34 @@ async function cargarFotos(){
       if (f.length) { FOTOS = new Set(f.map(String)); ls.set('fotos', f); return; } } catch (e) {}
   }
 }
-const fotoUrl = (id) => (FOTOS.has(String(id)) ? FOTO_BASE + encodeURIComponent(id) + '.jpg' : null);
+const fotoPropia = (id) => { const f = S.foto && S.foto.get(String(id)); return f && !f._d && f.d ? f.d : null; };
+const fotoUrl = (id) => fotoPropia(id) || (FOTOS.has(String(id)) ? FOTO_BASE + encodeURIComponent(id) + '.jpg' : null);
+/** Reduce una imagen a JPEG liviano (máx. ~45 KB) para guardarla en la nube */
+function comprimirFoto(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      let lado = 520, q = 0.78, out = '';
+      for (let i = 0; i < 8; i++) {
+        const k = Math.min(1, lado / Math.max(img.width, img.height)); const c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', q); if (out.length <= 45000) break;
+        if (q > 0.5) q -= 0.1; else lado = Math.round(lado * 0.8);
+      }
+      URL.revokeObjectURL(url); res(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen.')); };
+    img.src = url;
+  });
+}
 function thumb(p, cls){
   const u = p && fotoUrl(p.id || p.p);
   return u ? '<img class="th ' + (cls || '') + '" src="' + u + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'th ph ' + (cls || '') + '\'}))">'
     : '<span class="th ph ' + (cls || '') + '"></span>';
 }
 
-const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg'];
+const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
@@ -588,7 +609,9 @@ async function sincronizar(manual){
     let vueltas = 0, more = true;
     while ((M.pend.size || more) && vueltas < 40) {
       vueltas++;
-      const claves = Array.from(M.pend).slice(0, 350);
+      // lotes de hasta 350 registros o ~1,5 MB (las fotos pesan más)
+      const claves = []; let peso = 0;
+      for (const k of M.pend) { if (claves.length >= 350 || peso > 1500000) break; claves.push(k); const i = k.indexOf('|'); const v = S[k.slice(0, i)] && S[k.slice(0, i)].get(k.slice(i + 1)); peso += v && v.d ? v.d.length : 300; }
       const push = claves.map((k) => {
         const i = k.indexOf('|'); const t = k.slice(0, i), id = k.slice(i + 1); const v = S[t] && S[t].get(id);
         return v ? { t, id, u: v._u || 0, d: v._d ? 1 : 0, j: JSON.stringify(v) } : null;
@@ -1564,7 +1587,10 @@ function editarProducto(p, pre, onDone){
   const s = nuevo ? 0 : stockDe(p.id);
   const ro = ed ? '' : ' disabled';
   const m = modal({ title: nuevo ? 'Nuevo producto' : p.n, wide: true, body:
-    (!nuevo && fotoUrl(p.id) ? '<div style="margin-bottom:12px">' + thumb(p, 'big') + '</div>' : '') +
+    (!nuevo ? '<div class="fotobox" style="margin-bottom:12px"><div id="epFoto">' + thumb(p, 'big') + '</div>' +
+      (ed || puede('inv') ? '<div class="row" style="margin-top:8px"><label class="btn sm pri">' + ic('cam') + 'Tomar o elegir foto<input type="file" id="epFile" accept="image/*" hidden></label>' +
+        (fotoPropia(p.id) ? '<button class="btn sm danger" id="epFotoX" type="button">' + ic('trash') + 'Quitar foto</button>' : '') +
+        '<span class="small muted">' + (fotoPropia(p.id) ? 'Foto subida en el POS' : (fotoUrl(p.id) ? 'Foto del Catálogo MASS' : 'Sin foto')) + '</span></div>' : '') + '</div>' : '') +
     (nuevo ? '' : '<div class="kpis" style="margin-bottom:14px"><div class="kpi gold"><span>Stock actual</span><b>' + numf(s) + '</b><small>' + h(p.un || 'UND') + '</small></div>' +
       '<div class="kpi"><span>Valor a costo</span><b>' + money(s * (Number(p.co) || 0)) + '</b></div><div class="kpi"><span>Margen</span><b id="epMg">—</b></div></div>') +
     '<datalist id="dlCat">' + categorias().map((c) => '<option value="' + h(c) + '">').join('') + '</datalist>' +
@@ -1589,6 +1615,12 @@ function editarProducto(p, pre, onDone){
     const base = iva ? pv / (1 + iva / 100) : pv; const e = m.q('#epMg'); if (e) e.textContent = co && base ? Math.round((base - co) / base * 100) + '%' : '—'; };
   ['#epCo', '#epPv', '#epIva'].forEach((s2) => m.q(s2).addEventListener('input', margen)); margen();
   if (m.q('#epScan')) m.q('#epScan').onclick = () => escanear((code) => { const otro = porCodigo(code); if (otro && otro.id !== p.id) return { ok: false, msg: 'Ese código ya es de: ' + otro.n }; m.q('#epB').value = code; return { msg: 'Código ' + code }; });
+  if (m.q('#epFile')) m.q('#epFile').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const d = await comprimirFoto(f); await put('foto', { id: p.id, d }); m.close(); if (RUTA === 'inv') render(); editarProducto(S.prod.get(p.id)); toast('Foto guardada. Se verá en todos los equipos.'); }
+    catch (err) { toast(err.message, true); }
+  };
+  if (m.q('#epFotoX')) m.q('#epFotoX').onclick = async () => { await put('foto', { id: p.id, d: '', _d: 1 }); m.close(); if (RUTA === 'inv') render(); editarProducto(S.prod.get(p.id)); toast('Foto quitada'); };
   if (m.q('#epKx')) m.q('#epKx').onclick = () => kardex(p);
   if (m.q('#epAj')) m.q('#epAj').onclick = () => { m.close(); ajustarStock(p); };
   if (m.q('#epVen')) m.q('#epVen').onclick = () => { m.close(); agregarAlCarrito(p); irA('vender'); toast('Agregado a la venta'); };
