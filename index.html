@@ -394,7 +394,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17m';
+const APP_VER = '2026-10-17n';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -519,14 +519,26 @@ const ic = (n, cls) => '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fil
 /* ---------- Fotos (las mismas del Catálogo MASS) ---------- */
 const FOTO_BASE = 'https://catalogo-mass.vercel.app/fotos/';
 let FOTOS = new Set(ls.get('fotos', []));
+let FOTOS_VER = ls.get('fotosVer', '');
+function usarListaFotos(d, origen){
+  const f = (d && d.f) || []; if (!f.length) return 0;
+  FOTOS = new Set(f.map(String)); FOTOS_VER = String(d.fecha || '') + '-' + f.length;
+  ls.set('fotos', f); ls.set('fotosVer', FOTOS_VER); ls.set('fotosInfo', { n: f.length, fecha: d.fecha || '', origen, ts: Date.now() });
+  return f.length;
+}
+/** Trae la lista de fotos publicada en el Catálogo MASS (catalogo-mass.vercel.app). */
+async function traerFotosCatalogo(){
+  const r = await fetch('https://catalogo-mass.vercel.app/catalogo.json?v=' + Date.now(), { cache: 'no-store' });
+  if (!r.ok) throw new Error('El Catálogo MASS respondió con error ' + r.status);
+  return usarListaFotos(await r.json(), 'Catálogo MASS en internet');
+}
 async function cargarFotos(){
-  for (const u of ['https://catalogo-mass.vercel.app/catalogo.json', 'catalogo.json']) {
-    try { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) continue; const f = (await r.json()).f || [];
-      if (f.length) { FOTOS = new Set(f.map(String)); ls.set('fotos', f); return; } } catch (e) {}
-  }
+  try { await traerFotosCatalogo(); return; } catch (e) {}
+  if (FOTOS.size) return;                       // conserva la última lista conocida
+  try { const r = await fetch('catalogo.json'); if (r.ok) usarListaFotos(await r.json(), 'copia incluida en la app'); } catch (e) {}
 }
 const fotoPropia = (id) => { const f = S.foto && S.foto.get(String(id)); return f && !f._d && f.d ? f.d : null; };
-const fotoUrl = (id) => fotoPropia(id) || (FOTOS.has(String(id)) ? FOTO_BASE + encodeURIComponent(id) + '.jpg' : null);
+const fotoUrl = (id) => fotoPropia(id) || (FOTOS.has(String(id)) ? FOTO_BASE + encodeURIComponent(id) + '.jpg' + (FOTOS_VER ? '?v=' + encodeURIComponent(FOTOS_VER) : '') : null);
 /** Reduce una imagen a JPEG liviano (máx. ~45 KB) para guardarla en la nube */
 function comprimirFoto(file){
   return new Promise((res, rej) => {
@@ -2289,6 +2301,10 @@ function pgExcel(){
       (puede('compras') ? '<label class="btn">' + ic('truck') + 'Proveedores<input type="file" id="xProv" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' : '') + '</div></div>' +
     '<div class="card stack"><h3>Exportar</h3><p class="small muted" style="margin:0">Un solo libro de Excel con hojas de productos y stock, ventas, detalle de ventas, compras, clientes, proveedores y ajustes.</p>' +
       '<div class="row"><button class="btn pri" id="xTodo">' + ic('download') + 'Exportar todo a Excel</button><button class="btn" id="xStock">' + ic('box') + 'Solo productos y stock</button></div></div>' +
+    '<div class="card stack"><h3>Fotos del Catálogo MASS</h3><p class="small muted" style="margin:0">Cuando subas o cambies fotos en tu app Catálogo MASS y las publiques, pulsa aquí para que aparezcan también en POS MASS MF. ' +
+      'Si no se puede conectar, descarga el <b>catalogo.json</b> de tu repositorio catalogo-mass y elígelo con el segundo botón.</p>' +
+      '<div class="row"><button class="btn c3d cb" id="xFotos">' + ic('download') + 'Actualizar fotos del Catálogo MASS</button><label class="btn">' + ic('upload') + 'Elegir catalogo.json<input type="file" id="xFotosF" accept=".json,application/json" hidden></label></div>' +
+      '<p class="small" id="xFotosInfo" style="margin:0"></p></div>' +
     (adm ? '<div class="card stack"><h3>Catálogo MASS (clientes)</h3><p class="small muted" style="margin:0">Genera el archivo catalogo.json con los productos y precios de esta app, para subirlo al repositorio de tu Catálogo MASS y que los clientes vean los mismos precios.</p><button class="btn" id="xCat" style="align-self:flex-start">' + ic('download') + 'Generar catalogo.json</button></div>' : '') + '</div>';
   if ($('xProd')) $('xProd').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarProductos(f); };
   if ($('xPlant')) $('xPlant').onclick = () => exportarFilas('Plantilla productos', ['Código', 'Código de barras', 'Descripción', 'Marca', 'Categoría', 'Unidad', 'Costo', 'PVP', 'IVA', 'Stock', 'Mínimo'], [['11103', '7861234567890', 'KALIPEGA 500 CC PLASTIGAMA', 'PLASTIGAMA', 'Plomería', 'UND', 8.5, 11.95, 'SI', 10, 2]]);
@@ -2297,6 +2313,19 @@ function pgExcel(){
   $('xTodo').onclick = exportarTodo;
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
+  const infoFotos = () => { const i2 = ls.get('fotosInfo', null); $('xFotosInfo').innerHTML = i2 ? 'Fotos disponibles: <b>' + i2.n + '</b>' + (i2.fecha ? ' · catálogo del ' + fechaTxt(i2.fecha) : '') + ' · actualizado ' + fechaTxt(fechaISO(new Date(i2.ts))) + ' ' + horaTxt(i2.ts) + ' (' + h(i2.origen) + ')' : 'Fotos disponibles: <b>' + FOTOS.size + '</b>'; };
+  infoFotos();
+  $('xFotos').onclick = async () => {
+    const b = $('xFotos'); b.disabled = true;
+    try { const n = await traerFotosCatalogo(); toast(n + ' fotos del Catálogo MASS listas.'); }
+    catch (e) { toast('No se pudo leer el Catálogo MASS desde aquí. Usa “Elegir catalogo.json”.', true); }
+    b.disabled = false; infoFotos();
+  };
+  $('xFotosF').onchange = async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try { const d = JSON.parse(await f.text()); const n = usarListaFotos(d, 'archivo ' + f.name); if (!n) throw new Error('El archivo no tiene lista de fotos.'); toast(n + ' fotos del Catálogo MASS listas.'); infoFotos(); }
+    catch (err) { toast('Archivo no válido: ' + err.message, true); }
+  };
 }
 
 function hojaProductos(){
