@@ -292,7 +292,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17b';
+const APP_VER = '2026-10-17c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1850,7 +1850,7 @@ const CAMPOS_PROD = [
   ['m', 'Marca', /marca|fabricante/],
   ['c', 'Categoría', /categor|grupo|l[ií]nea|familia|departamento|secci[oó]n/],
   ['pv', 'PVP', /^p\.?\s?v\.?\s?p|precio\s*(de\s*)?venta|precio\s*1|precio\s*p[uú]blico|^precio$|^pvp/],
-  ['co', 'Costo', /costo|precio\s*(de\s*)?compra|p\.?\s*compra/],
+  ['co', 'Costo', /^cost|costo|precio\s*(de\s*)?compra|p\.?\s*compra/],
   ['st', 'Stock / existencia', /stock|existencia|saldo|disponible|cantidad|cant\.?$/],
   ['iva', 'IVA (sí/no o %)', /^iva|grava|impuesto/],
   ['mi', 'Stock mínimo', /m[ií]nimo/],
@@ -1960,12 +1960,16 @@ async function importarProductos(file){
     previa();
   };
   const filasMap = () => {
-    const H = hojas[hi]; const mp = det.map; const out = [];
+    const H = hojas[hi]; const mp = det.map; const out = []; let sec = '';
+    const titulo = (t) => { t = String(t).trim().toLowerCase(); return t.charAt(0).toUpperCase() + t.slice(1); };
     for (let i = det.fila + 1; i < H.filas.length; i++) {
       const r = H.filas[i]; const g = (k) => (mp[k] == null ? undefined : r[mp[k]]);
       const id = String(g('id') == null ? '' : g('id')).trim().replace(/\.0$/, ''); const n = String(g('n') == null ? '' : g('n')).trim();
+      // Filas de título de categoría (como en Anfibus: "ABRASIVOS" sola en la fila)
+      const llenas = r.filter((x) => String(x).trim() !== '');
+      if (llenas.length === 1 && !n && isNaN(aNum(llenas[0]))) { sec = titulo(llenas[0]); continue; }
       if (!id || !n) continue;
-      out.push({ id, n, b: g('b') != null ? String(g('b')).trim().replace(/\.0$/, '') : undefined, m: g('m'), c: g('c'), pv: aNum(g('pv')), co: aNum(g('co')), st: aNum(g('st')), iva: g('iva'), mi: aNum(g('mi')), un: g('un') });
+      out.push({ id, n, b: g('b') != null ? String(g('b')).trim().replace(/\.0$/, '') : undefined, m: g('m'), c: mp.c != null ? g('c') : (sec || undefined), pv: aNum(g('pv')), co: aNum(g('co')), st: aNum(g('st')), iva: g('iva'), mi: aNum(g('mi')), un: g('un') });
     }
     return out;
   };
@@ -1973,6 +1977,8 @@ async function importarProductos(file){
     if (det.map.id == null || det.map.n == null) { m.q('#ipPrev').className = 'note warn'; m.q('#ipPrev').textContent = 'Elige las columnas de Código y Nombre.'; return; }
     const l = filasMap(); const nuevos = l.filter((x) => !S.prod.has(x.id) || S.prod.get(x.id)._d).length;
     m.q('#ipPrev').className = 'note'; m.q('#ipPrev').innerHTML = '<b>' + l.length + '</b> productos en el archivo · <b>' + nuevos + '</b> nuevos · <b>' + (l.length - nuevos) + '</b> ya existen.' +
+      (det.map.c == null && l.some((x) => x.c) ? '<br>Categorías tomadas de los títulos del archivo: <b>' + new Set(l.map((x) => x.c).filter(Boolean)).size + '</b>.' : '') +
+      (!isNaN(l[0] && l[0].st) ? '<br>Para cargar las existencias marca <b>“Poner el stock igual a la cantidad del archivo”</b>.' : '') +
       (l[0] ? '<br><span class="small">Ejemplo: ' + h(l[0].id) + ' · ' + h(l[0].n) + (isNaN(l[0].pv) ? '' : ' · PVP ' + money(l[0].pv)) + (isNaN(l[0].st) ? '' : ' · stock ' + l[0].st) + '</span>' : '');
   };
   pintar();
