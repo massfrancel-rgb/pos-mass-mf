@@ -54,7 +54,7 @@ header.top img{width:34px;height:39px;object-fit:contain}
 header.top .tt{display:flex;flex-direction:column;line-height:1.05;min-width:0}
 header.top .tt b{font-family:var(--font-display);font-weight:800;font-size:17px;letter-spacing:.02em}
 header.top .tt span{font-size:12.5px;color:#CFC6B4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.syncb{margin-left:auto;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);border:0;color:var(--on-dark);
+.syncb{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.08);border:0;color:var(--on-dark);
   border-radius:999px;padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
 .dot{width:9px;height:9px;border-radius:50%;background:#8C8578;flex:none}
 .dot.ok{background:#4CC274}.dot.pend{background:#E8B23C}.dot.err{background:#E0573A}.dot.run{background:#E8B23C;animation:pulse 1s infinite}
@@ -245,6 +245,31 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
 .rgh{margin:16px 0 8px;display:flex;gap:8px;align-items:center;font-size:16px}
 .rgh .ico3d{width:28px;height:28px;border-radius:8px}.rgh .ico3d svg{width:16px;height:16px}
 
+/* botón sincronizar */
+.syncnow{background:var(--gold);border-color:var(--gold);color:#1A1814;min-height:36px;flex:none}
+.syncnow.run svg{animation:girar 1s linear infinite}
+@keyframes girar{to{transform:rotate(360deg)}}
+.syncb{margin-left:auto}
+@media (max-width:520px){.syncnow span{display:none}.syncnow{width:38px;padding:0}.syncb{padding:6px 9px;font-size:12px}}
+@media (max-width:520px){header.top .tt b{font-size:15px;white-space:nowrap}header.top{gap:7px;padding-left:10px;padding-right:10px}
+  .mini{width:74px;min-height:36px;padding:5px 6px}.mini.pct{width:58px}.qty button{width:36px;height:36px}.qty input{width:48px;height:36px}.ci .ctrl{gap:6px}}
+/* cobrar compacto */
+.sheet.narrow{max-width:580px}
+.cobro{display:flex;flex-direction:column;gap:7px}
+.cobro .cl{font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:-3px}
+.cobro .cl0{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+.cobro .seg{padding:2px}.cobro .seg button{min-height:32px;padding:4px 6px;font-size:14px}
+.cobro .in{min-height:36px;padding:6px 10px;font-size:15px}
+.cobro .card{padding:8px 12px}
+.cobro label.f{font-size:12.5px}
+.crow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cmas summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--gold-ink);padding:2px 0}
+.ctot .totbox{font-size:14.5px;gap:1px}.ctot .totbox .big{font-size:22px;padding-top:4px;margin-top:3px}
+.cobro #cCli .card{padding:8px 10px}
+.cobro #cCli .btn.sm{min-height:32px;padding:4px 9px;font-size:13.5px}
+.sheet.narrow .sh-h{padding:10px 14px}.sheet.narrow .sh-b{padding:10px 14px}.sheet.narrow .sh-f{padding:8px 14px calc(8px + env(safe-area-inset-bottom))}
+.sheet.narrow .sh-f .btn{min-height:42px;flex:1 1 100px}
+
 /* login */
 #login{position:fixed;inset:0;z-index:70;background:var(--dark);color:var(--on-dark);overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
 #login .box{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;align-items:stretch}
@@ -303,6 +328,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
       <div class="tt"><b>POS MASS MF</b><span id="hdrUser">MASS FERRETERÍA</span></div>
       <div class="crumb" id="crumb"></div>
       <button class="syncb" id="syncBtn" type="button"><i class="dot" id="syncDot"></i><span id="syncTxt">Sin nube</span></button>
+      <button class="btn sm syncnow" id="syncNow" type="button" title="Sincronizar ahora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M21 4v5h-5M3 20v-5h5"/></svg><span>Sincronizar</span></button>
       <button class="userb" id="userBtn" type="button" aria-label="Usuario">?</button>
     </header>
     <main id="view"></main>
@@ -317,7 +343,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17i';
+const APP_VER = '2026-10-17j';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -654,6 +680,7 @@ function pintarSync(){
     else { c = 'ok'; t = 'En la nube'; }
   } else if (M.pend.size) t = 'Solo este equipo';
   dot.className = 'dot ' + c; txt.textContent = t;
+  const sn = $('syncNow'); if (sn) sn.classList.toggle('run', !!syncEnCurso);
 }
 window.addEventListener('online', () => programarSync(300));
 window.addEventListener('offline', () => { syncError = 'Sin internet'; pintarSync(); });
@@ -676,7 +703,7 @@ const nomCli = (v) => (v.cli && v.cli.nombre) || CONSUMIDOR.nombre;
    ===================================================================== */
 function modal(opts){
   const wrap = document.createElement('div'); wrap.className = 'modal';
-  wrap.innerHTML = '<div class="sheet ' + (opts.wide ? 'wide' : '') + '" role="dialog" aria-modal="true">' +
+  wrap.innerHTML = '<div class="sheet ' + (opts.wide ? 'wide' : '') + ' ' + (opts.cls || '') + '" role="dialog" aria-modal="true">' +
     '<div class="sh-h"><h3>' + h(opts.title || '') + '</h3><button class="btn ghost icon" data-x aria-label="Cerrar">' + ic('x') + '</button></div>' +
     '<div class="sh-b">' + (opts.body || '') + '</div>' + (opts.foot ? '<div class="sh-f">' + opts.foot + '</div>' : '') + '</div>';
   $('modals').appendChild(wrap);
@@ -745,6 +772,8 @@ function pintarNav(){
   $('hdrUser').textContent = USR.nombre + (esAdmin() ? ' · Administrador' : ' · Vendedor');
 }
 $('syncBtn').onclick = () => { if (M.nube && M.nube.url) sincronizar(true); else irA('ajustes'); };
+$('syncNow').onclick = async () => { if (!(M.nube && M.nube.url)) { toast('Primero conecta la nube en Ajustes.', true); return irA('ajustes'); }
+  const ok = await sincronizar(true); if (ok && USR && !$('modals').children.length) render(); };
 $('userBtn').onclick = () => {
   const m = modal({ title: USR.nombre, body: '<p class="muted" style="margin-top:0">' + (esAdmin() ? 'Administrador' : 'Vendedor') + ' · Punto ' + h(USR.pto || '001') + '</p>' +
     '<div class="stack"><button class="btn block" id="uTema">' + ic('gear') + 'Cambiar tema claro / oscuro</button>' +
@@ -1117,23 +1146,23 @@ async function guardarClienteVenta(c){
 function abrirCobro(){
   if (!CART.it.length) return toast('Agrega productos primero.', true);
   if (CART.it.some((x) => !(Number(x.q) > 0))) return toast('Hay productos con cantidad 0.', true);
-  const m = modal({ title: 'Cobrar', body:
-    '<div class="stack"><div><div class="small muted" style="font-weight:700;margin-bottom:4px">Documento</div><div class="seg" id="cTp">' +
-      Object.keys(DOC).map((k) => '<button data-v="' + k + '">' + DOC[k] + '</button>').join('') + '</div></div>' +
+  const m = modal({ title: 'Cobrar', cls: 'narrow', body:
+    '<div class="cobro"><div class="cl">Documento</div><div class="seg" id="cTp">' +
+      Object.keys(DOC).map((k) => '<button data-v="' + k + '">' + DOC[k] + '</button>').join('') + '</div>' +
     '<div id="cCli"></div>' +
-    '<div id="cPagoBox"><div class="small muted" style="font-weight:700;margin-bottom:4px">Forma de pago</div><div class="seg" id="cFp">' +
+    '<div class="cl">Forma de pago</div><div class="seg" id="cFp">' +
       Object.keys(FPAGO).map((k) => '<button data-v="' + k + '">' + FPAGO[k] + '</button>').join('') + '</div>' +
-      '<div id="cFpExtra" style="margin-top:10px"></div></div>' +
-    '<div class="grid2"><label class="f" id="cSriL">N° factura SRI (Anfibus) <span class="hint">opcional</span><input class="in" id="cSri" value="' + h(CART.sri || '') + '"></label>' +
-      '<label class="f">Nota <span class="hint">opcional</span><input class="in" id="cNota" value="' + h(CART.nota || '') + '"></label></div>' +
-    (puede('precios') ? '<div><div class="small muted" style="font-weight:700;margin-bottom:4px">Descuento general</div><div class="row" style="flex-wrap:nowrap">' +
-      '<div class="seg" id="cDtp" style="flex:none"><button data-v="p">%</button><button data-v="v">$</button></div>' +
-      '<input class="in grow" id="cDesc" inputmode="decimal" placeholder="0" value="' + h(CART.dgv || '') + '">' +
-      '<button class="btn sm" id="cDescX" type="button">Quitar</button></div><div class="small muted" id="cDescTxt" style="margin-top:4px"></div></div>' : '') +
-    '<div class="card" id="cTot"></div></div>',
+    '<div id="cFpExtra"></div>' +
+    (puede('precios') ? '<div class="crow"><span class="cl0">Descuento</span><div class="seg" id="cDtp" style="flex:none"><button data-v="p">%</button><button data-v="v">$</button></div>' +
+      '<input class="in" id="cDesc" inputmode="decimal" placeholder="0" style="width:96px" value="' + h(CART.dgv || '') + '">' +
+      '<button class="btn sm" id="cDescX" type="button">Quitar</button><span class="small muted" id="cDescTxt"></span></div>' : '') +
+    '<details class="cmas"' + (CART.sri || CART.nota ? ' open' : '') + '><summary>N° factura SRI y nota (opcional)</summary><div class="grid2" style="margin-top:6px">' +
+      '<label class="f" id="cSriL">N° factura SRI<input class="in" id="cSri" value="' + h(CART.sri || '') + '"></label>' +
+      '<label class="f">Nota<input class="in" id="cNota" value="' + h(CART.nota || '') + '"></label></div></details>' +
+    '<div class="card ctot" id="cTot"></div></div>',
     foot: '<button class="btn" data-x>Volver</button><button class="btn" id="cOk">' + ic('check') + 'Guardar</button><button class="btn pri" id="cOkP">' + ic('ticket') + 'Guardar e imprimir</button>' });
   let t = totales(CART.it);
-  const pintaTot = () => { t = totales(CART.it); m.q('#cTot').innerHTML = desgloseHTML(t, true); const r = m.q('#cRec'); if (r) { r.placeholder = t.total.toFixed(2); r.dispatchEvent(new Event('input')); } };
+  const pintaTot = () => { t = totales(CART.it); m.q('#cTot').innerHTML = desgloseHTML(t); const r = m.q('#cRec'); if (r) { r.placeholder = t.total.toFixed(2); r.dispatchEvent(new Event('input')); } };
   // Descuento general: se reparte como % sobre cada producto (dg)
   let dtp = CART.dgt || 'p';
   const aplicarDesc = () => {
@@ -1155,10 +1184,10 @@ function abrirCobro(){
     m.q('#cSriL').style.visibility = v === 'F' ? '' : 'hidden'; m.q('#cOk').innerHTML = ic('check') + (v === 'P' ? 'Guardar pedido' : 'Guardar ' + (v === 'F' ? 'factura' : 'nota de venta')); };
   const extra = () => {
     const e = m.q('#cFpExtra');
-    if (fp === 'ef') { e.innerHTML = '<div class="grid2"><label class="f">Recibido<input class="in" id="cRec" inputmode="decimal" placeholder="' + totales(CART.it).total.toFixed(2) + '"></label><div class="f"><span class="small muted" style="font-weight:700">Cambio</span><div id="cCambio" style="font-family:var(--font-display);font-weight:800;font-size:26px">$0.00</div></div></div>';
+    if (fp === 'ef') { e.innerHTML = '<div class="crow"><span class="cl0">Recibido</span><input class="in" id="cRec" inputmode="decimal" style="width:120px" placeholder="' + totales(CART.it).total.toFixed(2) + '"><span class="cl0" style="margin-left:auto">Cambio</span><b id="cCambio" style="font-family:var(--font-display);font-size:22px">$0.00</b></div>';
       m.q('#cRec').oninput = (ev) => { const r = parseFloat(ev.target.value.replace(',', '.')) || 0; m.q('#cCambio').textContent = money(Math.max(0, r - totales(CART.it).total)); }; }
-    else if (fp === 'cr') e.innerHTML = '<label class="f">Plazo<select class="in" id="cPl">' + [8, 15, 30, 45, 60, 90].map((d) => '<option value="' + d + '"' + (d === 30 ? ' selected' : '') + '>' + d + ' días</option>').join('') + '</select></label><p class="small muted" style="margin:6px 0 0">Las ventas a crédito aparecen en Reportes → Cuentas por cobrar, donde registras los abonos.</p>';
-    else e.innerHTML = '<label class="f">' + (fp === 'tr' ? 'N° de transferencia / banco' : 'N° de voucher / lote') + ' <span class="hint">opcional</span><input class="in" id="cRef"></label>';
+    else if (fp === 'cr') e.innerHTML = '<div class="crow"><span class="cl0">Plazo</span><select class="in" id="cPl" style="width:120px">' + [8, 15, 30, 45, 60, 90].map((d) => '<option value="' + d + '"' + (d === 30 ? ' selected' : '') + '>' + d + ' días</option>').join('') + '</select><span class="small muted">Abonos en Reportes → Cuentas por cobrar</span></div>';
+    else e.innerHTML = '<div class="crow"><span class="cl0">' + (fp === 'tr' ? 'N° transferencia' : 'N° voucher') + '</span><input class="in" id="cRef" style="width:200px" placeholder="opcional"></div>';
   };
   const setFp = (v) => { fp = v; qsa('#cFp button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.v === v)); extra(); };
   m.q('#cTp').onclick = (e) => { const b = e.target.closest('button'); if (b) setTp(b.dataset.v); };
