@@ -394,7 +394,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17l';
+const APP_VER = '2026-10-17m';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -554,8 +554,23 @@ function thumb(p, cls){
 
 const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
-const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido' };
+const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
+const FPNC = { ef: 'Devolución en efectivo', tr: 'Devolución por transferencia', ab: 'Abono a la deuda del cliente', sf: 'Saldo a favor (cambio de producto)' };
+const nomFp = (v) => (v.tp === 'C' ? FPNC[v.fp] : FPAGO[v.fp]) || (v.fp === 'nc' ? 'Nota de crédito' : '');
+/** Las notas de crédito se guardan en negativo (restan ventas y devuelven stock). Para mostrarlas se usan en positivo. */
+function vistaDoc(v){
+  if (v.tp !== 'C') return v;
+  const a = (n) => Math.abs(Number(n) || 0);
+  const ts = {}; Object.entries(v.tasas || totales(v.it || []).tasas || {}).forEach(([k, o]) => { ts[k] = { b: a(o.b), i: a(o.i) }; });
+  return Object.assign({}, v, { it: (v.it || []).map((x) => Object.assign({}, x, { q: a(x.q) })), sub12: a(v.sub12), sub0: a(v.sub0), iva: a(v.iva), desc: a(v.desc), tot: a(v.tot), tasas: ts });
+}
+/** Cantidades ya devueltas por notas de crédito de una venta */
+function devueltoDe(vid){
+  const m = new Map();
+  S.vta.forEach((n) => { if (!n._d && !n.an && n.tp === 'C' && n.vref === vid) (n.it || []).forEach((x) => m.set(x.p + '|' + x.pu, (m.get(x.p + '|' + x.pu) || 0) + Math.abs(x.q))); });
+  return m;
+}
 const CONSUMIDOR = { id: 'CF', ruc: '9999999999999', nombre: 'CONSUMIDOR FINAL' };
 
 let idb;
@@ -813,7 +828,7 @@ function render(){
   const v = $('view'); v.innerHTML = ''; v.scrollTop = 0; window.scrollTo(0, 0);
   RUTAS[r].fn();
 }
-window.addEventListener('hashchange', render);
+window.addEventListener('hashchange', () => { $('modals').innerHTML = ''; render(); });
 function pintarNav(){
   const NAVC = { vender: 'cv', docs: 'cb', inv: 'ct', rep: 'co', mas: 'cp', compras: 'cp', clientes: 'ci3', proveedores: 'ca', vendedores: 'ck', excel: 'ce', ajustes: 'cs' };
   const link = (r) => '<a href="#' + r + '" data-r="' + r + '" class="' + NAVC[r] + '">' + ic(RUTAS[r].i) + '<span>' + RUTAS[r].t + '</span></a>';
@@ -1126,7 +1141,7 @@ function pintarCarrito(){
 
 function siguienteNumero(tp, pto){
   const C = cfg(); pto = pad(pto || '001', 3);
-  const pref = tp === 'F' ? pad(C.estab || '001', 3) + '-' + pto + '-' : (tp === 'N' ? 'NV-' + pto + '-' : 'PD-' + pto + '-');
+  const pref = tp === 'F' ? pad(C.estab || '001', 3) + '-' + pto + '-' : ({ N: 'NV-', C: 'NC-', P: 'PD-' }[tp] || 'PD-') + pto + '-';
   let max = 0;
   S.vta.forEach((v) => { if (v.tp === tp && v.num && v.num.startsWith(pref)) { const n = parseInt(v.num.slice(pref.length), 10); if (n > max) max = n; } });
   return pref + pad(max + 1, tp === 'F' ? 9 : 6);
@@ -1205,7 +1220,7 @@ function abrirCobro(){
   if (CART.it.some((x) => !(Number(x.q) > 0))) return toast('Hay productos con cantidad 0.', true);
   const m = modal({ title: 'Cobrar', cls: 'narrow', body:
     '<div class="cobro"><div class="cl">Documento</div><div class="seg" id="cTp">' +
-      Object.keys(DOC).map((k) => '<button data-v="' + k + '">' + DOC[k] + '</button>').join('') + '</div>' +
+      ['F', 'N', 'P'].map((k) => '<button data-v="' + k + '">' + DOC[k] + '</button>').join('') + '</div>' +
     '<div id="cCli"></div>' +
     '<div class="cl">Forma de pago</div><div class="seg" id="cFp">' +
       Object.keys(FPAGO).map((k) => '<button data-v="' + k + '">' + FPAGO[k] + '</button>').join('') + '</div>' +
@@ -1337,6 +1352,7 @@ const enRango = (f, F) => f >= F.desde && f <= F.hasta;
 
 function estadoDoc(v){
   if (v.an) return '<span class="badge warn">Anulado</span>';
+  if (v.tp === 'C') return '<span class="badge warn">Devolución</span>';
   if (v.tp === 'P') return v.cv ? '<span class="badge ok">Facturado ' + h(v.cvNum || '') + '</span>' : '<span class="badge gold">Pendiente</span>';
   const s = saldo(v); if (s > 0) return '<span class="badge info">Por cobrar ' + money(s) + '</span>';
   return '';
@@ -1346,7 +1362,7 @@ function pgDocs(){
   const prm = new URLSearchParams((location.hash.split('?')[1]) || '');
   const v = $('view');
   v.innerHTML = '<div class="pagehead"><h2>Documentos</h2><button class="btn sm c3d cv" id="dNueva">' + ic('plus') + 'Nueva venta</button></div>' +
-    '<div class="stack"><div class="seg" id="dTp"><button data-v="">Todos</button><button data-v="F">Facturas</button><button data-v="N">Notas de venta</button><button data-v="P">Pedidos</button></div>' +
+    '<div class="stack"><div class="seg" id="dTp"><button data-v="">Todos</button><button data-v="F">Facturas</button><button data-v="N">Notas de venta</button><button data-v="P">Pedidos</button><button data-v="C">Notas de crédito</button></div>' +
     '<div id="dPer"></div><div class="row"><input class="in grow" id="dQ" type="search" placeholder="Buscar N°, cliente o producto"><select class="in" id="dEst" style="width:auto"><option value="">Todos los estados</option><option value="pend">Pedidos pendientes</option><option value="cxc">Por cobrar</option><option value="an">Anulados</option></select></div>' +
     '<div id="dRes" class="small muted"></div><div class="card" style="padding:4px 10px"><div class="list" id="dList"></div></div></div>';
   $('dNueva').onclick = () => irA('vender');
@@ -1363,10 +1379,10 @@ function pgDocs(){
     if (!(est === 'pend' || est === 'cxc')) l = l.filter((d) => enRango(d.f, F) && (!F.vend || d.v === F.vend));
     if (w.length) l = l.filter((d) => { const hay = norm(d.num + ' ' + nomCli(d) + ' ' + ((d.cli && d.cli.ruc) || '') + ' ' + (d.it || []).map((x) => x.n + ' ' + x.p).join(' ') + ' ' + (d.sri || '')); return w.every((x) => hay.includes(x)); });
     l.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-    const tot = l.filter((d) => !d.an && d.tp !== 'P').reduce((s, d) => s + d.tot, 0);
+    const tot = l.filter((d) => !d.an && d.tp !== 'P').reduce((s, d) => s + d.tot, 0);   // las NC restan
     $('dRes').textContent = l.length + ' documentos' + (tp !== 'P' ? ' · Vendido: ' + money(tot) : '');
     $('dList').innerHTML = l.length ? l.slice(0, 300).map((d) => '<div class="li" data-id="' + h(d.id) + '"><div class="grow"><div class="t">' + h(DOC[d.tp]) + ' ' + h(d.num) + ' ' + estadoDoc(d) + '</div>' +
-      '<div class="s">' + fechaTxt(d.f) + ' ' + horaTxt(d.ts) + ' · ' + h(nomCli(d)) + ' · ' + h(nomVend(d.v)) + ' · ' + h(FPAGO[d.fp] || '') + '</div></div>' +
+      '<div class="s">' + fechaTxt(d.f) + ' ' + horaTxt(d.ts) + ' · ' + h(nomCli(d)) + ' · ' + h(nomVend(d.v)) + ' · ' + h(nomFp(d)) + (d.tp === 'C' ? ' · modifica ' + h(d.vrefNum || '') : '') + '</div></div>' +
       '<div class="v" style="' + (d.an ? 'text-decoration:line-through;opacity:.5' : '') + '">' + money(d.tot) + '</div></div>').join('') +
       (l.length > 300 ? '<div class="empty small">Se muestran los 300 más recientes. Usa el buscador o el período.</div>' : '') : '<div class="empty"><b>Sin documentos</b>Cambia el período o los filtros.</div>';
   };
@@ -1376,38 +1392,45 @@ function pgDocs(){
   filtroPeriodo($('dPer'), 'docs', (f) => { F = f; pintar(); }, true);
 }
 
-function verDocumento(v, recien){
-  const t = v; const s = saldo(v);
+function verDocumento(v0, recien){
+  const v = vistaDoc(v0); const t = v; const s = saldo(v0);
+  const ncs = vivos('vta').filter((n) => n.tp === 'C' && n.vref === v0.id && !n.an);
+  const vref = v0.vref && S.vta.get(v0.vref);
   const filas = (v.it || []).map((x) => { const k = calcItem(x); return '<tr><td class="n">' + numf(x.q) + '</td><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + (x.d ? ' · desc. ' + x.d + '%' : '') + (x.iva ? '' : ' · IVA 0%') + '</div></td><td class="n">' + money(x.pu) + '</td><td class="n">' + money(k.neto) + '</td></tr>'; }).join('');
-  const ab = (v.ab || []).map((a) => '<div class="row small"><span>' + fechaTxt(a.f) + ' · ' + h(FPAGO[a.fp] || '') + ' · ' + h(nomVend(a.v)) + '</span><span class="spacer"></span><b>' + money(a.m) + '</b></div>').join('');
+  const ab = (v.ab || []).map((a) => '<div class="row small"><span>' + fechaTxt(a.f) + ' · ' + h(a.fp === 'nc' ? 'Nota de crédito ' + (a.ref || '') : (FPAGO[a.fp] || '')) + ' · ' + h(nomVend(a.v)) + '</span><span class="spacer"></span><b>' + money(a.m) + '</b></div>').join('');
   const puedeAnular = !v.an && (puede('anular') || (v.v === USR.id && v.f === hoyISO()));
   const m = modal({ title: DOC[v.tp] + ' ' + v.num, wide: true, body:
     (recien ? '<div class="note ok" style="margin-bottom:12px"><b>✓ ' + DOC[v.tp] + ' guardada.</b> ' + (v.fp === 'ef' && v.rec > v.tot ? 'Cambio: <b>' + money(v.rec - v.tot) + '</b>' : '') + '</div>' : '') +
     (v.an ? '<div class="note warn" style="margin-bottom:12px">Anulado el ' + fechaTxt(v.an.f) + ' por ' + h(nomVend(v.an.v)) + (v.an.m ? ': ' + h(v.an.m) : '') + '</div>' : '') +
     '<div class="grid2" style="margin-bottom:12px"><div><div class="small muted">Cliente</div><b>' + h(nomCli(v)) + '</b><div class="small">' + h(v.cli ? [v.cli.ruc, v.cli.tel, v.cli.correo].filter(Boolean).join(' · ') : CONSUMIDOR.ruc) + '</div>' + (v.cli && v.cli.dir ? '<div class="small muted">' + h(v.cli.dir) + '</div>' : '') + '</div>' +
-    '<div><div class="small muted">Fecha · Vendedor</div><b>' + fechaTxt(v.f) + ' ' + horaTxt(v.ts) + '</b><div class="small">' + h(nomVend(v.v)) + ' · ' + h(FPAGO[v.fp] || '') + (v.ref ? ' · ' + h(v.ref) : '') + (v.venc ? ' · vence ' + fechaTxt(v.venc) : '') + '</div></div></div>' +
+    '<div><div class="small muted">Fecha · Vendedor</div><b>' + fechaTxt(v.f) + ' ' + horaTxt(v.ts) + '</b><div class="small">' + h(nomVend(v.v)) + ' · ' + h(nomFp(v)) + (v.ref ? ' · ' + h(v.ref) : '') + (v.venc ? ' · vence ' + fechaTxt(v.venc) : '') + '</div></div></div>' +
     (v.sri ? '<p class="small" style="margin:0 0 8px">Factura SRI: <b>' + h(v.sri) + '</b></p>' : '') +
+    (v.tp === 'C' ? '<div class="note warn" style="margin-bottom:10px">Modifica: <b>' + h(DOC[(vref || {}).tp] || 'Documento') + ' ' + h(v.vrefNum || '') + '</b>' + (vref ? ' del ' + fechaTxt(vref.f) : '') + ' · Motivo: <b>' + h(v.mot || '') + '</b></div>' : '') +
+    (ncs.length ? '<div class="note" style="margin-bottom:10px">Notas de crédito emitidas: ' + ncs.map((n) => '<b>' + h(n.num) + '</b> (' + money(Math.abs(n.tot)) + ')').join(', ') + '</div>' : '') +
     '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Descripción</th><th class="n">P. unit.</th><th class="n">Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '<div class="grid2" style="margin-top:12px"><div>' + (v.nota ? '<p class="small"><b>Nota:</b> ' + h(v.nota) + '</p>' : '') +
       (v.fp === 'cr' && v.tp !== 'P' ? '<div class="card" style="padding:10px"><b>Abonos</b>' + (ab || '<div class="small muted">Sin abonos</div>') + '<div class="row" style="margin-top:6px"><span>Saldo</span><span class="spacer"></span><b>' + money(s) + '</b></div></div>' : '') + '</div>' +
     '<div class="card">' + desgloseHTML(t) + '</div></div>',
     foot: '<button class="btn c3d cb" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn c3d cv" id="dvWa">' + ic('wa') + 'WhatsApp</button>' +
+      ((v.tp === 'F' || v.tp === 'N') && !v.an && puede('anular') ? '<button class="btn c3d cr" id="dvNc">' + ic('rotate') + 'Nota de crédito</button>' : '') +
       (v.tp === 'P' && !v.cv && !v.an ? '<button class="btn" id="dvEd">' + ic('edit') + 'Editar</button><button class="btn pri" id="dvCv">' + ic('check') + 'Facturar</button>' : '') +
       (s > 0 ? '<button class="btn pri" id="dvAb">' + ic('cash') + 'Abono</button>' : '') +
-      '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' +
+      (v.tp !== 'C' ? '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' : '') +
       (puedeAnular ? '<button class="btn danger" id="dvAn">' + ic('x') + 'Anular</button>' : '') +
       (recien ? '<button class="btn dark" data-x>' + ic('plus') + 'Nueva venta</button>' : '') });
-  m.q('#dvPdf').onclick = () => opcionesImpresion(v);
-  m.q('#dvWa').onclick = () => compartirWA(v);
-  if (m.q('#dvCv')) m.q('#dvCv').onclick = () => { m.close(); cargarEnVenta(v, 'convertir'); };
-  if (m.q('#dvEd')) m.q('#dvEd').onclick = () => { m.close(); cargarEnVenta(v, 'editar'); };
-  m.q('#dvDup').onclick = () => { m.close(); cargarEnVenta(v, 'duplicar'); };
-  if (m.q('#dvAb')) m.q('#dvAb').onclick = () => { m.close(); registrarAbono(v); };
+  m.q('#dvPdf').onclick = () => opcionesImpresion(v0);
+  m.q('#dvWa').onclick = () => compartirWA(v0);
+  if (m.q('#dvNc')) m.q('#dvNc').onclick = () => { m.close(); notaCredito(v0); };
+  if (m.q('#dvCv')) m.q('#dvCv').onclick = () => { m.close(); cargarEnVenta(v0, 'convertir'); };
+  if (m.q('#dvEd')) m.q('#dvEd').onclick = () => { m.close(); cargarEnVenta(v0, 'editar'); };
+  if (m.q('#dvDup')) m.q('#dvDup').onclick = () => { m.close(); cargarEnVenta(v0, 'duplicar'); };
+  if (m.q('#dvAb')) m.q('#dvAb').onclick = () => { m.close(); registrarAbono(v0); };
   if (m.q('#dvAn')) m.q('#dvAn').onclick = async () => {
     const mot = await pedirTexto('Anular ' + DOC[v.tp] + ' ' + v.num, 'Motivo de la anulación', '');
     if (mot == null) return;
-    v.an = { f: hoyISO(), v: USR.id, m: mot }; await put('vta', v);
-    if (v.ped) { const p = S.vta.get(v.ped); if (p && p.cv === v.id) { delete p.cv; delete p.cvNum; await put('vta', p); } }
+    v0.an = { f: hoyISO(), v: USR.id, m: mot }; await put('vta', v0);
+    if (v0.ped) { const p = S.vta.get(v0.ped); if (p && p.cv === v0.id) { delete p.cv; delete p.cvNum; await put('vta', p); } }
+    if (v0.tp === 'C' && v0.fp === 'ab' && v0.vref) { const o = S.vta.get(v0.vref); if (o) { o.ab = (o.ab || []).filter((a) => a.nc !== v0.id); await put('vta', o); } }
     toast(DOC[v.tp] + ' anulada. El stock se devolvió.'); m.close(); render();
   };
 }
@@ -1437,6 +1460,7 @@ function logoData(){
     try { LOGO64 = c.toDataURL('image/png'); } catch (e) { LOGO64 = null; } res(LOGO64); }; i.onerror = () => res(null); i.src = 'logo_mass.png'; });
 }
 async function pdfA4(v){
+  const vref = v.tp === 'C' && v.vref && S.vta.get(v.vref); v = vistaDoc(v);
   const J = await libPDF(); const C = cfg();
   const doc = new J({ unit: 'mm', format: 'a4' });
   const W = 210, Mg = 15, oro = [201, 154, 46], osc = [26, 24, 20], gris = [94, 88, 76];
@@ -1446,7 +1470,7 @@ async function pdfA4(v){
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...gris);
   let yy = y + 12.5;
   [C.ruc ? 'RUC ' + C.ruc : '', C.dir, C.ciudad, 'WhatsApp ' + C.tel].filter(Boolean).forEach((l) => { doc.text(l, Mg + 27, yy); yy += 4.3; });
-  const tit = v.tp === 'F' ? 'FACTURA' : (v.tp === 'N' ? 'NOTA DE VENTA' : 'NOTA DE PEDIDO');
+  const tit = { F: 'FACTURA', N: 'NOTA DE VENTA', P: 'NOTA DE PEDIDO', C: 'NOTA DE CRÉDITO' }[v.tp];
   doc.setDrawColor(...oro); doc.setLineWidth(0.6); doc.roundedRect(W - Mg - 62, y, 62, 26, 2, 2);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...osc); doc.text(tit, W - Mg - 31, y + 7.5, { align: 'center' });
   doc.setFontSize(11.5); doc.setTextColor(...oro); doc.text('N° ' + v.num, W - Mg - 31, y + 14, { align: 'center' });
@@ -1455,7 +1479,9 @@ async function pdfA4(v){
   y += 33;
   const cli = v.cli || CONSUMIDOR;
   const filas = [['Cliente', cli.nombre], ['Cédula / RUC', cli.ruc], ['Teléfono', cli.tel], ['Correo', cli.correo], ['Dirección', cli.dir],
-    ['Vendedor', nomVend(v.v)], ['Forma de pago', (FPAGO[v.fp] || '') + (v.fp === 'cr' ? ' · ' + v.pl + ' días, vence ' + fechaTxt(v.venc) : '') + (v.ref ? ' · ' + v.ref : '')],
+    v.tp === 'C' ? ['Modifica', ({ F: 'Fact. ', N: 'NV ' }[(vref || {}).tp] || '') + (v.vrefNum || '') + (vref ? ' (' + fechaTxt(vref.f) + ')' : '')] : null,
+    v.tp === 'C' ? ['Motivo', v.mot] : null,
+    ['Vendedor', nomVend(v.v)], [v.tp === 'C' ? 'Devolución' : 'Forma de pago', (nomFp(v) || '') + (v.fp === 'cr' ? ' · ' + v.pl + ' días, vence ' + fechaTxt(v.venc) : '') + (v.ref ? ' · ' + v.ref : '')],
     v.sri ? ['Factura SRI', v.sri] : null].filter((f) => f && f[1]);
   doc.setFillColor(243, 233, 207); const alto = 5 + Math.ceil(filas.length / 2) * 5.5;
   doc.roundedRect(Mg, y, W - 2 * Mg, alto, 2, 2, 'F');
@@ -1496,7 +1522,7 @@ async function pdfA4(v){
   if (v.nota) { doc.text(doc.splitTextToSize('Nota: ' + v.nota, tx - Mg - 6), Mg, yl); }
   y = Math.max(y, yl) + 8;
   doc.setFontSize(8.5);
-  const pie = v.tp === 'P' ? 'Pedido sin valor tributario. Precios sujetos a confirmación de stock.' :
+  const pie = v.tp === 'C' ? 'Nota de crédito interna de MASS FERRETERÍA por devolución o ajuste del documento indicado.' : v.tp === 'P' ? 'Pedido sin valor tributario. Precios sujetos a confirmación de stock.' :
     (v.tp === 'F' ? 'Documento interno de control de MASS FERRETERÍA. El comprobante electrónico autorizado por el SRI se emite por separado.' : 'Documento interno de control. No válido como comprobante tributario.');
   doc.text(doc.splitTextToSize(pie + ' ' + (C.pie || ''), W - 2 * Mg), Mg, Math.min(y, 285));
   return doc;
@@ -1504,13 +1530,15 @@ async function pdfA4(v){
 
 /* ---------- Ticket 80 mm ---------- */
 async function pdfTicket(v){
+  v = vistaDoc(v);
   const J = await libPDF(); const C = cfg();
   const n = (v.it || []).length; const H = 115 + n * 9 + (v.nota ? 8 : 0);
   const doc = new J({ unit: 'mm', format: [80, H] }); const W = 80, Mg = 5; let y = 7;
   const c = (t, sz, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(sz); doc.text(t, W / 2, y, { align: 'center' }); };
   c(C.nombre, 12, true); y += 4.5; c([C.ruc ? 'RUC ' + C.ruc : '', 'Tel. ' + C.tel].filter(Boolean).join(' · '), 7.5); y += 3.5;
   doc.text(doc.splitTextToSize(C.dir, W - 10), W / 2, y, { align: 'center' }); y += 6;
-  c((v.tp === 'F' ? 'FACTURA' : v.tp === 'N' ? 'NOTA DE VENTA' : 'PEDIDO') + ' ' + v.num, 9.5, true); y += 4.2;
+  c(({ F: 'FACTURA', N: 'NOTA DE VENTA', P: 'PEDIDO', C: 'NOTA DE CRÉDITO' }[v.tp]) + ' ' + v.num, 9.5, true); y += 4.2;
+  if (v.tp === 'C') { c('Modifica ' + (v.vrefNum || '') + ' · ' + (v.mot || ''), 7.5); y += 4; }
   c(fechaTxt(v.f) + ' ' + horaTxt(v.ts) + ' · ' + nomVend(v.v), 7.5); y += 4;
   if (v.an) { c('*** ANULADO ***', 9, true); y += 4; }
   const cli = v.cli || CONSUMIDOR; doc.setFontSize(7.5); doc.text('Cliente: ' + cli.nombre.slice(0, 40), Mg, y); y += 3.4; doc.text('CI/RUC: ' + (cli.ruc || ''), Mg, y); y += 2.5;
@@ -1524,7 +1552,7 @@ async function pdfTicket(v){
   const l = (k, val, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(b ? 11 : 8); doc.text(k, Mg, y); doc.text(val, W - Mg, y, { align: 'right' }); y += b ? 5.5 : 3.8; };
   const TS = tasasDe(v); const ks = Object.keys(TS).map(Number).sort((a, b) => b - a);
   ks.forEach((k) => l('Subtotal ' + k + '%', money(TS[k].b))); if (v.desc) l('Descuentos', '-' + money(v.desc)); ks.filter((k) => k).forEach((k) => l('IVA ' + k + '%', money(TS[k].i))); l('TOTAL', money(v.tot), true);
-  l('Pago: ' + (FPAGO[v.fp] || ''), v.fp === 'ef' && v.rec ? 'Recibido ' + money(v.rec) : '');
+  l((v.tp === 'C' ? '' : 'Pago: ') + (nomFp(v) || ''), v.fp === 'ef' && v.rec ? 'Recibido ' + money(v.rec) : '');
   if (v.fp === 'ef' && v.rec > v.tot) l('Cambio', money(v.rec - v.tot));
   if (v.nota) { doc.setFontSize(7.5); doc.text(doc.splitTextToSize('Nota: ' + v.nota, W - 2 * Mg), Mg, y); y += 7; }
   y += 2; doc.setFontSize(7); doc.text(doc.splitTextToSize((v.tp === 'P' ? 'Pedido sin valor tributario.' : 'Documento interno.') + ' ' + (C.pie || ''), W - 2 * Mg), W / 2, y, { align: 'center' });
@@ -1577,6 +1605,48 @@ function opcionesImpresion(v){
       m.close();
     } catch (err) { toast(err.message, true); }
   };
+}
+
+/* =====================================================================
+   NOTA DE CRÉDITO (devolución de un cliente)
+   ===================================================================== */
+function notaCredito(v){
+  const dev = devueltoDe(v.id);
+  const lin = (v.it || []).map((x) => { const ya = dev.get(x.p + '|' + x.pu) || 0; return Object.assign({}, x, { max: r2(x.q - ya), dq: 0 }); });
+  if (!lin.some((x) => x.max > 0)) return toast('Todos los productos de este documento ya fueron devueltos.', true);
+  const s = saldo(v);
+  const m = modal({ title: 'Nota de crédito · ' + DOC[v.tp] + ' ' + v.num, wide: true, body:
+    '<p class="small muted" style="margin-top:0">Cliente: <b>' + h(nomCli(v)) + '</b> · ' + fechaTxt(v.f) + '. Escribe cuántas unidades devuelve. El stock vuelve al inventario y el valor se resta de las ventas.</p>' +
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Vendido</th><th class="n">Puede devolver</th><th class="n">Devuelve</th><th class="n">Valor</th></tr></thead><tbody id="ncB"></tbody></table></div>' +
+    '<div class="row" style="margin-top:8px"><button class="btn sm" id="ncTodo" type="button">Devolver todo</button><button class="btn sm" id="ncNada" type="button">Nada</button></div>' +
+    '<div class="grid2" style="margin-top:12px"><label class="f">Motivo<select class="in" id="ncMot"><option>Devolución de producto</option><option>Producto defectuoso</option><option>Error en la factura</option><option>Cambio de producto</option><option>Descuento posterior</option></select></label>' +
+    '<label class="f">Cómo se compensa al cliente<select class="in" id="ncFp">' + (s > 0 ? '<option value="ab">' + FPNC.ab + ' (saldo ' + money(s) + ')</option>' : '') +
+      '<option value="ef">' + FPNC.ef + '</option><option value="tr">' + FPNC.tr + '</option><option value="sf">' + FPNC.sf + '</option></select></label></div>' +
+    '<label class="f" style="margin-top:10px">Detalle (opcional)<input class="in" id="ncNota"></label>' +
+    '<div class="card ctot" id="ncTot" style="margin-top:12px"></div>',
+    foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d cr" id="ncOk">' + ic('check') + 'Guardar nota de crédito</button>' });
+  const pintar = () => {
+    m.q('#ncB').innerHTML = lin.map((x, i) => '<tr data-i="' + i + '"><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + ' · ' + money(x.pu) + ' c/u</div></td><td class="n">' + numf(x.q) + '</td><td class="n">' + numf(x.max) + '</td>' +
+      '<td class="n"><input class="mini pct" data-q inputmode="decimal" value="' + (x.dq || '') + '" placeholder="0"' + (x.max > 0 ? '' : ' disabled') + '></td><td class="n">' + money(calcItem(Object.assign({}, x, { q: x.dq })).neto) + '</td></tr>').join('');
+    const t = totales(lin.filter((x) => x.dq > 0).map((x) => Object.assign({}, x, { q: x.dq })));
+    m.q('#ncTot').innerHTML = desgloseHTML(t);
+  };
+  m.q('#ncB').onchange = (e) => { const tr = e.target.closest('[data-i]'); if (!tr) return; const x = lin[+tr.dataset.i];
+    let q = parseFloat(String(e.target.value).replace(',', '.')) || 0; q = Math.max(0, Math.min(x.max, q)); x.dq = q; pintar(); };
+  m.q('#ncTodo').onclick = () => { lin.forEach((x) => { x.dq = Math.max(0, x.max); }); pintar(); };
+  m.q('#ncNada').onclick = () => { lin.forEach((x) => { x.dq = 0; }); pintar(); };
+  m.q('#ncOk').onclick = async () => {
+    const it = lin.filter((x) => x.dq > 0).map((x) => ({ p: x.p, n: x.n, q: -x.dq, pu: x.pu, d: x.d || 0, dg: x.dg || 0, iva: x.iva || 0, co: x.co || 0 }));
+    if (!it.length) return toast('Escribe la cantidad que devuelve el cliente.', true);
+    const t = totales(it); const fp = m.q('#ncFp').value;
+    const nc = { id: uid('nc'), tp: 'C', num: siguienteNumero('C', USR.pto), f: hoyISO(), ts: Date.now(), v: USR.id, cli: v.cli || null, it, fp, mot: m.q('#ncMot').value, nota: m.q('#ncNota').value.trim(),
+      vref: v.id, vrefNum: v.num, sub12: t.sub12, sub0: t.sub0, iva: t.iva, desc: t.desc, tot: t.total, costo: t.costo, tasas: t.tasas, ab: [] };
+    await put('vta', nc);
+    if (fp === 'ab') { const o = S.vta.get(v.id); const val = Math.min(saldo(o), Math.abs(nc.tot));
+      if (val > 0) { o.ab = (o.ab || []).concat([{ id: uid('a'), f: hoyISO(), m: r2(val), fp: 'nc', ref: nc.num, nc: nc.id, v: USR.id, ts: Date.now() }]); await put('vta', o); } }
+    m.close(); toast('Nota de crédito ' + nc.num + ' guardada. El stock regresó al inventario.'); render(); verDocumento(nc);
+  };
+  pintar();
 }
 
 /* =====================================================================
@@ -1846,8 +1916,8 @@ function pgCompras(){
     const l = vivos('com').filter((c) => enRango(c.f, F) && (!pr || c.pr === pr) && (!w.length || w.every((x) => norm(c.num + ' ' + nomProv(c.pr) + ' ' + (c.it || []).map((i) => i.n).join(' ')).includes(x))))
       .sort((a, b) => (b.f + pad(b.ts, 15)).localeCompare(a.f + pad(a.ts, 15)));
     $('coRes').textContent = l.length + ' compras · Total ' + money(l.filter((c) => !c.an).reduce((s, c) => s + c.tot, 0));
-    $('coList').innerHTML = l.map((c) => '<div class="li" data-id="' + h(c.id) + '"><div class="grow"><div class="t">' + h(nomProv(c.pr)) + ' · ' + h(c.num || 's/n') + ' ' + (c.an ? '<span class="badge warn">Anulada</span>' : '') + (c.fp === 'cr' ? ' <span class="badge info">Crédito ' + c.pl + ' d</span>' : '') + '</div>' +
-      '<div class="s">' + fechaTxt(c.f) + ' · ' + (c.it || []).length + ' productos · ' + h(nomVend(c.v)) + '</div></div><div class="v" style="' + (c.an ? 'text-decoration:line-through;opacity:.5' : '') + '">' + money(c.tot) + '</div></div>').join('') || '<div class="empty"><b>Sin compras</b>Registra tus facturas de proveedores para sumar stock.</div>';
+    $('coList').innerHTML = l.map((c) => '<div class="li" data-id="' + h(c.id) + '"><div class="grow"><div class="t">' + h(nomProv(c.pr)) + ' · ' + (c.td === 'ND' ? '<span class="badge warn">Nota de débito</span> ' : '') + h(c.num || 's/n') + ' ' + (c.an ? '<span class="badge warn">Anulada</span>' : '') + (c.fp === 'cr' ? ' <span class="badge info">Crédito ' + c.pl + ' d</span>' : '') + '</div>' +
+      '<div class="s">' + fechaTxt(c.f) + ' · ' + (c.td === 'ND' ? h(c.conc || '') + ' · modifica ' + h(c.refNum || '') : (c.it || []).length + ' productos') + ' · ' + h(nomVend(c.v)) + '</div></div><div class="v" style="' + (c.an ? 'text-decoration:line-through;opacity:.5' : '') + '">' + money(c.tot) + '</div></div>').join('') || '<div class="empty"><b>Sin compras</b>Registra tus facturas de proveedores para sumar stock.</div>';
   };
   $('coProv').onchange = pintar; $('coQ').oninput = pintar;
   $('coList').onclick = (e) => { const d = e.target.closest('[data-id]'); if (d) verCompra(S.com.get(d.dataset.id)); };
@@ -1855,16 +1925,18 @@ function pgCompras(){
 }
 
 function verCompra(c){
-  const t = c;
+  if (c.td === 'ND') return verNotaDebito(c);
+  const t = c; const nds = vivos('com').filter((x) => x.td === 'ND' && x.ref === c.id && !x.an);
   const m = modal({ title: 'Compra ' + (c.num || ''), wide: true, body:
     (c.an ? '<div class="note warn" style="margin-bottom:10px">Anulada el ' + fechaTxt(c.an.f) + ' por ' + h(nomVend(c.an.v)) + '</div>' : '') +
     '<p style="margin-top:0"><b>' + h(nomProv(c.pr)) + '</b> · ' + fechaTxt(c.f) + ' · ' + (c.fp === 'cr' ? 'Crédito ' + c.pl + ' días (vence ' + fechaTxt(c.venc) + ')' : 'Contado') + ' · registró ' + h(nomVend(c.v)) + '</p>' +
     '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Producto</th><th class="n">Costo</th><th class="n">IVA</th><th class="n">Subtotal</th></tr></thead><tbody>' +
     (c.it || []).map((x) => '<tr><td class="n">' + numf(x.q) + '</td><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + '</div></td><td class="n">' + money(x.co) + '</td><td class="n">' + (x.iva || 0) + '%</td><td class="n">' + money(x.co * x.q) + '</td></tr>').join('') +
-    '</tbody><tfoot><tr><td colspan="4">Subtotal ' + cfg().iva + '% ' + money(t.sub12) + ' · 0% ' + money(t.sub0) + ' · IVA ' + money(t.iva) + '</td><td class="n">' + money(t.tot) + '</td></tr></tfoot></table></div>' + (c.nota ? '<p>Nota: ' + h(c.nota) + '</p>' : ''),
-    foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vcX">' + ic('sheet') + 'Excel</button>' + (!c.an && esAdmin() ? '<button class="btn" id="vcEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="vcAn">' + ic('x') + 'Anular</button>' : '') });
+    '</tbody><tfoot><tr><td colspan="4">Subtotal ' + cfg().iva + '% ' + money(t.sub12) + ' · 0% ' + money(t.sub0) + ' · IVA ' + money(t.iva) + '</td><td class="n">' + money(t.tot) + '</td></tr></tfoot></table></div>' + (nds.length ? '<div class="note warn" style="margin-top:10px">Notas de débito: ' + nds.map((n) => '<b>' + h(n.num || 's/n') + '</b> ' + h(n.conc || '') + ' (' + money(n.tot) + ')').join(', ') + '</div>' : '') + (c.nota ? '<p>Nota: ' + h(c.nota) + '</p>' : ''),
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vcX">' + ic('sheet') + 'Excel</button>' + (!c.an && puede('compras') ? '<button class="btn c3d co" id="vcNd">' + ic('receipt') + 'Nota de débito</button>' : '') + (!c.an && esAdmin() ? '<button class="btn" id="vcEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="vcAn">' + ic('x') + 'Anular</button>' : '') });
   m.q('#vcX').onclick = () => exportarFilas('Compra ' + (c.num || c.id), ['Código', 'Producto', 'Cantidad', 'Costo', 'IVA %', 'Subtotal'], (c.it || []).map((x) => [x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q)]));
   if (m.q('#vcEd')) m.q('#vcEd').onclick = () => { m.close(); editarCompra(c); };
+  if (m.q('#vcNd')) m.q('#vcNd').onclick = () => { m.close(); notaDebito(c); };
   if (m.q('#vcAn')) m.q('#vcAn').onclick = async () => { if (!(await confirmar('¿Anular esta compra? El stock que sumó se descuenta.', 'Anular', true))) return;
     c.an = { f: hoyISO(), v: USR.id }; await put('com', c); m.close(); toast('Compra anulada'); render(); };
 }
@@ -1932,6 +2004,50 @@ function editarCompra(c){
     m.close(); toast('Compra guardada. Stock actualizado.'); render();
   };
   pintar();
+}
+
+/* =====================================================================
+   NOTA DE DÉBITO del proveedor (valor adicional a pagar por una compra)
+   ===================================================================== */
+function notaDebito(c, nd){
+  const nuevo = !nd;
+  nd = nd || { id: uid('nd'), td: 'ND', pr: c.pr, ref: c.id, refNum: c.num, num: '', f: hoyISO(), conc: 'Intereses por mora', nota: '', base: 0, ivaP: cfg().iva, fp: c.fp === 'cr' ? 'cr' : 'co', it: [] };
+  const m = modal({ title: (nuevo ? 'Nota de débito' : 'Editar nota de débito') + ' · ' + nomProv(nd.pr), body:
+    '<p class="small muted" style="margin-top:0">Valor adicional que el proveedor te cobra sobre la compra <b>' + h(nd.refNum || '') + '</b>. Se suma a lo que le debes y aparece en los reportes de compras.</p>' +
+    '<div class="grid2"><label class="f">N° nota de débito del proveedor<input class="in" id="ndNum" value="' + h(nd.num) + '" placeholder="001-001-000000123"></label>' +
+    '<label class="f">Fecha<input class="in" type="date" id="ndF" value="' + h(nd.f) + '"></label>' +
+    '<label class="f">Concepto<select class="in" id="ndC">' + ['Intereses por mora', 'Flete / transporte', 'Diferencia de precio', 'Gastos bancarios', 'Cheque protestado', 'Otro'].map((o) => '<option' + (o === nd.conc ? ' selected' : '') + '>' + o + '</option>').join('') + '</select></label>' +
+    '<label class="f">Pago<select class="in" id="ndFp"><option value="cr">A crédito (se suma a la deuda)</option><option value="co">Pagada al contado</option></select></label>' +
+    '<label class="f">Valor sin IVA<input class="in" id="ndB" inputmode="decimal" value="' + (nd.base || '') + '" placeholder="0.00" autofocus></label>' +
+    '<label class="f">IVA %' + campoIva('in', 'id="ndI"', nd.ivaP) + '</label></div>' +
+    '<label class="f" style="margin-top:10px">Detalle (opcional)<input class="in" id="ndN" value="' + h(nd.nota) + '"></label>' +
+    '<div class="card ctot" id="ndT" style="margin-top:12px"></div>',
+    foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d co" id="ndOk">' + ic('check') + 'Guardar nota de débito</button>' });
+  m.q('#ndFp').value = nd.fp;
+  const calc = () => { const b = r2(parseFloat(String(m.q('#ndB').value).replace(',', '.')) || 0), p = parseFloat(String(m.q('#ndI').value).replace(',', '.')) || 0, i = r2(b * p / 100);
+    m.q('#ndT').innerHTML = '<div class="totbox"><div><span>Subtotal ' + p + '%</span><b>' + money(b) + '</b></div><div><span>IVA ' + p + '%</span><b>' + money(i) + '</b></div><div class="big"><span>TOTAL</span><span>' + money(b + i) + '</span></div></div>';
+    return { b, p, i }; };
+  m.q('#ndB').oninput = calc; m.q('#ndI').oninput = calc; calc();
+  m.q('#ndOk').onclick = async () => {
+    const k = calc(); if (!(k.b > 0)) return toast('Escribe el valor de la nota de débito.', true);
+    const comp = S.com.get(nd.ref) || c || {};
+    Object.assign(nd, { num: m.q('#ndNum').value.trim(), f: m.q('#ndF').value || hoyISO(), conc: m.q('#ndC').value, fp: m.q('#ndFp').value, nota: m.q('#ndN').value.trim(),
+      base: k.b, ivaP: k.p, sub12: k.p ? k.b : 0, sub0: k.p ? 0 : k.b, iva: k.i, tot: r2(k.b + k.i), ts: nd.ts || Date.now(), v: nd.v || USR.id,
+      pl: m.q('#ndFp').value === 'cr' ? (comp.pl || 30) : 0, venc: m.q('#ndFp').value === 'cr' ? (comp.venc || sumarDias(m.q('#ndF').value || hoyISO(), comp.pl || 30)) : '' });
+    await put('com', nd); m.close(); toast('Nota de débito guardada'); render();
+  };
+}
+function verNotaDebito(n){
+  const c = S.com.get(n.ref);
+  const m = modal({ title: 'Nota de débito ' + (n.num || ''), body:
+    (n.an ? '<div class="note warn" style="margin-bottom:10px">Anulada el ' + fechaTxt(n.an.f) + '</div>' : '') +
+    '<p style="margin-top:0"><b>' + h(nomProv(n.pr)) + '</b> · ' + fechaTxt(n.f) + ' · ' + (n.fp === 'cr' ? 'A crédito, vence ' + fechaTxt(n.venc) : 'Pagada al contado') + '</p>' +
+    '<div class="note" style="margin-bottom:10px">Modifica la compra <b>' + h(n.refNum || '') + '</b>' + (c ? ' del ' + fechaTxt(c.f) : '') + ' · Concepto: <b>' + h(n.conc) + '</b>' + (n.nota ? ' · ' + h(n.nota) : '') + '</div>' +
+    '<div class="card"><div class="totbox"><div><span>Subtotal ' + (n.ivaP || 0) + '%</span><b>' + money(n.base) + '</b></div><div><span>IVA</span><b>' + money(n.iva) + '</b></div><div class="big"><span>TOTAL</span><span>' + money(n.tot) + '</span></div></div></div>',
+    foot: '<button class="btn" data-x>Cerrar</button>' + (c ? '<button class="btn" id="ndVc">' + ic('doc') + 'Ver compra</button>' : '') + (!n.an && esAdmin() ? '<button class="btn" id="ndEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="ndAn">' + ic('x') + 'Anular</button>' : '') });
+  if (m.q('#ndVc')) m.q('#ndVc').onclick = () => { m.close(); verCompra(c); };
+  if (m.q('#ndEd')) m.q('#ndEd').onclick = () => { m.close(); notaDebito(c, n); };
+  if (m.q('#ndAn')) m.q('#ndAn').onclick = async () => { if (!(await confirmar('¿Anular esta nota de débito?', 'Anular', true))) return; n.an = { f: hoyISO(), v: USR.id }; await put('com', n); m.close(); render(); };
 }
 
 /* =====================================================================
@@ -2197,8 +2313,8 @@ function exportarTodo(){
       vs.map((v) => [DOC[v.tp], v.num, v.f, horaTxt(v.ts), nomVend(v.v), nomCli(v), (v.cli && v.cli.ruc) || CONSUMIDOR.ruc, FPAGO[v.fp] || '', v.sub12, v.sub0, v.desc, v.iva, v.tot, r2(v.costo || 0), r2(v.sub12 + v.sub0 - (v.costo || 0)), pagado(v), saldo(v), est(v), v.sri || '', v.nota || ''])],
     ['Detalle ventas', ['Número', 'Tipo', 'Fecha', 'Vendedor', 'Cliente', 'Código', 'Producto', 'Cantidad', 'P. unit.', 'Desc. %', 'IVA %', 'Total', 'Costo unit.', 'Estado'],
       [].concat(...vs.map((v) => (v.it || []).map((x) => [v.num, DOC[v.tp], v.f, nomVend(v.v), nomCli(v), x.p, x.n, x.q, x.pu, x.d || 0, x.iva, r2(calcItem(x).neto), x.co || 0, est(v)])))],
-    ['Compras', ['N° factura', 'Fecha', 'Proveedor', 'Pago', 'Plazo', 'Vence', 'Subtotal IVA', 'Subtotal 0%', 'IVA', 'Total', 'Registró', 'Estado'],
-      cs.map((c) => [c.num, c.f, nomProv(c.pr), c.fp === 'cr' ? 'Crédito' : 'Contado', c.pl || '', c.venc || '', c.sub12, c.sub0, c.iva, c.tot, nomVend(c.v), c.an ? 'ANULADA' : ''])],
+    ['Compras', ['Tipo', 'N° documento', 'Fecha', 'Proveedor', 'Pago', 'Plazo', 'Vence', 'Subtotal IVA', 'Subtotal 0%', 'IVA', 'Total', 'Registró', 'Estado'],
+      cs.map((c) => [c.td === 'ND' ? 'Nota de débito (modifica ' + (c.refNum || '') + ')' : 'Factura', c.num, c.f, nomProv(c.pr), c.fp === 'cr' ? 'Crédito' : 'Contado', c.pl || '', c.venc || '', c.sub12, c.sub0, c.iva, c.tot, nomVend(c.v), c.an ? 'ANULADA' : ''])],
     ['Detalle compras', ['N° factura', 'Fecha', 'Proveedor', 'Código', 'Producto', 'Cantidad', 'Costo', 'IVA %', 'Subtotal', 'Estado'],
       [].concat(...cs.map((c) => (c.it || []).map((x) => [c.num, c.f, nomProv(c.pr), x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q), c.an ? 'ANULADA' : ''])))],
     ['Clientes', ['Nombre', 'Cédula/RUC', 'Teléfono', 'Correo', 'Dirección'], vivos('cli').map((c) => [c.nombre, c.ruc, c.tel, c.correo, c.dir])],
@@ -2522,7 +2638,7 @@ const REP = {
   },
   caja(F){
     const vs = ventasDe(F); const an = vivos('vta').filter((v) => v.an && v.tp !== 'P' && enRango(v.an.f, F) && (!F.vend || v.v === F.vend));
-    const abonos = []; vivos('vta').forEach((v) => (v.ab || []).forEach((a) => { if (enRango(a.f, F) && (!F.vend || a.v === F.vend)) abonos.push({ v, a }); }));
+    const abonos = []; vivos('vta').forEach((v) => (v.ab || []).forEach((a) => { if (a.fp !== 'nc' && enRango(a.f, F) && (!F.vend || a.v === F.vend)) abonos.push({ v, a }); }));
     const porFp = {}; Object.keys(FPAGO).forEach((k) => { porFp[k] = 0; });
     vs.forEach((v) => { porFp[v.fp] = (porFp[v.fp] || 0) + v.tot; });
     const abFp = { ef: 0, tr: 0, tj: 0 }; abonos.forEach(({ a }) => { abFp[a.fp] = (abFp[a.fp] || 0) + a.m; });
