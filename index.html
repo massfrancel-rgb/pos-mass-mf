@@ -292,7 +292,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17d';
+const APP_VER = '2026-10-17e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2040,35 +2040,61 @@ async function importarTerceros(file, t){
 /* =====================================================================
    REPORTES
    ===================================================================== */
+// [clave, título, grupo, solo con permiso "rep", descripción, sin período, controles]
 const REPORTES = [
-  ['resumen', 'Resumen general', 0], ['caja', 'Cierre de caja', 0], ['vendedores', 'Ventas por vendedor', 1], ['formas', 'Ventas por forma de pago', 0],
-  ['dias', 'Ventas por día', 0], ['productos', 'Productos más vendidos y utilidad', 0], ['categorias', 'Ventas por categoría', 1], ['clientes', 'Ventas por cliente', 1],
-  ['cxc', 'Cuentas por cobrar', 0], ['pedidos', 'Pedidos pendientes', 0], ['anulados', 'Documentos anulados', 1],
-  ['compras', 'Compras por proveedor', 1], ['cxp', 'Compras a crédito por vencer', 1], ['inventario', 'Inventario valorizado', 1], ['stockbajo', 'Stock bajo y agotados', 0],
-  ['sinmov', 'Productos sin venta', 1], ['ajustes', 'Ajustes de inventario', 1], ['iva', 'Resumen de IVA (declaración)', 1]
+  ['resumen', 'Resumen general', 'Ventas', 0, 'Ventas, utilidad, IVA, compras y más vendidos'],
+  ['caja', 'Cierre de caja', 'Ventas', 0, 'Efectivo a entregar por forma de pago'],
+  ['dias', 'Ventas por fecha', 'Ventas', 0, 'Por día, semana o mes con gráfico', 0, ['agr', 'cat']],
+  ['horas', 'Ventas por hora y día', 'Ventas', 1, 'A qué hora y qué día se vende más'],
+  ['periodos', 'Comparar períodos', 'Ventas', 1, 'Este período contra el anterior', 0, ['cat']],
+  ['vendedores', 'Ventas por vendedor', 'Ventas', 1, 'Documentos, ventas, utilidad y comisión'],
+  ['formas', 'Por forma de pago', 'Ventas', 0, 'Efectivo, transferencia, tarjeta, crédito'],
+  ['clientes', 'Ventas por cliente', 'Ventas', 1, 'Quién compra más y cuánto debe'],
+  ['anulados', 'Documentos anulados', 'Ventas', 1, 'Quién anuló y por qué'],
+  ['iva', 'Resumen de IVA', 'Ventas', 1, 'Base, IVA ventas y compras por mes'],
+  ['productos', 'Productos más vendidos', 'Productos', 0, 'Ranking por ventas, unidades y utilidad', 0, ['cat', 'marca', 'top', 'ordv']],
+  ['abc', 'Clasificación ABC', 'Productos', 1, 'Qué productos hacen el 80% de tus ventas', 0, ['cat']],
+  ['comparar', 'Comparar productos', 'Productos', 0, 'Elige hasta 6 productos y compáralos por fecha', 0, ['prods', 'agr']],
+  ['kardex', 'Movimiento de un producto', 'Productos', 0, 'Entradas, salidas y saldo por fecha', 0, ['prod']],
+  ['categorias', 'Ventas por categoría', 'Productos', 1, 'Unidades, ventas y utilidad por categoría'],
+  ['marcas', 'Ventas por marca', 'Productos', 1, 'Unidades, ventas y utilidad por marca', 0, ['cat']],
+  ['sinmov', 'Productos sin venta', 'Productos', 1, 'Con stock pero no se vendieron', 0, ['cat']],
+  ['existencias', 'Existencias detalladas', 'Inventario', 0, 'Stock, costo, valor y margen de cada producto', 1, ['cat', 'marca', 'est', 'orden']],
+  ['inventario', 'Inventario por categoría', 'Inventario', 1, 'Unidades y valor a costo y PVP', 1],
+  ['invmarca', 'Inventario por marca', 'Inventario', 1, 'Unidades y valor por marca', 1, ['cat']],
+  ['stockbajo', 'Stock bajo y agotados', 'Inventario', 0, 'Para reponer primero lo que más se vende', 1, ['cat']],
+  ['rotacion', 'Rotación y días de stock', 'Inventario', 1, 'Para cuántos días alcanza el stock', 0, ['cat']],
+  ['ajustes', 'Ajustes de inventario', 'Inventario', 1, 'Conteos, daños, pérdidas y correcciones'],
+  ['compras', 'Compras por proveedor', 'Compras y cuentas', 1, 'Base, IVA y total por proveedor'],
+  ['cxc', 'Cuentas por cobrar', 'Compras y cuentas', 0, 'Ventas a crédito pendientes', 1],
+  ['cxp', 'Compras a crédito', 'Compras y cuentas', 1, 'Vencimientos con proveedores', 1],
+  ['pedidos', 'Pedidos pendientes', 'Compras y cuentas', 0, 'Pedidos sin facturar', 1]
 ];
+const GRUPOS_REP = { Ventas: 'chart', Productos: 'cart', Inventario: 'box', 'Compras y cuentas': 'truck' };
+let RO = Object.assign({ cat: '', marca: '', est: '', agr: 'dia', prods: [], prod: '', orden: 'valor', top: '50', ordv: 'ventas' }, ls.get('repOpt', {}));
+const guardarRO = () => ls.set('repOpt', RO);
+
 function pgReportes(){
   const todos = puede('rep');
-  const lista = REPORTES.filter((r) => todos || !r[2]);
-  let rep = ls.get('repSel', 'resumen'); if (!lista.some((r) => r[0] === rep)) rep = 'resumen';
-  $('view').innerHTML = '<div class="pagehead"><h2>Reportes</h2><button class="btn sm" id="rX">' + ic('sheet') + 'Excel</button><button class="btn sm noprint" id="rP">' + ic('pdf') + 'Imprimir</button></div>' +
-    '<div class="stack"><div class="row noprint"><select class="in" id="rSel" style="flex:1 1 240px;width:auto">' + lista.map((r) => '<option value="' + r[0] + '">' + r[1] + '</option>').join('') + '</select></div>' +
-    '<div id="rPer" class="noprint"></div><div id="rOut"></div></div>';
-  $('rSel').value = rep;
+  const lista = REPORTES.filter((r) => todos || !r[3]);
+  const prm = new URLSearchParams((location.hash.split('?')[1]) || '');
+  const rep = prm.get('r');
+  const def = lista.find((r) => r[0] === rep);
+  if (!def) return menuReportes(lista);
+  const sinPeriodo = !!def[5];
+  $('view').innerHTML = '<div class="pagehead"><a class="btn sm noprint" href="#rep">← Todos los reportes</a><span class="spacer"></span><button class="btn sm" id="rX">' + ic('sheet') + 'Excel</button><button class="btn sm noprint" id="rP">' + ic('pdf') + 'Imprimir</button></div>' +
+    '<div class="stack"><div id="rPer" class="noprint" style="' + (sinPeriodo ? 'display:none' : '') + '"></div><div id="rCtl" class="noprint"></div><div id="rOut"></div></div>';
   let F, ultimo = null;
   const pintar = () => {
-    rep = $('rSel').value; ls.set('repSel', rep);
-    const def = lista.find((r) => r[0] === rep);
-    const sinPeriodo = ['cxc', 'pedidos', 'inventario', 'stockbajo', 'cxp'].includes(rep);
-    $('rPer').style.display = sinPeriodo ? 'none' : '';
-    const R = REP[rep](F);
+    let R;
+    try { R = REP[def[0]](F); } catch (e) { R = { html: '<div class="note warn">No se pudo generar: ' + h(e.message) + '</div>' }; }
     ultimo = Object.assign({ nombre: def[1], titulo: def[1] + (sinPeriodo ? '' : ' · ' + F.txt) }, R);
-    $('rOut').innerHTML = '<h3 style="margin:2px 0 10px">' + h(ultimo.titulo) + (F.vend ? ' · ' + h(nomVend(F.vend)) : '') + '</h3>' +
+    $('rOut').innerHTML = '<h3 style="margin:2px 0 10px">' + h(ultimo.titulo) + (F.vend && !sinPeriodo ? ' · ' + h(nomVend(F.vend)) : '') + (RO.cat && (def[6] || []).includes('cat') ? ' · ' + h(RO.cat) : '') + '</h3>' +
       (R.kpis ? '<div class="kpis" style="margin-bottom:12px">' + R.kpis.map((k, i) => '<div class="kpi ' + (i === 0 ? 'gold' : '') + '"><span>' + h(k[0]) + '</span><b>' + k[1] + '</b>' + (k[2] ? '<small>' + h(k[2]) + '</small>' : '') + '</div>').join('') + '</div>' : '') +
       (R.html || '') + (R.cab ? tablaRep(R) : '');
     if (R.after) R.after($('rOut'));
   };
-  $('rSel').onchange = pintar;
+  controlesRep($('rCtl'), def[6] || [], pintar);
   $('rX').onclick = () => { if (!ultimo || !ultimo.cab) return toast('Este reporte no tiene tabla para exportar.', true);
     const ta = document.createElement('textarea');
     const limpio = (c) => { if (typeof c !== 'string') return c; ta.innerHTML = c.replace(/<[^>]+>/g, '').trim(); return ta.value; };
@@ -2076,29 +2102,113 @@ function pgReportes(){
   $('rP').onclick = () => window.print();
   filtroPeriodo($('rPer'), 'rep', (f) => { F = f; pintar(); }, true);
 }
+function menuReportes(lista){
+  const grupos = Object.keys(GRUPOS_REP);
+  $('view').innerHTML = '<div class="pagehead"><h2>Reportes</h2></div>' + grupos.map((g) => {
+    const rs = lista.filter((r) => r[2] === g); if (!rs.length) return '';
+    return '<h3 style="margin:18px 0 10px;display:flex;gap:8px;align-items:center">' + ic(GRUPOS_REP[g], '').replace('class=""', 'style="width:22px;height:22px;color:var(--gold)"') + h(g) + '</h3><div class="menu">' +
+      rs.map((r) => '<a href="#rep?r=' + r[0] + '">' + h(r[1]) + '<small>' + h(r[4]) + '</small></a>').join('') + '</div>';
+  }).join('');
+}
+function controlesRep(cont, ctls, onChange){
+  if (!ctls.length) { cont.innerHTML = ''; return; }
+  const cats = categorias(); const marcas = Array.from(new Set(vivos('prod').map((p) => p.m).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const sel = (k, opts, w) => '<select class="in" data-o="' + k + '" style="flex:1 1 ' + (w || 170) + 'px;width:auto">' + opts.map(([v, t]) => '<option value="' + h(v) + '"' + (String(RO[k]) === String(v) ? ' selected' : '') + '>' + h(t) + '</option>').join('') + '</select>';
+  let html = '<div class="row">';
+  if (ctls.includes('agr')) html += '<div class="seg" data-seg="agr" style="flex:1 1 240px">' + [['dia', 'Por día'], ['sem', 'Por semana'], ['mes', 'Por mes']].map(([v, t]) => '<button data-v="' + v + '" class="' + (RO.agr === v ? 'on' : '') + '">' + t + '</button>').join('') + '</div>';
+  if (ctls.includes('cat')) html += sel('cat', [['', 'Todas las categorías']].concat(cats.map((c) => [c, c])), 200);
+  if (ctls.includes('marca')) html += sel('marca', [['', 'Todas las marcas']].concat(marcas.map((c) => [c, c])), 180);
+  if (ctls.includes('est')) html += sel('est', [['', 'Todo el stock'], ['con', 'Con stock'], ['sin', 'Sin stock (0)'], ['bajo', 'Bajo el mínimo'], ['neg', 'Stock negativo'], ['sinc', 'Con stock y sin costo']]);
+  if (ctls.includes('orden')) html += sel('orden', [['valor', 'Ordenar: mayor valor'], ['stock', 'Ordenar: mayor stock'], ['margen', 'Ordenar: menor margen'], ['nombre', 'Ordenar: nombre A-Z'], ['codigo', 'Ordenar: código']]);
+  if (ctls.includes('ordv')) html += sel('ordv', [['ventas', 'Ordenar: más dinero'], ['unid', 'Ordenar: más unidades'], ['util', 'Ordenar: más utilidad'], ['docs', 'Ordenar: más veces vendido']]);
+  if (ctls.includes('top')) html += sel('top', [['20', 'Top 20'], ['50', 'Top 50'], ['100', 'Top 100'], ['0', 'Todos']], 110);
+  html += '</div>';
+  if (ctls.includes('prods') || ctls.includes('prod')) {
+    const multi = ctls.includes('prods');
+    const ids = multi ? RO.prods : (RO.prod ? [RO.prod] : []);
+    html += '<div class="stack" style="margin-top:10px"><div id="rcBus"></div><div class="row" id="rcChips">' + ids.map((id) => { const p = S.prod.get(id) || { n: id };
+      return '<span class="badge gold" style="font-size:14px;padding:5px 6px 5px 11px">' + h(p.n.slice(0, 40)) + ' <button class="btn sm icon ghost" data-quitar="' + h(id) + '" style="min-height:24px;width:24px" aria-label="Quitar">' + ic('x') + '</button></span>'; }).join('') +
+      (ids.length ? '' : '<span class="small muted">' + (multi ? 'Busca y agrega de 2 a 6 productos para compararlos.' : 'Busca el producto que quieres revisar.') + '</span>') + '</div></div>';
+  }
+  cont.innerHTML = html;
+  qsa('[data-o]', cont).forEach((s) => { s.onchange = () => { RO[s.dataset.o] = s.value; guardarRO(); onChange(); }; });
+  const sg = qs('[data-seg="agr"]', cont); if (sg) sg.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; RO.agr = b.dataset.v; guardarRO(); qsa('button', sg).forEach((x) => x.classList.toggle('on', x === b)); onChange(); };
+  if ($('rcBus')) {
+    const multi = ctls.includes('prods');
+    montarBuscador($('rcBus'), (p) => {
+      if (multi) { if (RO.prods.includes(p.id)) return; if (RO.prods.length >= 6) return toast('Máximo 6 productos.', true); RO.prods = RO.prods.concat([p.id]); } else RO.prod = p.id;
+      guardarRO(); controlesRep(cont, ctls, onChange); onChange();
+    }, { ph: multi ? 'Agregar producto a comparar…' : 'Buscar producto…', continuo: false });
+    $('rcChips').onclick = (e) => { const b = e.target.closest('[data-quitar]'); if (!b) return; const id = b.dataset.quitar;
+      if (multi) RO.prods = RO.prods.filter((x) => x !== id); else RO.prod = ''; guardarRO(); controlesRep(cont, ctls, onChange); onChange(); };
+  }
+}
 function tablaRep(R){
   const n = R.num || [];
+  const max = R.max || 1500;
+  const filas = R.filas.slice(0, max);
   return '<div class="tblwrap"><table class="tbl"><thead><tr>' + R.cab.map((c, i) => '<th class="' + (n.includes(i) ? 'n' : '') + '">' + h(c) + '</th>').join('') + '</tr></thead><tbody>' +
-    (R.filas.length ? R.filas.map((f, j) => '<tr' + (R.clic ? ' class="click" data-j="' + j + '"' : '') + '>' + f.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + R.cab.length + '" class="center muted" style="padding:20px">Sin datos en este período</td></tr>') +
-    '</tbody>' + (R.pie ? '<tfoot><tr>' + R.pie.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] && typeof c === 'number' ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr></tfoot>' : '') + '</table></div>';
+    (filas.length ? filas.map((f, j) => '<tr' + (R.clic ? ' class="click" data-j="' + j + '"' : '') + '>' + f.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + R.cab.length + '" class="center muted" style="padding:20px">Sin datos para este filtro</td></tr>') +
+    '</tbody>' + (R.pie ? '<tfoot><tr>' + R.pie.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] && typeof c === 'number' ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr></tfoot>' : '') + '</table></div>' +
+    (R.filas.length > max ? '<p class="small muted">Se muestran ' + max + ' de ' + R.filas.length + ' filas. El botón Excel exporta todas.</p>' : '');
 }
 function ventasDe(F, conPedidos){ return vivos('vta').filter((v) => !v.an && (conPedidos || v.tp !== 'P') && enRango(v.f, F) && (!F.vend || v.v === F.vend)); }
 const util = (v) => r2((v.sub12 || 0) + (v.sub0 || 0) - (v.costo || 0));
 const pct = (a, b) => (b ? Math.round(a / b * 1000) / 10 + '%' : '—');
 const M$ = (c) => money(c);
 function agrupar(lista, key, val){ const m = new Map(); lista.forEach((x) => { const k = key(x); const o = m.get(k) || {}; val(o, x); m.set(k, o); }); return m; }
-function barras(datos){   // [[etiqueta, valor]]
+function barras(datos, fmt){   // [[etiqueta, valor]]
+  fmt = fmt || money;
   const max = Math.max(1, ...datos.map((d) => d[1]));
-  return '<div class="card" style="margin-bottom:12px"><div class="bars">' + datos.map((d) => '<div class="b" title="' + h(d[0]) + ': ' + money(d[1]) + '"><i style="height:' + Math.max(1, d[1] / max * 100) + '%"></i></div>').join('') + '</div>' +
+  return '<div class="card" style="margin-bottom:12px"><div class="bars">' + datos.map((d) => '<div class="b" title="' + h(d[0]) + ': ' + fmt(d[1]) + '"><i style="height:' + Math.max(1, d[1] / max * 100) + '%"></i></div>').join('') + '</div>' +
     '<div class="bars-x">' + datos.map((d, i) => '<span>' + (datos.length > 16 && i % Math.ceil(datos.length / 12) ? '' : h(d[0])) + '</span>').join('') + '</div></div>';
 }
-function serieDias(vs, F){
+/* ---------- agrupación por día / semana / mes ---------- */
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function claveAgr(f, agr){
+  if (agr === 'mes') return f.slice(0, 7);
+  if (agr === 'sem') { const d = new Date(f + 'T12:00:00'); const dw = (d.getDay() + 6) % 7; return sumarDias(f, -dw); }
+  return f;
+}
+function etiquetaAgr(k, agr){
+  if (agr === 'mes') return MESES[+k.slice(5, 7) - 1] + ' ' + k.slice(2, 4);
+  if (agr === 'sem') return 'Sem ' + k.slice(8, 10) + '/' + k.slice(5, 7);
+  return k.slice(8, 10) + '/' + k.slice(5, 7);
+}
+function cubetas(F, fechas, agr){
   let d1 = F.desde, d2 = F.hasta;
-  if (d1 < '2000') { const fs = vs.map((v) => v.f).sort(); d1 = fs[0] || hoyISO(); d2 = fs[fs.length - 1] || hoyISO(); }
-  const m = agrupar(vs, (v) => v.f, (o, v) => { o.t = (o.t || 0) + v.tot; });
-  const out = []; let d = d1, n = 0;
-  while (d <= d2 && n < 400) { out.push([d.slice(8, 10) + '/' + d.slice(5, 7), r2((m.get(d) || {}).t || 0), d]); d = sumarDias(d, 1); n++; }
+  if (d1 < '2000') { const fs = fechas.slice().sort(); d1 = fs[0] || hoyISO(); d2 = fs[fs.length - 1] || hoyISO(); }
+  const out = []; const vistos = new Set(); let d = d1, n = 0;
+  while (d <= d2 && n < 1200) { const k = claveAgr(d, agr); if (!vistos.has(k)) { vistos.add(k); out.push(k); } d = sumarDias(d, 1); n++; }
   return out;
+}
+function serieDias(vs, F){
+  const m = agrupar(vs, (v) => v.f, (o, v) => { o.t = (o.t || 0) + v.tot; });
+  return cubetas(F, vs.map((v) => v.f), 'dia').map((k) => [etiquetaAgr(k, 'dia'), r2((m.get(k) || {}).t || 0), k]);
+}
+const prodDe = (id) => S.prod.get(id) || {};
+const enFiltro = (id) => { const p = prodDe(id); return (!RO.cat || p.c === RO.cat) && (!RO.marca || p.m === RO.marca); };
+/** Líneas de detalle vendidas en el período: [{v, x, k}] */
+function lineasVendidas(F, filtrar){
+  const out = [];
+  ventasDe(F).forEach((v) => (v.it || []).forEach((x) => { if (!filtrar || enFiltro(x.p)) out.push({ v, x, k: calcItem(x) }); }));
+  return out;
+}
+const COLORES = ['#C99A2E', '#2F6DB5', '#2E8B57', '#C0392B', '#7D4CA8', '#E67E22'];
+function lineasSvg(labels, series){   // series: [{n, d:[valores]}]
+  const W = 900, H = 260, P = 36; const n = labels.length || 1;
+  const max = Math.max(1, ...series.flatMap((s) => s.d));
+  const x = (i) => P + (n === 1 ? (W - 2 * P) / 2 : i * (W - 2 * P) / (n - 1)); const y = (v) => H - P - v / max * (H - 2 * P);
+  let g = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block" role="img">';
+  for (let i = 0; i <= 4; i++) { const yy = P + i * (H - 2 * P) / 4; g += '<line x1="' + P + '" x2="' + (W - P) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)"/><text x="4" y="' + (yy + 4) + '" font-size="11" fill="var(--muted)">' + numf(r2(max * (1 - i / 4)), 0) + '</text>'; }
+  const paso = Math.ceil(n / 12);
+  labels.forEach((l, i) => { if (i % paso === 0) g += '<text x="' + x(i) + '" y="' + (H - 10) + '" font-size="11" text-anchor="middle" fill="var(--muted)">' + h(l) + '</text>'; });
+  series.forEach((s, si) => { const c = COLORES[si % COLORES.length];
+    g += '<polyline fill="none" stroke="' + c + '" stroke-width="2.5" points="' + s.d.map((v, i) => x(i) + ',' + y(v)).join(' ') + '"/>';
+    s.d.forEach((v, i) => { g += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="3" fill="' + c + '"><title>' + h(s.n + ' · ' + labels[i] + ': ' + numf(v)) + '</title></circle>'; }); });
+  g += '</svg>';
+  const ley = '<div class="row small" style="margin-top:6px">' + series.map((s, si) => '<span style="display:inline-flex;align-items:center;gap:6px"><i style="width:12px;height:12px;border-radius:3px;background:' + COLORES[si % COLORES.length] + ';display:inline-block"></i>' + h(s.n.slice(0, 40)) + '</span>').join('') + '</div>';
+  return '<div class="card" style="margin-bottom:12px">' + g + ley + '</div>';
 }
 
 const REP = {
@@ -2245,6 +2355,170 @@ const REP = {
       cab: ['Mes', 'Ventas base IVA', 'Ventas 0%', 'IVA ventas', 'Compras base IVA', 'Compras 0%', 'IVA compras', 'Diferencia'], num: [1, 2, 3, 4, 5, 6, 7], fmt: { 1: M$, 2: M$, 3: M$, 4: M$, 5: M$, 6: M$, 7: M$ }, filas: l };
   }
 };
+
+/* =====================================================================
+   REPORTES DETALLADOS (inventario, productos, fechas, comparaciones)
+   ===================================================================== */
+const N0 = (c) => numf(r2(c));
+const estadoStock = (p, s) => (s < 0 ? '<span class="badge warn">Negativo</span>' : s === 0 ? '<span class="badge warn">Agotado</span>' : (Number(p.mi) && s <= Number(p.mi) ? '<span class="badge gold">Bajo mínimo</span>' : '<span class="badge ok">OK</span>'));
+const margenDe = (p) => { const base = Number(p.iva) ? (Number(p.pv) || 0) / (1 + Number(p.iva) / 100) : (Number(p.pv) || 0); return base && Number(p.co) ? (base - p.co) / base * 100 : null; };
+
+Object.assign(REP, {
+  dias(F){
+    const ls2 = lineasVendidas(F, true);
+    const docs = new Map();
+    const m = agrupar(ls2, (l) => claveAgr(l.v.f, RO.agr), (o, l) => { o.t = (o.t || 0) + l.k.neto; o.u = (o.u || 0) + l.k.base - (l.x.co || 0) * l.x.q; o.iva = (o.iva || 0) + l.k.iva; o.q = (o.q || 0) + l.x.q; o.d = o.d || new Set(); o.d.add(l.v.id); });
+    const ks = cubetas(F, ls2.map((l) => l.v.f), RO.agr);
+    const filas = ks.map((k) => { const o = m.get(k) || {}; return [etiquetaAgr(k, RO.agr) + (RO.agr === 'dia' ? ' ' + ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][new Date(k + 'T12:00:00').getDay()] : ''), o.d ? o.d.size : 0, o.q || 0, o.t || 0, o.iva || 0, o.u || 0]; });
+    const tot = filas.reduce((s, f) => s + f[3], 0); const dconv = filas.filter((f) => f[3] > 0);
+    docs.size;
+    return { kpis: [['Ventas', money(tot)], ['Promedio por ' + (RO.agr === 'mes' ? 'mes' : RO.agr === 'sem' ? 'semana' : 'día'), money(dconv.length ? tot / dconv.length : 0), dconv.length + ' con ventas'], ['Mejor', dconv.length ? money(Math.max(...dconv.map((f) => f[3]))) : '$0.00', dconv.length ? dconv.reduce((a, b) => (b[3] > a[3] ? b : a))[0] : ''], ['Utilidad', money(filas.reduce((s, f) => s + f[5], 0))]],
+      html: barras(ks.map((k) => [etiquetaAgr(k, RO.agr), r2((m.get(k) || {}).t || 0)])),
+      cab: ['Fecha', 'Documentos', 'Unidades', 'Ventas', 'IVA', 'Utilidad'], num: [1, 2, 3, 4, 5], fmt: { 2: N0, 3: M$, 4: M$, 5: M$ }, filas: filas.slice().reverse(),
+      pie: ['Total', filas.reduce((s, f) => s + f[1], 0), r2(filas.reduce((s, f) => s + f[2], 0)), r2(tot), r2(filas.reduce((s, f) => s + f[4], 0)), r2(filas.reduce((s, f) => s + f[5], 0))] };
+  },
+  horas(F){
+    const vs = ventasDe(F); const hs = Array.from({ length: 24 }, () => ({ n: 0, t: 0 })); const ds = Array.from({ length: 7 }, () => ({ n: 0, t: 0 }));
+    vs.forEach((v) => { const d = new Date(v.ts); hs[d.getHours()].n++; hs[d.getHours()].t += v.tot; const w = (d.getDay() + 6) % 7; ds[w].n++; ds[w].t += v.tot; });
+    const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const rango = hs.map((x, i) => [i, x]).filter(([, x]) => x.n); const h1 = rango.length ? rango[0][0] : 7, h2 = rango.length ? rango[rango.length - 1][0] : 19;
+    const horasVis = []; for (let i = Math.min(h1, 7); i <= Math.max(h2, 19); i++) horasVis.push(i);
+    return { html: '<h3 style="margin:4px 0 8px">Por hora</h3>' + barras(horasVis.map((i) => [i + 'h', r2(hs[i].t)])) + '<h3 style="margin:4px 0 8px">Por día de la semana</h3>' + barras(DIAS.map((d, i) => [d.slice(0, 3), r2(ds[i].t)])),
+      cab: ['Día', 'Documentos', 'Ventas', 'Promedio por documento'], num: [1, 2, 3], fmt: { 2: M$, 3: M$ }, filas: DIAS.map((d, i) => [d, ds[i].n, r2(ds[i].t), ds[i].n ? ds[i].t / ds[i].n : 0]) };
+  },
+  periodos(F){
+    let d1 = F.desde, d2 = F.hasta; if (d1 < '2000') { d1 = hoyISO().slice(0, 8) + '01'; d2 = hoyISO(); }
+    const dias = Math.round((new Date(d2) - new Date(d1)) / 864e5) + 1;
+    const P = { desde: sumarDias(d1, -dias), hasta: sumarDias(d1, -1), vend: F.vend };
+    const A = { desde: d1, hasta: d2, vend: F.vend };
+    const sumCat = (FF) => agrupar(lineasVendidas(FF, true), (l) => prodDe(l.x.p).c || 'Sin categoría', (o, l) => { o.t = (o.t || 0) + l.k.neto; o.q = (o.q || 0) + l.x.q; o.u = (o.u || 0) + l.k.base - (l.x.co || 0) * l.x.q; });
+    const a = sumCat(A), p = sumCat(P);
+    const cats = Array.from(new Set([...a.keys(), ...p.keys()]));
+    const vari = (x, y) => (y ? Math.round((x - y) / y * 1000) / 10 : (x ? 100 : 0));
+    const fl = (x) => '<b style="color:' + (x > 0 ? 'var(--ok-fg)' : x < 0 ? 'var(--warn-fg)' : 'inherit') + '">' + (x > 0 ? '▲ +' : x < 0 ? '▼ ' : '') + x + '%</b>';
+    const ta = Array.from(a.values()).reduce((s, o) => s + o.t, 0), tp = Array.from(p.values()).reduce((s, o) => s + o.t, 0);
+    const ua = Array.from(a.values()).reduce((s, o) => s + o.u, 0), up = Array.from(p.values()).reduce((s, o) => s + o.u, 0);
+    const filas = cats.map((c) => { const x = a.get(c) || {}, y = p.get(c) || {}; return [h(c), y.t || 0, x.t || 0, vari(x.t || 0, y.t || 0), y.q || 0, x.q || 0]; }).sort((m1, m2) => m2[2] - m1[2]);
+    return { kpis: [['Ventas este período', money(ta), fechaTxt(d1) + ' – ' + fechaTxt(d2)], ['Período anterior', money(tp), fechaTxt(P.desde) + ' – ' + fechaTxt(P.hasta)], ['Variación', (vari(ta, tp) > 0 ? '+' : '') + vari(ta, tp) + '%'], ['Utilidad', money(ua), 'antes ' + money(up)]],
+      cab: ['Categoría', 'Ventas anterior', 'Ventas actual', 'Variación', 'Unid. anterior', 'Unid. actual'], num: [1, 2, 3, 4, 5], fmt: { 1: M$, 2: M$, 3: fl, 4: N0, 5: N0 }, filas,
+      raw: filas.map((f) => [f[0].replace(/&amp;/g, '&'), f[1], f[2], f[3] + '%', f[4], f[5]]) };
+  },
+  productos(F){
+    const ls2 = lineasVendidas(F, true); const tot = ls2.reduce((s, l) => s + l.k.neto, 0);
+    const m = agrupar(ls2, (l) => l.x.p, (o, l) => { o.n = l.x.n; o.q = (o.q || 0) + l.x.q; o.t = (o.t || 0) + l.k.neto; o.u = (o.u || 0) + l.k.base - (l.x.co || 0) * l.x.q; o.d = (o.d || 0) + 1; o.sc = o.sc || !l.x.co; });
+    const key = { ventas: 't', unid: 'q', util: 'u', docs: 'd' }[RO.ordv] || 't';
+    let l = Array.from(m.entries()).sort((a, b) => b[1][key] - a[1][key]);
+    const top = +RO.top; if (top) l = l.slice(0, top);
+    const filas = l.map(([id, o], i) => [i + 1, h(id), thumb({ id }, 'sm'), h(o.n) + (o.sc ? ' <span class="badge warn">sin costo</span>' : '') + '<div class="small muted">' + h([prodDe(id).m, prodDe(id).c].filter(Boolean).join(' · ')) + '</div>', o.d, o.q, o.t, pct(o.t, tot), o.u, stockDe(id)]);
+    return { kpis: [['Productos vendidos', String(m.size)], ['Ventas', money(tot)], ['Unidades', N0(ls2.reduce((s, x) => s + x.x.q, 0))], ['Utilidad', money(ls2.reduce((s, x) => s + x.k.base - (x.x.co || 0) * x.x.q, 0))]],
+      html: l.length ? barras(l.slice(0, 15).map(([, o]) => [o.n.slice(0, 10), r2(o[key])]), key === 'q' || key === 'd' ? N0 : money) : '',
+      cab: ['#', 'Código', '', 'Producto', 'Veces', 'Unidades', 'Ventas', '% del total', 'Utilidad', 'Stock'], num: [0, 4, 5, 6, 7, 8, 9], fmt: { 5: N0, 6: M$, 8: M$, 9: N0 }, filas,
+      raw: l.map(([id, o], i) => [i + 1, id, '', o.n, o.d, o.q, r2(o.t), pct(o.t, tot), r2(o.u), stockDe(id)]) };
+  },
+  abc(F){
+    const ls2 = lineasVendidas(F, true); const tot = ls2.reduce((s, l) => s + l.k.neto, 0);
+    const l = Array.from(agrupar(ls2, (x) => x.x.p, (o, x) => { o.n = x.x.n; o.q = (o.q || 0) + x.x.q; o.t = (o.t || 0) + x.k.neto; }).entries()).sort((a, b) => b[1].t - a[1].t);
+    let acc = 0; const cnt = { A: 0, B: 0, C: 0 }, val = { A: 0, B: 0, C: 0 };
+    const filas = l.map(([id, o]) => { acc += o.t; const pa = tot ? acc / tot * 100 : 0; const cl = pa <= 80 ? 'A' : pa <= 95 ? 'B' : 'C'; cnt[cl]++; val[cl] += o.t;
+      return [cl === 'A' ? '<span class="badge ok">A</span>' : cl === 'B' ? '<span class="badge gold">B</span>' : '<span class="badge">C</span>', h(id), h(o.n), o.q, o.t, pct(o.t, tot), Math.round(pa * 10) / 10 + '%', stockDe(id)]; });
+    return { html: '<p class="small muted" style="margin-top:0"><b>A</b>: productos que hacen el 80% de tus ventas (nunca deben faltar). <b>B</b>: el siguiente 15%. <b>C</b>: el 5% restante.</p>',
+      kpis: [['Clase A', cnt.A + ' productos', money(val.A)], ['Clase B', cnt.B + ' productos', money(val.B)], ['Clase C', cnt.C + ' productos', money(val.C)]],
+      cab: ['Clase', 'Código', 'Producto', 'Unidades', 'Ventas', '%', '% acumulado', 'Stock'], num: [3, 4, 5, 6, 7], fmt: { 3: N0, 4: M$, 7: N0 }, filas };
+  },
+  comparar(F){
+    if (!RO.prods.length) return { html: '<div class="card empty"><b>Elige productos</b>Usa el buscador de arriba para agregar de 2 a 6 productos.</div>' };
+    const ids = RO.prods; const ls2 = lineasVendidas(F, false).filter((l) => ids.includes(l.x.p));
+    const ks = cubetas(F, ls2.map((l) => l.v.f), RO.agr);
+    const m = agrupar(ls2, (l) => l.x.p + '|' + claveAgr(l.v.f, RO.agr), (o, l) => { o.q = (o.q || 0) + l.x.q; });
+    const series = ids.map((id) => ({ n: (prodDe(id).n || id), d: ks.map((k) => r2((m.get(id + '|' + k) || {}).q || 0)) }));
+    const res = ids.map((id) => { const p = prodDe(id); const x = ls2.filter((l) => l.x.p === id); const t = x.reduce((s, l) => s + l.k.neto, 0), q = x.reduce((s, l) => s + l.x.q, 0), u = x.reduce((s, l) => s + l.k.base - (l.x.co || 0) * l.x.q, 0);
+      const mg = margenDe(p); return [thumb({ id }, 'sm'), h(p.n || id), q, t, u, mg == null ? '—' : Math.round(mg) + '%', Number(p.pv) || 0, Number(p.co) || 0, stockDe(id)]; });
+    const resumen = tablaRep({ cab: ['', 'Producto', 'Unidades', 'Ventas', 'Utilidad', 'Margen', 'PVP', 'Costo', 'Stock'], num: [2, 3, 4, 5, 6, 7, 8], fmt: { 2: N0, 3: M$, 4: M$, 6: M$, 7: M$, 8: N0 }, filas: res });
+    return { html: resumen + '<h3 style="margin:14px 0 8px">Unidades vendidas ' + (RO.agr === 'mes' ? 'por mes' : RO.agr === 'sem' ? 'por semana' : 'por día') + '</h3>' + lineasSvg(ks.map((k) => etiquetaAgr(k, RO.agr)), series) + '<h3 style="margin:14px 0 8px">Detalle por fecha</h3>',
+      cab: ['Fecha'].concat(ids.map((id) => (prodDe(id).n || id).slice(0, 26))), num: ids.map((_, i) => i + 1), max: 120,
+      filas: ks.slice().reverse().map((k) => [etiquetaAgr(k, RO.agr)].concat(ids.map((id) => r2((m.get(id + '|' + k) || {}).q || 0)))) };
+  },
+  kardex(F){
+    if (!RO.prod || !S.prod.get(RO.prod)) return { html: '<div class="card empty"><b>Elige un producto</b>Búscalo arriba para ver sus entradas, salidas y saldo por fecha.</div>' };
+    const p = S.prod.get(RO.prod); const todo = movimientosDe(p.id);
+    const antes = todo.filter((x) => x.f < F.desde); const saldoIni = antes.length ? antes[antes.length - 1].s : 0;
+    const l = todo.filter((x) => enRango(x.f, F));
+    const ent = l.filter((x) => x.q > 0).reduce((s, x) => s + x.q, 0), sal = l.filter((x) => x.q < 0).reduce((s, x) => s - x.q, 0);
+    return { kpis: [['Stock actual', N0(stockDe(p.id))], ['Saldo al inicio', N0(saldoIni)], ['Entradas', N0(ent)], ['Salidas', N0(sal)]],
+      html: '<div class="pcell" style="margin-bottom:10px">' + thumb(p) + '<div><b>' + h(p.n) + '</b><div class="small muted">' + h([p.id, p.m, p.c].filter(Boolean).join(' · ')) + ' · PVP ' + money(p.pv) + (Number(p.co) ? ' · costo ' + money(p.co) : '') + '</div></div></div>',
+      cab: ['Fecha', 'Detalle', 'Usuario', 'Entra', 'Sale', 'Saldo'], num: [3, 4, 5], fmt: { 5: (c) => '<b>' + N0(c) + '</b>' },
+      filas: l.slice().reverse().map((x) => [fechaTxt(x.f) + ' ' + (x.ts ? horaTxt(x.ts) : ''), h(x.d), h(nomVend(x.u)), x.q > 0 ? x.q : '', x.q < 0 ? -x.q : '', x.s]) };
+  },
+  marcas(F){
+    const ls2 = lineasVendidas(F, true); const tot = ls2.reduce((s, l) => s + l.k.neto, 0);
+    const l = Array.from(agrupar(ls2, (x) => prodDe(x.x.p).m || 'Sin marca', (o, x) => { o.q = (o.q || 0) + x.x.q; o.t = (o.t || 0) + x.k.neto; o.u = (o.u || 0) + x.k.base - (x.x.co || 0) * x.x.q; o.p = o.p || new Set(); o.p.add(x.x.p); }).entries()).sort((a, b) => b[1].t - a[1].t);
+    return { html: barras(l.slice(0, 15).map(([k, o]) => [k.slice(0, 10), r2(o.t)])), cab: ['Marca', 'Productos', 'Unidades', 'Ventas', '%', 'Utilidad'], num: [1, 2, 3, 4, 5], fmt: { 2: N0, 3: M$, 5: M$ },
+      filas: l.map(([k, o]) => [h(k), o.p.size, o.q, o.t, pct(o.t, tot), o.u]), pie: ['Total', '', r2(l.reduce((s, x) => s + x[1].q, 0)), r2(tot), '100%', r2(l.reduce((s, x) => s + x[1].u, 0))] };
+  },
+  sinmov(F){
+    const vend = new Set(); ventasDe(F).forEach((v) => (v.it || []).forEach((x) => vend.add(x.p)));
+    const l = vivos('prod').filter((p) => !vend.has(p.id) && stockDe(p.id) > 0 && enFiltro(p.id)).map((p) => { const s = stockDe(p.id); return [h(p.id), h(p.n), h(p.c || ''), s, Number(p.co) || 0, r2(s * (Number(p.co) || 0))]; }).sort((a, b) => b[5] - a[5]);
+    return { html: '<p class="small muted" style="margin-top:0">Productos con stock que no se vendieron en el período (capital detenido).</p>', kpis: [['Capital detenido', money(l.reduce((s, x) => s + x[5], 0)), l.length + ' productos']],
+      cab: ['Código', 'Producto', 'Categoría', 'Stock', 'Costo', 'Valor'], num: [3, 4, 5], fmt: { 4: M$, 5: M$ }, filas: l };
+  },
+  existencias(){
+    let ps = vivos('prod').filter((p) => enFiltro(p.id)).map((p) => ({ p, s: stockDe(p.id) }));
+    if (RO.est === 'con') ps = ps.filter((x) => x.s > 0); else if (RO.est === 'sin') ps = ps.filter((x) => x.s === 0);
+    else if (RO.est === 'bajo') ps = ps.filter((x) => Number(x.p.mi) > 0 && x.s <= Number(x.p.mi)); else if (RO.est === 'neg') ps = ps.filter((x) => x.s < 0);
+    else if (RO.est === 'sinc') ps = ps.filter((x) => x.s > 0 && !Number(x.p.co));
+    const vc = (x) => Math.max(0, x.s) * (Number(x.p.co) || 0);
+    const ord = { valor: (a, b) => vc(b) - vc(a), stock: (a, b) => b.s - a.s, margen: (a, b) => (margenDe(a.p) ?? 999) - (margenDe(b.p) ?? 999), nombre: (a, b) => a.p.n.localeCompare(b.p.n), codigo: (a, b) => a.p.id.localeCompare(b.p.id, undefined, { numeric: true }) }[RO.orden] || ((a, b) => vc(b) - vc(a));
+    ps.sort(ord);
+    const tc = ps.reduce((s, x) => s + vc(x), 0), tv = ps.reduce((s, x) => s + Math.max(0, x.s) * (Number(x.p.pv) || 0), 0), tu = ps.reduce((s, x) => s + Math.max(0, x.s), 0);
+    const filas = ps.map((x) => { const mg = margenDe(x.p); return [h(x.p.id), h(x.p.n) + '<div class="small muted">' + h([x.p.m, x.p.c].filter(Boolean).join(' · ')) + '</div>', x.s, Number(x.p.mi) || 0, Number(x.p.co) || 0, vc(x), Number(x.p.pv) || 0, Math.max(0, x.s) * (Number(x.p.pv) || 0), mg == null ? '—' : Math.round(mg) + '%', estadoStock(x.p, x.s)]; });
+    return { kpis: [['Valor a costo', money(tc)], ['Valor a PVP', money(tv), 'Utilidad posible ' + money(tv / (1 + cfg().iva / 100) - tc)], ['Unidades', N0(tu)], ['Productos', String(ps.length), ps.filter((x) => x.s > 0).length + ' con stock']],
+      cab: ['Código', 'Producto', 'Stock', 'Mínimo', 'Costo', 'Valor costo', 'PVP', 'Valor PVP', 'Margen', 'Estado'], num: [2, 3, 4, 5, 6, 7, 8], fmt: { 2: N0, 3: N0, 4: M$, 5: M$, 6: M$, 7: M$ }, filas, max: 300, clic: true,
+      pie: ['Total', ps.length + ' productos', r2(tu), '', '', r2(tc), '', r2(tv), '', ''],
+      raw: ps.map((x) => { const mg = margenDe(x.p); return [x.p.id, x.p.n, x.p.m || '', x.p.c || '', x.s, Number(x.p.mi) || 0, Number(x.p.co) || 0, r2(vc(x)), Number(x.p.pv) || 0, r2(Math.max(0, x.s) * (Number(x.p.pv) || 0)), mg == null ? '' : Math.round(mg) + '%']; }),
+      after: (out) => { qs('tbody', out).onclick = (e) => { const r = e.target.closest('[data-j]'); if (r) editarProducto(ps[+r.dataset.j].p); }; } };
+  },
+  inventario(){
+    const ps = vivos('prod');
+    const m = agrupar(ps, (p) => p.c || 'Sin categoría', (o, p) => { const s = Math.max(0, stockDe(p.id)); o.n = (o.n || 0) + 1; o.cs = (o.cs || 0) + (s > 0 ? 1 : 0); o.u = (o.u || 0) + s; o.c = (o.c || 0) + s * (Number(p.co) || 0); o.v = (o.v || 0) + s * (Number(p.pv) || 0); o.ag = (o.ag || 0) + (s <= 0 ? 1 : 0); });
+    const l = Array.from(m.entries()).sort((a, b) => b[1].c - a[1].c); const tc = l.reduce((s, x) => s + x[1].c, 0);
+    const [cab2, raw] = hojaProductos();
+    return { kpis: [['Valor a costo', money(tc)], ['Valor a PVP', money(l.reduce((s, x) => s + x[1].v, 0))], ['Unidades', N0(l.reduce((s, x) => s + x[1].u, 0))], ['Categorías', String(l.length)]],
+      html: barras(l.slice(0, 20).map(([k, o]) => [k.slice(0, 10), r2(o.c)])) + '<p class="small muted">Toca una categoría para ver sus productos.</p>',
+      cab: ['Categoría', 'Productos', 'Con stock', 'Agotados', 'Unidades', 'Valor costo', '% del inventario', 'Valor PVP'], num: [1, 2, 3, 4, 5, 6, 7], fmt: { 4: N0, 5: M$, 7: M$ }, clic: true,
+      filas: l.map(([k, o]) => [h(k), o.n, o.cs, o.ag, o.u, o.c, pct(o.c, tc), o.v]),
+      pie: ['Total', ps.length, l.reduce((s, x) => s + x[1].cs, 0), l.reduce((s, x) => s + x[1].ag, 0), r2(l.reduce((s, x) => s + x[1].u, 0)), r2(tc), '100%', r2(l.reduce((s, x) => s + x[1].v, 0))],
+      extra: [['Detalle productos', cab2, raw]],
+      after: (out) => { qs('tbody', out).onclick = (e) => { const r = e.target.closest('[data-j]'); if (!r) return; RO.cat = l[+r.dataset.j][0] === 'Sin categoría' ? '' : l[+r.dataset.j][0]; RO.marca = ''; RO.est = ''; guardarRO(); location.hash = 'rep?r=existencias'; }; } };
+  },
+  invmarca(){
+    const ps = vivos('prod').filter((p) => enFiltro(p.id));
+    const l = Array.from(agrupar(ps, (p) => p.m || 'Sin marca', (o, p) => { const s = Math.max(0, stockDe(p.id)); o.n = (o.n || 0) + 1; o.u = (o.u || 0) + s; o.c = (o.c || 0) + s * (Number(p.co) || 0); o.v = (o.v || 0) + s * (Number(p.pv) || 0); }).entries()).sort((a, b) => b[1].c - a[1].c);
+    const tc = l.reduce((s, x) => s + x[1].c, 0);
+    return { html: barras(l.slice(0, 20).map(([k, o]) => [k.slice(0, 10), r2(o.c)])), cab: ['Marca', 'Productos', 'Unidades', 'Valor costo', '%', 'Valor PVP'], num: [1, 2, 3, 4, 5], fmt: { 2: N0, 3: M$, 5: M$ },
+      filas: l.map(([k, o]) => [h(k), o.n, o.u, o.c, pct(o.c, tc), o.v]), pie: ['Total', ps.length, r2(l.reduce((s, x) => s + x[1].u, 0)), r2(tc), '100%', r2(l.reduce((s, x) => s + x[1].v, 0))] };
+  },
+  stockbajo(){
+    const ps = vivos('prod').filter((p) => enFiltro(p.id)).map((p) => ({ p, s: stockDe(p.id) })).filter((x) => x.s <= 0 || (Number(x.p.mi) > 0 && x.s <= Number(x.p.mi)));
+    const vend = new Map(); const d30 = sumarDias(hoyISO(), -30);
+    vivos('vta').forEach((v) => { if (!v.an && v.tp !== 'P' && v.f >= d30) (v.it || []).forEach((x) => vend.set(x.p, (vend.get(x.p) || 0) + x.q)); });
+    ps.sort((a, b) => (vend.get(b.p.id) || 0) - (vend.get(a.p.id) || 0) || a.s - b.s);
+    return { html: '<p class="small muted" style="margin-top:0">Primero los que más se vendieron en los últimos 30 días. Pon el stock mínimo en cada producto para recibir alertas.</p>',
+      kpis: [['Agotados', String(ps.filter((x) => x.s <= 0).length)], ['Bajo el mínimo', String(ps.filter((x) => x.s > 0).length)]],
+      cab: ['Código', 'Producto', 'Categoría', 'Stock', 'Mínimo', 'Vendido 30 días', 'Costo', 'Estado'], num: [3, 4, 5, 6], fmt: { 6: M$ },
+      filas: ps.map((x) => [h(x.p.id), h(x.p.n), h(x.p.c || ''), x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0, estadoStock(x.p, x.s)]) };
+  },
+  rotacion(F){
+    let d1 = F.desde, d2 = F.hasta; const ls2 = lineasVendidas(F, true);
+    if (d1 < '2000') { const fs = ls2.map((l) => l.v.f).sort(); d1 = fs[0] || hoyISO(); d2 = fs[fs.length - 1] || hoyISO(); }
+    const dias = Math.max(1, Math.round((new Date(d2) - new Date(d1)) / 864e5) + 1);
+    const l = Array.from(agrupar(ls2, (x) => x.x.p, (o, x) => { o.n = x.x.n; o.q = (o.q || 0) + x.x.q; }).entries()).map(([id, o]) => { const s = stockDe(id); const pd = o.q / dias; return [h(id), h(o.n), o.q, r2(pd), s, pd ? Math.floor(Math.max(0, s) / pd) : null]; })
+      .sort((a, b) => (a[5] ?? 1e9) - (b[5] ?? 1e9));
+    const cob = (c) => (c == null ? '—' : c <= 7 ? '<b style="color:var(--warn-fg)">' + c + ' días</b>' : c <= 30 ? '<b style="color:var(--gold-ink)">' + c + ' días</b>' : c + ' días');
+    return { html: '<p class="small muted" style="margin-top:0">Con el ritmo de venta del período (' + dias + ' días), cuántos días alcanza el stock actual. Arriba están los que se agotarán primero.</p>',
+      kpis: [['Se agotan en 7 días o menos', String(l.filter((x) => x[5] != null && x[5] <= 7).length)], ['Entre 8 y 30 días', String(l.filter((x) => x[5] > 7 && x[5] <= 30).length)]],
+      cab: ['Código', 'Producto', 'Vendido', 'Promedio diario', 'Stock', 'Alcanza para'], num: [2, 3, 4, 5], fmt: { 2: N0, 3: (c) => numf(c, 2), 4: N0, 5: cob }, filas: l };
+  }
+});
 
 /* =====================================================================
    ARRANQUE
