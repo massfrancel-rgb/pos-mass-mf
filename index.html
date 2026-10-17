@@ -292,7 +292,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17c';
+const APP_VER = '2026-10-17d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -753,6 +753,7 @@ function entrar(v){
   USR = v; ls.set('sesion', { id: v.id, t: Date.now() }); document.onkeydown = null;
   const L = $('login'); if (L) L.remove();
   pintarNav(); render(); programarSync(500);
+  if (v.rol === 'admin') limpiarBasura().then((n) => { if (n) { toast(n + ' filas de totales de Anfibus eliminadas de productos.'); render(); } });
 }
 
 /* =====================================================================
@@ -1936,6 +1937,18 @@ async function exportarCatalogo(){
   toast('catalogo.json descargado' + (fotos.length ? ' (con ' + fotos.length + ' fotos)' : '') + '. Súbelo a tu repositorio catalogo-mass.');
 }
 
+/* ---------- filas que no son productos (totales "Suman …" de Anfibus) ---------- */
+function esFilaBasura(id, n){ return /^suman\b/i.test(String(id).trim()) || !/[a-zñáéíóú]/i.test(String(n)); }
+async function limpiarBasura(){
+  const malos = vivos('prod').filter((p) => esFilaBasura(p.id, p.n));
+  if (!malos.length) return 0;
+  const ids = new Set(malos.map((p) => p.id));
+  await putMuchos('prod', malos.map((p) => Object.assign({}, p, { _d: 1 })));
+  const movs = vivos('mov').filter((m) => ids.has(m.p));
+  if (movs.length) await putMuchos('mov', movs.map((m) => Object.assign({}, m, { _d: 1 })));
+  return malos.length;
+}
+
 /* ---------- asistente de importación ---------- */
 async function importarProductos(file){
   let hojas; try { hojas = await leerExcel(file); } catch (e) { return toast('No se pudo leer el archivo: ' + e.message, true); }
@@ -1968,7 +1981,7 @@ async function importarProductos(file){
       // Filas de título de categoría (como en Anfibus: "ABRASIVOS" sola en la fila)
       const llenas = r.filter((x) => String(x).trim() !== '');
       if (llenas.length === 1 && !n && isNaN(aNum(llenas[0]))) { sec = titulo(llenas[0]); continue; }
-      if (!id || !n) continue;
+      if (!id || !n || esFilaBasura(id, n)) continue;
       out.push({ id, n, b: g('b') != null ? String(g('b')).trim().replace(/\.0$/, '') : undefined, m: g('m'), c: mp.c != null ? g('c') : (sec || undefined), pv: aNum(g('pv')), co: aNum(g('co')), st: aNum(g('st')), iva: g('iva'), mi: aNum(g('mi')), un: g('un') });
     }
     return out;
