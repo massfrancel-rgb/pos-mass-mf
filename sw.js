@@ -1,5 +1,5 @@
 // POS MASS MF — guarda la app para abrir rápido y vender sin internet.
-const VERSION = 'pos-mass-mf-2026-10-17a';
+const VERSION = 'pos-mass-mf-2026-10-17b';
 const BASE = ['./', 'index.html', 'manifest.json', 'logo_mass.png', 'pos-192.png', 'pos-512.png', 'pos-180.png', 'catalogo.json'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname.includes('script.google')) return;            // la nube siempre directo
-  const libreria = /cdnjs\.cloudflare\.com|unpkg\.com|fonts\.(googleapis|gstatic)\.com/.test(url.hostname);
+  const libreria = /cdnjs\.cloudflare\.com|unpkg\.com|fonts\.(googleapis|gstatic)\.com/.test(url.hostname) || (url.hostname === 'catalogo-mass.vercel.app' && url.pathname.startsWith('/fotos/'));
   if (libreria) {                                                  // librerías: primero lo guardado
     e.respondWith(caches.open(VERSION).then((c) => c.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok || r.type === 'opaque') c.put(req, r.clone()); return r; }))));
     return;

@@ -253,6 +253,11 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 .note{background:var(--gold-soft);color:var(--fg);border-radius:12px;padding:10px 12px;font-size:14.5px}
 .note.warn{background:var(--warn-bg);color:var(--warn-fg)}
 .note.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.th{width:46px;height:46px;border-radius:9px;object-fit:contain;background:#fff;border:1px solid var(--line);flex:none;display:block}
+.th.ph{background:var(--surface2)}
+.th.big{width:100%;height:220px;border-radius:12px}
+.th.sm{width:38px;height:38px}
+.pcell{display:flex;gap:10px;align-items:center}
 .stockchip{font-size:12.5px;font-weight:700;border-radius:7px;padding:1px 7px;background:var(--ok-bg);color:var(--ok-fg);white-space:nowrap}
 .stockchip.lo{background:var(--gold-soft);color:var(--gold-ink)}
 .stockchip.no{background:var(--warn-bg);color:var(--warn-fg)}
@@ -287,7 +292,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17a';
+const APP_VER = '2026-10-17b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -394,6 +399,22 @@ const ic = (n, cls) => '<svg class="' + (cls || '') + '" viewBox="0 0 24 24" fil
    vta (facturas, notas de venta, pedidos), com (compras),
    mov (ajustes de inventario), cfg (configuración de la empresa)
    ===================================================================== */
+/* ---------- Fotos (las mismas del Catálogo MASS) ---------- */
+const FOTO_BASE = 'https://catalogo-mass.vercel.app/fotos/';
+let FOTOS = new Set(ls.get('fotos', []));
+async function cargarFotos(){
+  for (const u of ['https://catalogo-mass.vercel.app/catalogo.json', 'catalogo.json']) {
+    try { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) continue; const f = (await r.json()).f || [];
+      if (f.length) { FOTOS = new Set(f.map(String)); ls.set('fotos', f); return; } } catch (e) {}
+  }
+}
+const fotoUrl = (id) => (FOTOS.has(String(id)) ? FOTO_BASE + encodeURIComponent(id) + '.jpg' : null);
+function thumb(p, cls){
+  const u = p && fotoUrl(p.id || p.p);
+  return u ? '<img class="th ' + (cls || '') + '" src="' + u + '" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'th ph ' + (cls || '') + '\'}))">'
+    : '<span class="th ph ' + (cls || '') + '"></span>';
+}
+
 const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido' };
@@ -827,7 +848,7 @@ function montarBuscador(cont, onPick, opts){
   let lista = [], sel = 0;
   const pintar = () => {
     if (!lista.length) { res.innerHTML = inp.value.trim() ? '<div class="empty small">Sin resultados. Si es un código nuevo, regístralo en Inventario.</div>' : ''; res.classList.toggle('hide', !inp.value.trim()); return; }
-    res.innerHTML = lista.map((p, i) => '<div class="res ' + (i === sel ? 'sel' : '') + '" data-i="' + i + '"><div class="grow"><div class="t">' + h(p.n) + '</div><div class="s">' + h(p.id) + (p.b ? ' · ' + h(p.b) : '') + (p.m ? ' · ' + h(p.m) : '') + ' ' + chipStock(p) + '</div></div><div class="p">' + money(p.pv) + '</div></div>').join('');
+    res.innerHTML = lista.map((p, i) => '<div class="res ' + (i === sel ? 'sel' : '') + '" data-i="' + i + '">' + thumb(p) + '<div class="grow"><div class="t">' + h(p.n) + '</div><div class="s">' + h(p.id) + (p.b ? ' · ' + h(p.b) : '') + (p.m ? ' · ' + h(p.m) : '') + ' ' + chipStock(p) + '</div></div><div class="p">' + money(p.pv) + '</div></div>').join('');
     res.classList.remove('hide');
   };
   const elegir = (p) => { onPick(p); inp.value = ''; lista = []; res.classList.add('hide'); if (opts.keepFocus !== false && matchMedia('(pointer:fine)').matches) inp.focus(); };
@@ -902,8 +923,8 @@ function pintarCarrito(){
   const precios = puede('precios');
   c.innerHTML = CART.it.map((x, i) => {
     const k = calcItem(x); const s = stockDe(x.p);
-    return '<div class="ci" data-i="' + i + '"><div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · ' + money(x.pu) + ' c/u ' +
-      '<span class="stockchip ' + (s - x.q < 0 ? 'no' : '') + '">Stock ' + numf(s) + '</span>' + (x.iva ? '' : ' <span class="badge">IVA 0%</span>') + '</div></div>' +
+    return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb(x) + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · ' + money(x.pu) + ' c/u ' +
+      '<span class="stockchip ' + (s - x.q < 0 ? 'no' : '') + '">Stock ' + numf(s) + '</span>' + (x.iva ? '' : ' <span class="badge">IVA 0%</span>') + '</div></div></div>' +
       '<div class="tot">' + money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '') + '</div>' +
       '<div class="ctrl"><div class="qty"><button data-a="menos" aria-label="Menos">−</button><input data-a="q" inputmode="decimal" value="' + numf(x.q) + '"><button data-a="mas" aria-label="Más">+</button></div>' +
       (precios ? '<label class="minilbl">Precio<input class="mini" data-a="pu" inputmode="decimal" value="' + Number(x.pu).toFixed(2) + '"></label><label class="minilbl">Desc. %<input class="mini pct" data-a="d" inputmode="decimal" value="' + (Number(x.d) || '') + '" placeholder="0"></label>' : '') +
@@ -1333,7 +1354,7 @@ function invProductos(){
     l.sort((a, b) => a.n.localeCompare(b.n));
     $('pRes').textContent = l.length + ' productos';
     $('pBody').innerHTML = l.slice(0, lim).map((p) => { const s = stockDe(p.id);
-      return '<tr class="click" data-id="' + h(p.id) + '"><td>' + h(p.id) + (p.b ? '<div class="small muted">' + h(p.b) + '</div>' : '') + '</td><td>' + h(p.n) + '<div class="small muted">' + h([p.m, p.c].filter(Boolean).join(' · ')) + '</div></td>' +
+      return '<tr class="click" data-id="' + h(p.id) + '"><td>' + h(p.id) + (p.b ? '<div class="small muted">' + h(p.b) + '</div>' : '') + '</td><td><div class="pcell">' + thumb(p, 'sm') + '<div>' + h(p.n) + '<div class="small muted">' + h([p.m, p.c].filter(Boolean).join(' · ')) + '</div></div></div></td>' +
         '<td class="n"><span class="stockchip ' + (s <= 0 ? 'no' : (Number(p.mi) && s <= Number(p.mi) ? 'lo' : '')) + '">' + numf(s) + '</span></td><td class="n">' + money(p.pv) + '</td>' + (puede('prod') ? '<td class="n">' + (Number(p.co) ? money(p.co) : '—') + '</td>' : '') + '</tr>'; }).join('') ||
       '<tr><td colspan="5" class="center muted">Sin resultados</td></tr>';
     $('pMas').classList.toggle('hide', l.length <= lim);
@@ -1378,6 +1399,7 @@ function editarProducto(p, pre, onDone){
   const s = nuevo ? 0 : stockDe(p.id);
   const ro = ed ? '' : ' disabled';
   const m = modal({ title: nuevo ? 'Nuevo producto' : p.n, wide: true, body:
+    (!nuevo && fotoUrl(p.id) ? '<div style="margin-bottom:12px">' + thumb(p, 'big') + '</div>' : '') +
     (nuevo ? '' : '<div class="kpis" style="margin-bottom:14px"><div class="kpi gold"><span>Stock actual</span><b>' + numf(s) + '</b><small>' + h(p.un || 'UND') + '</small></div>' +
       '<div class="kpi"><span>Valor a costo</span><b>' + money(s * (Number(p.co) || 0)) + '</b></div><div class="kpi"><span>Margen</span><b id="epMg">—</b></div></div>') +
     '<datalist id="dlCat">' + categorias().map((c) => '<option value="' + h(c) + '">').join('') + '</datalist>' +
@@ -2226,6 +2248,7 @@ document.addEventListener('datos-nube', () => {
     history.replaceState(null, '', location.pathname + '#vender');
   }
   ultimoSync = ls.get('ultimoSync', 0);
+  cargarFotos().then(() => { if (USR && RUTA !== 'vender' && !$('modals').children.length) render(); });
   pintarSync();
   const ses = ls.get('sesion', null); const v = ses && S.vend.get(ses.id);
   if (v && !v._d && v.act !== false) entrar(v);
