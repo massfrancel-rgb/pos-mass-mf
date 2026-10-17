@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="POS MASS MF">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Source+Sans+3:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
 :root{
   --bg:#F6F4EE; --surface:#FFFFFF; --surface2:#FBFAF6; --line:#E7E2D6; --fg:#1A1814; --muted:#5E584C;
@@ -246,7 +246,7 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
 .rgh .ico3d{width:28px;height:28px;border-radius:8px}.rgh .ico3d svg{width:16px;height:16px}
 
 /* botón sincronizar */
-.syncnow{background:var(--gold);border-color:var(--gold);color:#1A1814;min-height:36px;flex:none}
+.syncnow{min-height:36px;flex:none}
 .syncnow.run svg{animation:girar 1s linear infinite}
 @keyframes girar{to{transform:rotate(360deg)}}
 .syncb{margin-left:auto}
@@ -282,6 +282,44 @@ label.f .ivabox{display:flex}
 .cobro #cCli .btn.sm{min-height:32px;padding:4px 9px;font-size:13.5px}
 .sheet.narrow .sh-h{padding:10px 14px}.sheet.narrow .sh-b{padding:10px 14px}.sheet.narrow .sh-f{padding:8px 14px calc(8px + env(safe-area-inset-bottom))}
 .sheet.narrow .sh-f .btn{min-height:42px;flex:1 1 100px}
+
+/* ===== botones 3D con ícono (estilo COMPRA PROVEEDORES) ===== */
+.cv{--c1:#43C463;--c2:#1E8C3A;--c3:#135E26}.cb{--c1:#4686E8;--c2:#1E4FB0;--c3:#12316E}.ct{--c1:#33BBA6;--c2:#137A6B;--c3:#0B4F45}
+.co{--c1:#E08A32;--c2:#9C5410;--c3:#5E320A}.cp{--c1:#9663E6;--c2:#5A2DB0;--c3:#36196E}.cr{--c1:#EA5B45;--c2:#B12A18;--c3:#6E180C}
+.ca{--c1:#F2BC4A;--c2:#C08510;--c3:#7A520A}.cs{--c1:#7A8899;--c2:#3F4A59;--c3:#262D36}.ck{--c1:#E35E95;--c2:#A8285E;--c3:#6A1539}
+.ci3{--c1:#6676E8;--c2:#3140B0;--c3:#1C266E}.ce{--c1:#3DB878;--c2:#167A47;--c3:#0C4F2D}.cd{--c1:#5A4C36;--c2:#2A231A;--c3:#120E09}
+.c3d{position:relative;color:#fff!important;border:0!important;background:linear-gradient(180deg,var(--c1),var(--c2))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -2px 0 rgba(0,0,0,.2),0 3px 0 var(--c3),0 6px 12px -4px rgba(0,0,0,.45)!important;
+  text-transform:uppercase;font-family:'Barlow Condensed',var(--font-display);font-weight:700;letter-spacing:.045em;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+.btn.c3d{font-size:15.5px;margin-bottom:3px}
+.btn.c3d:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 1px 0 var(--c3)!important}
+.c3d > svg{background:#fff;color:var(--c2);border-radius:7px;padding:4px;width:27px!important;height:27px!important;stroke-width:2.4;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3));flex:none}
+.btn.sm.c3d > svg{width:23px!important;height:23px!important;padding:3px}
+.btn.c3d.icon{width:auto;padding:0 8px}
+/* botones normales con relieve */
+.btn:not(.c3d):not(.ghost){box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 2px 0 var(--line),0 4px 8px -4px rgba(0,0,0,.18)}
+.btn.pri:not(.c3d){background:linear-gradient(180deg,#E8BC55,#B9861F);border-color:#A97A1A;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 0 #7A5A12,0 6px 10px -4px rgba(0,0,0,.35)}
+.btn.wa:not(.c3d){background:linear-gradient(180deg,#34C06F,#1A8447);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 3px 0 #0E5A2F}
+.btn.dark:not(.c3d){background:linear-gradient(180deg,#3A3226,#15120D);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 3px 0 #000}
+.btn.danger:not(.c3d){background:linear-gradient(180deg,#FBE9E2,#F2CFC2);box-shadow:inset 0 1px 0 #fff,0 3px 0 #D9A894}
+.btn:not(.ghost):active{transform:translateY(2px)}
+/* menú lateral */
+@media (min-width:900px){
+  #side a{margin:3px 2px 6px;padding:7px 10px;border-radius:12px;font-size:18px;gap:10px;opacity:.93;white-space:nowrap}
+  #side a:hover{opacity:1;filter:brightness(1.07)}
+  #side a.on{outline:2.5px solid #F5C451;outline-offset:1px;opacity:1}
+  #side a.on::after{content:'';position:absolute;right:-9px;top:50%;margin-top:-7px;border:7px solid transparent;border-left-color:#F5C451}
+  #side a > svg{width:30px;height:30px}
+  #side .sep{margin:6px 6px 8px}
+}
+/* barra inferior del celular */
+nav#bottom a svg{background:linear-gradient(180deg,var(--c1),var(--c2));color:#fff;border-radius:10px;padding:5px;width:36px;height:30px;stroke-width:2.3;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 0 var(--c3)}
+nav#bottom a{gap:3px;font-family:'Barlow Condensed',var(--font-body);font-size:12.5px;white-space:nowrap;overflow:hidden;text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+nav#bottom a.on{color:var(--fg)}
+nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
+.syncnow.c3d{min-height:38px}
+.paybar .btn.c3d{font-size:19px}
 
 /* login */
 #login{position:fixed;inset:0;z-index:70;background:var(--dark);color:var(--on-dark);overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
@@ -341,7 +379,7 @@ label.f .ivabox{display:flex}
       <div class="tt"><b>POS MASS MF</b><span id="hdrUser">MASS FERRETERÍA</span></div>
       <div class="crumb" id="crumb"></div>
       <button class="syncb" id="syncBtn" type="button"><i class="dot" id="syncDot"></i><span id="syncTxt">Sin nube</span></button>
-      <button class="btn sm syncnow" id="syncNow" type="button" title="Sincronizar ahora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M21 4v5h-5M3 20v-5h5"/></svg><span>Sincronizar</span></button>
+      <button class="btn sm syncnow c3d cd" id="syncNow" type="button" title="Sincronizar ahora"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8"/><path d="M21 4v5h-5M3 20v-5h5"/></svg><span>Sincronizar</span></button>
       <button class="userb" id="userBtn" type="button" aria-label="Usuario">?</button>
     </header>
     <main id="view"></main>
@@ -356,7 +394,7 @@ label.f .ivabox{display:flex}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17k';
+const APP_VER = '2026-10-17l';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -777,12 +815,14 @@ function render(){
 }
 window.addEventListener('hashchange', render);
 function pintarNav(){
-  const link = (r) => '<a href="#' + r + '" data-r="' + r + '">' + ic(RUTAS[r].i) + '<span>' + RUTAS[r].t + '</span></a>';
+  const NAVC = { vender: 'cv', docs: 'cb', inv: 'ct', rep: 'co', mas: 'cp', compras: 'cp', clientes: 'ci3', proveedores: 'ca', vendedores: 'ck', excel: 'ce', ajustes: 'cs' };
+  const link = (r) => '<a href="#' + r + '" data-r="' + r + '" class="' + NAVC[r] + '">' + ic(RUTAS[r].i) + '<span>' + RUTAS[r].t + '</span></a>';
+  const link3d = (r) => '<a href="#' + r + '" data-r="' + r + '" class="c3d ' + NAVC[r] + '">' + ic(RUTAS[r].i) + '<span>' + RUTAS[r].t + '</span></a>';
   $('bottom').innerHTML = ['vender', 'docs', 'inv', 'rep', 'mas'].map(link).join('');
   const extra = ['compras', 'clientes', 'proveedores', 'vendedores', 'excel', 'ajustes'].filter((r) => (!RUTAS[r].admin || esAdmin()) && (!RUTAS[r].p || puede(RUTAS[r].p)));
   $('side').innerHTML = '<div class="brand"><img src="logo_mass.png" alt=""><div><b>POS MASS MF</b><span>MASS FERRETERÍA</span></div></div>' +
-    ['vender', 'docs', 'inv', 'rep'].map(link).join('') + '<div class="sep"></div>' + extra.map(link).join('') +
-    '<div class="spacer"></div><a href="#" id="sideOut">' + ic('logout') + '<span>Cerrar sesión</span></a>';
+    ['vender', 'docs', 'inv', 'rep'].map(link3d).join('') + '<div class="sep"></div>' + extra.map(link3d).join('') +
+    '<div class="spacer"></div><a href="#" id="sideOut" class="c3d cr">' + ic('logout') + '<span>Cerrar sesión</span></a>';
   $('sideOut').onclick = (e) => { e.preventDefault(); cerrarSesion(); };
   $('userBtn').textContent = iniciales(USR.nombre);
   $('hdrUser').textContent = USR.nombre + (esAdmin() ? ' · Administrador' : ' · Vendedor');
@@ -965,7 +1005,7 @@ function montarBuscador(cont, onPick, opts){
   opts = opts || {};
   cont.innerHTML = '<div class="searchbar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + IC.search + '</svg>' +
     '<input class="in grow" type="search" placeholder="' + h(opts.ph || 'Buscar o escanear…') + '" autocomplete="off" enterkeyhint="search">' +
-    '<button class="btn pri icon" type="button" aria-label="Escanear con cámara">' + ic('scan') + '</button><div class="results hide"></div></div>';
+    '<button class="btn c3d ca icon" type="button" aria-label="Escanear con cámara">' + ic('scan') + '</button><div class="results hide"></div></div>';
   const inp = qs('input', cont), res = qs('.results', cont), btn = qs('button', cont);
   let lista = [], sel = 0;
   const pintar = () => {
@@ -1018,15 +1058,15 @@ function pgVender(){
   const v = $('view');
   const titulo = CART.editId ? 'Editando pedido' : (CART.pedId ? 'Pedido → venta' : 'Nueva venta');
   v.innerHTML = '<div class="pagehead"><h2>' + titulo + '</h2>' +
-    '<button class="btn sm" id="vPed">' + ic('clip') + 'Pedidos pendientes</button>' +
-    '<button class="btn sm" id="vVaciar">' + ic('trash') + 'Vaciar</button></div>' +
+    '<button class="btn sm c3d cb" id="vPed">' + ic('clip') + 'Pedidos pendientes</button>' +
+    '<button class="btn sm c3d cr" id="vVaciar">' + ic('trash') + 'Vaciar</button></div>' +
     '<div id="vBus"></div><div class="cart" id="vCart"></div>';
   montarBuscador($('vBus'), (p) => { agregarAlCarrito(p); pintarCarrito(); },
     { onUnknown: (code) => toast('El código ' + code + ' no está registrado. Asígnalo en Inventario.', true) });
   $('vVaciar').onclick = async () => { if (!CART.it.length && !CART.pedId && !CART.editId) return; if (await confirmar('¿Vaciar la venta actual?', 'Vaciar', true)) { CART = cartNuevo(); guardarCart(); render(); } };
   $('vPed').onclick = () => { location.hash = 'docs?tp=P&est=pend'; };
   const bar = document.createElement('div'); bar.className = 'paybar';
-  bar.innerHTML = '<div class="pb-items"><div class="lbl" id="pbLbl">0 artículos</div></div><div class="pb-tot" id="pbTot"></div><button class="btn pri" id="pbBtn">' + ic('cash') + 'Cobrar</button>';
+  bar.innerHTML = '<div class="pb-items"><div class="lbl" id="pbLbl">0 artículos</div></div><div class="pb-tot" id="pbTot"></div><button class="btn c3d cv" id="pbBtn">' + ic('cash') + 'Cobrar</button>';
   document.body.appendChild(bar);
   $('pbBtn').onclick = abrirCobro;
   pintarCarrito();
@@ -1177,7 +1217,7 @@ function abrirCobro(){
       '<label class="f" id="cSriL">N° factura SRI<input class="in" id="cSri" value="' + h(CART.sri || '') + '"></label>' +
       '<label class="f">Nota<input class="in" id="cNota" value="' + h(CART.nota || '') + '"></label></div></details>' +
     '<div class="card ctot" id="cTot"></div></div>',
-    foot: '<button class="btn" data-x>Volver</button><button class="btn" id="cOk">' + ic('check') + 'Guardar</button><button class="btn pri" id="cOkP">' + ic('ticket') + 'Guardar e imprimir</button>' });
+    foot: '<button class="btn" data-x>Volver</button><button class="btn c3d cb" id="cOk">' + ic('check') + 'Guardar</button><button class="btn c3d cv" id="cOkP">' + ic('ticket') + 'Guardar e imprimir</button>' });
   let t = totales(CART.it);
   const pintaTot = () => { t = totales(CART.it); m.q('#cTot').innerHTML = desgloseHTML(t); const r = m.q('#cRec'); if (r) { r.placeholder = t.total.toFixed(2); r.dispatchEvent(new Event('input')); } };
   // Descuento general: se reparte como % sobre cada producto (dg)
@@ -1305,7 +1345,7 @@ function estadoDoc(v){
 function pgDocs(){
   const prm = new URLSearchParams((location.hash.split('?')[1]) || '');
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Documentos</h2><button class="btn sm pri" id="dNueva">' + ic('plus') + 'Nueva venta</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Documentos</h2><button class="btn sm c3d cv" id="dNueva">' + ic('plus') + 'Nueva venta</button></div>' +
     '<div class="stack"><div class="seg" id="dTp"><button data-v="">Todos</button><button data-v="F">Facturas</button><button data-v="N">Notas de venta</button><button data-v="P">Pedidos</button></div>' +
     '<div id="dPer"></div><div class="row"><input class="in grow" id="dQ" type="search" placeholder="Buscar N°, cliente o producto"><select class="in" id="dEst" style="width:auto"><option value="">Todos los estados</option><option value="pend">Pedidos pendientes</option><option value="cxc">Por cobrar</option><option value="an">Anulados</option></select></div>' +
     '<div id="dRes" class="small muted"></div><div class="card" style="padding:4px 10px"><div class="list" id="dList"></div></div></div>';
@@ -1351,7 +1391,7 @@ function verDocumento(v, recien){
     '<div class="grid2" style="margin-top:12px"><div>' + (v.nota ? '<p class="small"><b>Nota:</b> ' + h(v.nota) + '</p>' : '') +
       (v.fp === 'cr' && v.tp !== 'P' ? '<div class="card" style="padding:10px"><b>Abonos</b>' + (ab || '<div class="small muted">Sin abonos</div>') + '<div class="row" style="margin-top:6px"><span>Saldo</span><span class="spacer"></span><b>' + money(s) + '</b></div></div>' : '') + '</div>' +
     '<div class="card">' + desgloseHTML(t) + '</div></div>',
-    foot: '<button class="btn" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn wa" id="dvWa">' + ic('wa') + 'WhatsApp</button>' +
+    foot: '<button class="btn c3d cb" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn c3d cv" id="dvWa">' + ic('wa') + 'WhatsApp</button>' +
       (v.tp === 'P' && !v.cv && !v.an ? '<button class="btn" id="dvEd">' + ic('edit') + 'Editar</button><button class="btn pri" id="dvCv">' + ic('check') + 'Facturar</button>' : '') +
       (s > 0 ? '<button class="btn pri" id="dvAb">' + ic('cash') + 'Abono</button>' : '') +
       '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' +
@@ -1549,7 +1589,7 @@ function pgInventario(){
   let tab = prm.get('t') || ls.get('invTab', 'prod');
   if (tab === 'conteo' && !puede('inv')) tab = 'prod';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + (puede('prod') ? '<button class="btn sm pri" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
     '<div class="tabs" id="iTabs"><button data-t="prod">Productos y stock</button>' + (puede('inv') ? '<button data-t="conteo">Conteo con escáner</button><button data-t="mov">Ajustes de stock</button>' : '') + '</div><div id="iBody"></div>';
   if ($('iNuevo')) $('iNuevo').onclick = () => editarProducto(null);
   const go = (t) => { tab = t; ls.set('invTab', t); qsa('#iTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
@@ -1795,7 +1835,7 @@ const nomProv = (id) => (S.prov.get(id) || {}).nombre || '—';
 
 function pgCompras(){
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm pri" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
     '<div class="stack"><div id="coPer"></div><div class="row"><select class="in" id="coProv" style="flex:1 1 200px;width:auto"><option value="">Todos los proveedores</option>' +
     vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join('') + '</select><input class="in" id="coQ" type="search" placeholder="Buscar N° o producto" style="flex:1 1 200px"></div>' +
     '<div class="small muted" id="coRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="coList"></div></div></div>';
@@ -1926,7 +1966,7 @@ function editarTercero(t, rec, onDone, pre){
 function pgTerceros(t){
   const esP = t === 'prov';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>' + (esP ? 'Proveedores' : 'Clientes') + '</h2><button class="btn sm pri" id="tNuevo">' + ic('plus') + 'Nuevo</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>' + (esP ? 'Proveedores' : 'Clientes') + '</h2><button class="btn sm c3d cv" id="tNuevo">' + ic('plus') + 'Nuevo</button></div>' +
     '<div class="stack"><input class="in" id="tQ" type="search" placeholder="Buscar nombre, cédula/RUC o teléfono"><div class="small muted" id="tRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="tList"></div></div></div>';
   $('tNuevo').onclick = () => editarTercero(t, null);
   const resumen = (c) => {
@@ -1967,7 +2007,7 @@ function verTercero(t, c){
 function pgVendedores(){
   const v = $('view');
   const l = vivos('vend').sort((a, b) => a.nombre.localeCompare(b.nombre));
-  v.innerHTML = '<div class="pagehead"><h2>Vendedores</h2><button class="btn sm pri" id="veN">' + ic('plus') + 'Nuevo vendedor</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Vendedores</h2><button class="btn sm c3d cv" id="veN">' + ic('plus') + 'Nuevo vendedor</button></div>' +
     '<p class="muted" style="margin-top:0">Cada vendedor entra con su PIN y tiene su propio punto de emisión, así las facturas de cada teléfono no repiten número.</p>' +
     '<div class="card" style="padding:4px 10px"><div class="list" id="veL">' + l.map((x) => '<div class="li" data-id="' + h(x.id) + '"><span class="userb" style="display:flex;align-items:center;justify-content:center">' + h(iniciales(x.nombre)) + '</span><div class="grow"><div class="t">' + h(x.nombre) + ' ' + (x.act === false ? '<span class="badge warn">Inactivo</span>' : '') + '</div>' +
       '<div class="s">' + (x.rol === 'admin' ? 'Administrador' : 'Vendedor') + ' · Punto ' + h(x.pto || '001') + (x.com ? ' · Comisión ' + x.com + '%' : '') + '</div></div></div>').join('') + '</div></div>';
@@ -2323,7 +2363,7 @@ function pgReportes(){
   const def = lista.find((r) => r[0] === rep);
   if (!def) return menuReportes(lista);
   const sinPeriodo = !!def[5];
-  $('view').innerHTML = '<div class="pagehead"><a class="btn sm noprint" href="#rep">← Todos los reportes</a><span class="spacer"></span><button class="btn sm" id="rX">' + ic('sheet') + 'Excel</button><button class="btn sm noprint" id="rP">' + ic('pdf') + 'Imprimir</button></div>' +
+  $('view').innerHTML = '<div class="pagehead"><a class="btn sm noprint" href="#rep">← Todos los reportes</a><span class="spacer"></span><button class="btn sm c3d ce" id="rX">' + ic('sheet') + 'Excel</button><button class="btn sm noprint c3d cb" id="rP">' + ic('pdf') + 'Imprimir</button></div>' +
     '<div class="stack"><div id="rPer" class="noprint" style="' + (sinPeriodo ? 'display:none' : '') + '"></div><div id="rCtl" class="noprint"></div><div id="rOut"></div></div>';
   let F, ultimo = null;
   const pintar = () => {
