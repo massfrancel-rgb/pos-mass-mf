@@ -321,6 +321,18 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .syncnow.c3d{min-height:38px}
 .paybar .btn.c3d{font-size:19px}
 
+/* compras: casillas de totales, costo con IVA, foto de factura */
+.tcasillas{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:6px}
+.tcas{background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:5px 9px;display:flex;flex-direction:column;align-items:flex-end}
+.tcas span{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.tcas b{font-family:var(--font-display);font-size:17px;font-variant-numeric:tabular-nums}
+.tcas.tot{background:#1F9D55;border-color:#1F9D55;color:#fff;grid-column:span 2}
+.tcas.tot span{color:#E3F6E9}.tcas.tot b{font-size:24px}
+.cciva input{background:#E3F6E9;border-color:#7CC79A;font-weight:700}
+.ffmini{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:pointer;background:#fff;flex:none}
+.factfoto{margin-top:10px}
+.nbadge{background:#fff;color:#7A3D06;border-radius:999px;padding:0 7px;font-size:12px;line-height:18px;margin-left:2px;text-shadow:none}
+
 /* login */
 #login{position:fixed;inset:0;z-index:70;background:var(--dark);color:var(--on-dark);overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
 #login .box{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;align-items:stretch}
@@ -394,7 +406,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-17n';
+const APP_VER = '2026-10-18a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -564,7 +576,7 @@ function thumb(p, cls){
     : '<span class="th ph ' + (cls || '') + '"></span>';
 }
 
-const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto'];
+const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
@@ -1909,19 +1921,104 @@ function invMovs(){
    COMPRAS A PROVEEDORES (suman stock, actualizan costo y PVP)
    ===================================================================== */
 function totCompra(it){
-  const t = { sub12: 0, sub0: 0, iva: 0, tot: 0, unid: 0 };
-  (it || []).forEach((x) => { const b = (Number(x.co) || 0) * (Number(x.q) || 0); if (Number(x.iva)) { t.sub12 += b; t.iva += b * Number(x.iva) / 100; } else t.sub0 += b; t.unid += Number(x.q) || 0; });
-  Object.keys(t).forEach((k) => { t[k] = r2(t[k]); }); t.tot = r2(t.sub12 + t.sub0 + t.iva); return t;
+  const t = { sub12: 0, sub0: 0, iva: 0, tot: 0, unid: 0 }; const tasas = {};
+  (it || []).forEach((x) => { const b = (Number(x.co) || 0) * (Number(x.q) || 0); const p = Number(x.iva) || 0;
+    if (p) { t.sub12 += b; t.iva += b * p / 100; } else t.sub0 += b; t.unid += Number(x.q) || 0;
+    const o = tasas[p] || (tasas[p] = { b: 0, i: 0 }); o.b += b; o.i += b * p / 100; });
+  Object.keys(t).forEach((k) => { t[k] = r2(t[k]); }); t.tot = r2(t.sub12 + t.sub0 + t.iva);
+  Object.keys(tasas).forEach((k) => { tasas[k] = { b: r2(tasas[k].b), i: r2(tasas[k].i) }; }); t.tasas = tasas; return t;
+}
+/** Casillas de totales de una compra */
+function casillasCompra(it){
+  const t = totCompra(it); const ks = Object.keys(t.tasas).map(Number).sort((a, b) => b - a);
+  const c = (k, v, cls) => '<div class="tcas ' + (cls || '') + '"><span>' + k + '</span><b>' + v + '</b></div>';
+  return '<div class="tcasillas">' + c('Productos', String((it || []).length)) + c('Unidades', numf(t.unid)) +
+    (ks.filter((k) => k).map((k) => c('Subtotal ' + k + '%', money(t.tasas[k].b))).join('') || c('Subtotal IVA', money(0))) +
+    c('Subtotal 0%', money(t.sub0)) + c('IVA', money(t.iva)) + c('TOTAL', money(t.tot), 'tot') + '</div>';
+}
+/* ---------- Foto de la factura (se guarda en partes para la nube) ---------- */
+const PARTE = 44000;
+function fotoFactura(id){
+  const r = S.adj.get(id + '|0'); if (!r || r._d) return null;
+  let s = r.d; for (let i = 1; i < (r.n || 1); i++) { const x = S.adj.get(id + '|' + i); if (!x || x._d) return null; s += x.d; }
+  return s;
+}
+function comprimirFactura(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      let lado = 1600, q = 0.72, out = '';
+      for (let i = 0; i < 10; i++) {
+        const k = Math.min(1, lado / Math.max(img.width, img.height)); const c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', q); if (out.length <= PARTE * 4) break;
+        if (q > 0.5) q -= 0.08; else lado = Math.round(lado * 0.85);
+      }
+      URL.revokeObjectURL(url); res(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen. Usa una foto JPG o PNG.')); };
+    img.src = url;
+  });
+}
+async function guardarFotoFactura(id, data){
+  const viejo = S.adj.get(id + '|0'); const nViejo = viejo && !viejo._d ? (viejo.n || 1) : 0;
+  const partes = []; for (let i = 0; i < data.length; i += PARTE) partes.push(data.slice(i, i + PARTE));
+  const recs = partes.map((d, i) => ({ id: id + '|' + i, d, n: partes.length, _d: 0 }));
+  for (let i = partes.length; i < nViejo; i++) recs.push({ id: id + '|' + i, d: '', _d: 1 });
+  await putMuchos('adj', recs);
+}
+async function quitarFotoFactura(id){
+  const r = S.adj.get(id + '|0'); if (!r || r._d) return;
+  const recs = []; for (let i = 0; i < (r.n || 1); i++) recs.push({ id: id + '|' + i, d: '', _d: 1 });
+  await putMuchos('adj', recs);
+}
+function verFotoFactura(id, titulo){
+  const d = fotoFactura(id); if (!d) return toast('Esta compra no tiene foto de factura.', true);
+  const m = modal({ title: titulo || 'Foto de la factura', wide: true, body: '<img src="' + d + '" alt="Factura" style="width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#fff">',
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn c3d cb" id="vfD">' + ic('download') + 'Descargar</button>' });
+  m.q('#vfD').onclick = () => { const a = document.createElement('a'); a.href = d; a.download = 'factura-' + String(titulo || id).replace(/[^\w-]+/g, '_') + '.jpg'; a.click(); };
+}
+
+/* ---------- Borradores de compras (se comparten en la nube) ---------- */
+const borradores = () => vivos('bor').filter((b) => b.pr || (b.it || []).length || b.num);
+function migrarBorradorLocal(){
+  const d = ls.get('compraDraft', null);
+  if (d && ((d.it || []).length || d.pr || d.num)) { d.id = d.id || uid('co'); if (!S.bor.has(d.id)) put('bor', d); }
+  ls.del('compraDraft');
+}
+function verBorradores(){
+  const l = borradores();
+  const grupos = new Map();
+  l.forEach((b) => { const k = b.pr ? nomProv(b.pr) : 'SIN PROVEEDOR'; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(b); });
+  const ks = Array.from(grupos.keys()).sort((a, b) => (a === 'SIN PROVEEDOR') - (b === 'SIN PROVEEDOR') || a.localeCompare(b));
+  const m = modal({ title: 'Compras en borrador (' + l.length + ')', wide: true, body: l.length ? ks.map((k) => {
+    const bs = grupos.get(k).sort((a, b) => (b._u || 0) - (a._u || 0));
+    return '<h3 class="rgh" style="margin:10px 0 6px">' + ico3d('truck', ['#F2BC4A', '#C08510']) + h(k) + ' <span class="badge">' + bs.length + '</span></h3><div class="card" style="padding:4px 10px"><div class="list">' +
+      bs.map((b) => { const t = totCompra(b.it); return '<div class="li" data-id="' + h(b.id) + '"><div class="grow"><div class="t">' + (b.num ? 'Factura ' + h(b.num) : 'Sin N° de factura') + (fotoFactura(b.id) ? ' <span class="badge info">con foto</span>' : '') + '</div>' +
+        '<div class="s">' + fechaTxt(b.f) + ' · ' + (b.it || []).length + ' productos · ' + numf(t.unid) + ' u. · ' + (b.fp === 'cr' ? 'Crédito ' + b.pl + ' d' : 'Contado') + ' · guardado ' + (b._u ? fechaTxt(fechaISO(new Date(b._u))) + ' ' + horaTxt(b._u) : '') + '</div></div>' +
+        '<div class="v">' + money(t.tot) + '</div><button class="btn sm icon danger" data-del="' + h(b.id) + '" aria-label="Borrar borrador">' + ic('trash') + '</button></div>'; }).join('') + '</div></div>';
+  }).join('') : '<div class="empty"><b>No hay compras en borrador</b>Cuando empieces una compra y pulses “Guardar borrador y salir”, aparecerá aquí.</div>',
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn c3d cv" id="bnN">' + ic('plus') + 'Nueva compra</button>' });
+  m.q('#bnN').onclick = () => { m.close(); editarCompra(null); };
+  m.b.onclick = async (e) => {
+    const del = e.target.closest('[data-del]');
+    if (del) { e.stopPropagation(); if (await confirmar('¿Borrar este borrador de compra?', 'Borrar', true)) { await borrar('bor', del.dataset.del); await quitarFotoFactura(del.dataset.del); m.close(); render(); verBorradores(); } return; }
+    const li = e.target.closest('[data-id]'); if (li) { m.close(); editarCompra(null, S.bor.get(li.dataset.id)); }
+  };
 }
 const nomProv = (id) => (S.prov.get(id) || {}).nombre || '—';
 
 function pgCompras(){
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d co" id="coBor">' + ic('clip') + 'Borradores <span class="nbadge" id="coBorN"></span></button><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
     '<div class="stack"><div id="coPer"></div><div class="row"><select class="in" id="coProv" style="flex:1 1 200px;width:auto"><option value="">Todos los proveedores</option>' +
     vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join('') + '</select><input class="in" id="coQ" type="search" placeholder="Buscar N° o producto" style="flex:1 1 200px"></div>' +
     '<div class="small muted" id="coRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="coList"></div></div></div>';
   $('coNueva').onclick = () => editarCompra(null);
+  migrarBorradorLocal();
+  $('coBor').onclick = verBorradores;
+  const nb = borradores().length; $('coBorN').textContent = nb; $('coBorN').style.display = nb ? '' : 'none';
   let F;
   const pintar = () => {
     const pr = $('coProv').value, w = norm($('coQ').value).split(' ').filter(Boolean);
@@ -1939,35 +2036,41 @@ function pgCompras(){
 function verCompra(c){
   if (c.td === 'ND') return verNotaDebito(c);
   const t = c; const nds = vivos('com').filter((x) => x.td === 'ND' && x.ref === c.id && !x.an);
+  const ff = fotoFactura(c.id);
   const m = modal({ title: 'Compra ' + (c.num || ''), wide: true, body:
     (c.an ? '<div class="note warn" style="margin-bottom:10px">Anulada el ' + fechaTxt(c.an.f) + ' por ' + h(nomVend(c.an.v)) + '</div>' : '') +
     '<p style="margin-top:0"><b>' + h(nomProv(c.pr)) + '</b> · ' + fechaTxt(c.f) + ' · ' + (c.fp === 'cr' ? 'Crédito ' + c.pl + ' días (vence ' + fechaTxt(c.venc) + ')' : 'Contado') + ' · registró ' + h(nomVend(c.v)) + '</p>' +
     '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Producto</th><th class="n">Costo</th><th class="n">IVA</th><th class="n">Subtotal</th></tr></thead><tbody>' +
     (c.it || []).map((x) => '<tr><td class="n">' + numf(x.q) + '</td><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + '</div></td><td class="n">' + money(x.co) + '</td><td class="n">' + (x.iva || 0) + '%</td><td class="n">' + money(x.co * x.q) + '</td></tr>').join('') +
-    '</tbody><tfoot><tr><td colspan="4">Subtotal ' + cfg().iva + '% ' + money(t.sub12) + ' · 0% ' + money(t.sub0) + ' · IVA ' + money(t.iva) + '</td><td class="n">' + money(t.tot) + '</td></tr></tfoot></table></div>' + (nds.length ? '<div class="note warn" style="margin-top:10px">Notas de débito: ' + nds.map((n) => '<b>' + h(n.num || 's/n') + '</b> ' + h(n.conc || '') + ' (' + money(n.tot) + ')').join(', ') + '</div>' : '') + (c.nota ? '<p>Nota: ' + h(c.nota) + '</p>' : ''),
+    '</tbody><tfoot><tr><td colspan="4">Subtotal ' + cfg().iva + '% ' + money(t.sub12) + ' · 0% ' + money(t.sub0) + ' · IVA ' + money(t.iva) + '</td><td class="n">' + money(t.tot) + '</td></tr></tfoot></table></div>' + '<div style="margin-top:10px">' + casillasCompra(c.it) + '</div>' + (ff ? '<div class="row" style="margin-top:10px"><img src="' + ff + '" alt="Factura" class="ffmini" id="vcFoto"><span class="small muted">Foto de la factura · toca para ver</span></div>' : '') + (nds.length ? '<div class="note warn" style="margin-top:10px">Notas de débito: ' + nds.map((n) => '<b>' + h(n.num || 's/n') + '</b> ' + h(n.conc || '') + ' (' + money(n.tot) + ')').join(', ') + '</div>' : '') + (c.nota ? '<p>Nota: ' + h(c.nota) + '</p>' : ''),
     foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vcX">' + ic('sheet') + 'Excel</button>' + (!c.an && puede('compras') ? '<button class="btn c3d co" id="vcNd">' + ic('receipt') + 'Nota de débito</button>' : '') + (!c.an && esAdmin() ? '<button class="btn" id="vcEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="vcAn">' + ic('x') + 'Anular</button>' : '') });
   m.q('#vcX').onclick = () => exportarFilas('Compra ' + (c.num || c.id), ['Código', 'Producto', 'Cantidad', 'Costo', 'IVA %', 'Subtotal'], (c.it || []).map((x) => [x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q)]));
   if (m.q('#vcEd')) m.q('#vcEd').onclick = () => { m.close(); editarCompra(c); };
   if (m.q('#vcNd')) m.q('#vcNd').onclick = () => { m.close(); notaDebito(c); };
+  if (m.q('#vcFoto')) m.q('#vcFoto').onclick = () => verFotoFactura(c.id, c.num);
   if (m.q('#vcAn')) m.q('#vcAn').onclick = async () => { if (!(await confirmar('¿Anular esta compra? El stock que sumó se descuenta.', 'Anular', true))) return;
     c.an = { f: hoyISO(), v: USR.id }; await put('com', c); m.close(); toast('Compra anulada'); render(); };
 }
 
-function editarCompra(c){
+function editarCompra(c, borr){
   const nueva = !c;
-  let D = nueva ? (ls.get('compraDraft', null) || { id: uid('co'), pr: '', num: '', f: hoyISO(), fp: 'co', pl: 30, it: [], nota: '', act: true }) : JSON.parse(JSON.stringify(c));
+  let D = c ? JSON.parse(JSON.stringify(c)) : (borr ? JSON.parse(JSON.stringify(borr)) : { id: uid('co'), pr: '', num: '', f: hoyISO(), fp: 'co', pl: 30, it: [], nota: '', act: true });
+  delete D._u; delete D._d;
   if (D.act == null) D.act = true;
-  const guardarD = () => { if (nueva) ls.set('compraDraft', D); };
+  let tGuardar;
+  const guardarD = () => { if (!nueva) return; clearTimeout(tGuardar); tGuardar = setTimeout(() => { if (D.pr || D.it.length || D.num) put('bor', Object.assign({}, D)); }, 600); };
+  const guardarYa = async () => { clearTimeout(tGuardar); if (nueva && (D.pr || D.it.length || D.num)) await put('bor', Object.assign({}, D)); };
   const provs = () => vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre));
-  const m = modal({ title: nueva ? 'Nueva compra' : 'Editar compra ' + (c.num || ''), wide: true, sticky: true, body:
+  const m = modal({ title: nueva ? (borr ? 'Compra en borrador' : 'Nueva compra') : 'Editar compra ' + (c.num || ''), wide: true, sticky: true, body:
     '<div class="grid2"><label class="f">Proveedor<div class="row" style="flex-wrap:nowrap"><select class="in grow" id="ecPr"></select><button class="btn icon" id="ecPrN" type="button" aria-label="Nuevo proveedor">' + ic('plus') + '</button></div></label>' +
     '<label class="f">N° factura del proveedor<input class="in" id="ecNum" value="' + h(D.num) + '" placeholder="001-001-000012345"></label>' +
     '<label class="f">Fecha<input class="in" id="ecF" type="date" value="' + h(D.f) + '"></label>' +
     '<label class="f">Pago<div class="row" style="flex-wrap:nowrap"><select class="in" id="ecFp"><option value="co">Contado</option><option value="cr">Crédito</option></select><select class="in" id="ecPl">' + [15, 30, 45, 60, 90, 120].map((d) => '<option value="' + d + '">' + d + ' días</option>').join('') + '</select></div></label></div>' +
-    '<div style="margin:12px 0" id="ecBus"></div><div class="cart" id="ecBody" style="margin-top:0"></div><div class="note" id="ecFoot" style="margin-top:10px"></div>' +
+    '<div class="factfoto" id="ecFoto"></div>' +
+    '<div style="margin:10px 0" id="ecBus"></div><div class="cart" id="ecBody" style="margin-top:0"></div><div id="ecFoot" style="margin-top:10px"></div>' +
     '<label class="chk" style="margin-top:8px"><input type="checkbox" id="ecAct"> Actualizar costo y PVP de los productos con estos valores</label>' +
     '<label class="f" style="margin-top:6px">Nota<input class="in" id="ecNota" value="' + h(D.nota || '') + '"></label>',
-    foot: '<button class="btn" id="ecCan">' + (nueva ? 'Guardar borrador y salir' : 'Cancelar') + '</button>' + (nueva ? '<button class="btn danger" id="ecBor">Borrar todo</button>' : '') + '<button class="btn pri" id="ecOk">' + ic('check') + 'Guardar compra</button>' });
+    foot: '<button class="btn" id="ecCan">' + (nueva ? 'Guardar borrador y salir' : 'Cancelar') + '</button>' + (nueva ? '<button class="btn danger" id="ecBor">Borrar todo</button>' : '') + '<button class="btn c3d cv" id="ecOk">' + ic('check') + 'Guardar compra</button>' });
   const pintaProv = () => { m.q('#ecPr').innerHTML = '<option value="">— Elige proveedor —</option>' + provs().map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join(''); m.q('#ecPr').value = D.pr || ''; };
   pintaProv();
   m.q('#ecFp').value = D.fp; m.q('#ecPl').value = String(D.pl || 30); m.q('#ecAct').checked = D.act;
@@ -1975,34 +2078,51 @@ function editarCompra(c){
   m.q('#ecPrN').onclick = () => editarTercero('prov', null, (p) => { D.pr = p.id; pintaProv(); guardarD(); });
   ['#ecPr', '#ecNum', '#ecF', '#ecFp', '#ecPl', '#ecAct', '#ecNota'].forEach((s2) => m.q(s2).addEventListener('change', () => {
     D.pr = m.q('#ecPr').value; D.num = m.q('#ecNum').value.trim(); D.f = m.q('#ecF').value; D.fp = m.q('#ecFp').value; D.pl = +m.q('#ecPl').value; D.act = m.q('#ecAct').checked; D.nota = m.q('#ecNota').value.trim(); plVis(); guardarD(); }));
+  // foto de la factura
+  const pintaFoto = () => {
+    const d = fotoFactura(D.id);
+    m.q('#ecFoto').innerHTML = d ? '<div class="row"><img src="' + d + '" alt="Factura" class="ffmini" id="ecFotoV"><div class="grow"><b>Foto de la factura</b><div class="small muted">Toca la imagen para verla en grande</div></div>' +
+        '<label class="btn sm">' + ic('cam') + 'Cambiar<input type="file" id="ecFile" accept="image/*" hidden></label><button class="btn sm danger" id="ecFotoX" type="button">' + ic('trash') + 'Quitar</button></div>' :
+      '<label class="btn c3d cb" style="width:100%">' + ic('cam') + 'Tomar o subir foto de la factura<input type="file" id="ecFile" accept="image/*" hidden></label>';
+    m.q('#ecFile').onchange = async (e) => { const f = e.target.files[0]; if (!f) return;
+      try { toast('Guardando foto…'); const data = await comprimirFactura(f); await guardarFotoFactura(D.id, data); D.foto = 1; await guardarYa(); pintaFoto(); toast('Foto de la factura guardada.'); } catch (err) { toast(err.message, true); } };
+    if (m.q('#ecFotoV')) m.q('#ecFotoV').onclick = () => verFotoFactura(D.id, D.num || 'factura');
+    if (m.q('#ecFotoX')) m.q('#ecFotoX').onclick = async () => { await quitarFotoFactura(D.id); D.foto = 0; guardarD(); pintaFoto(); };
+  };
+  pintaFoto();
+  const nuevaLinea = (p) => ({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 });
   montarBuscador(m.q('#ecBus'), (p) => {
     const ex = D.it.find((x) => x.p === p.id);
-    if (ex) ex.q = r2(ex.q + 1); else D.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 });
+    if (ex) ex.q = r2(ex.q + 1); else D.it.unshift(nuevaLinea(p));
     guardarD(); pintar();
-  }, { ph: 'Agrega productos: busca o escanea…', onUnknown: (code) => codigoDesconocido(code, (p) => { if (p) { D.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, iva: Number(p.iva) || 0, pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }); guardarD(); pintar(); } }) });
+  }, { ph: 'Agrega productos: busca o escanea…', onUnknown: (code) => codigoDesconocido(code, (p) => { if (p) { D.it.unshift(nuevaLinea(p)); guardarD(); pintar(); } }) });
+  const conIva = (x) => Math.round((Number(x.co) || 0) * (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000;
   const pintar = () => {
     m.q('#ecBody').innerHTML = D.it.length ? D.it.map((x, i) => '<div class="ci" data-i="' + i + '"><div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + (x.pvA ? ' · PVP actual ' + money(x.pvA) : '') + '</div></div>' +
-      '<div class="tot">' + money(x.co * x.q) + '</div><div class="ctrl">' +
+      '<div class="tot">' + money(x.co * x.q) + '<div class="small muted" style="font-weight:400">c/IVA ' + money(conIva(x) * x.q) + '</div></div><div class="ctrl">' +
       '<label class="minilbl">Cantidad<input class="mini pct" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"></label>' +
       '<label class="minilbl">Costo s/IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co || '') + '"></label>' +
       '<label class="minilbl">IVA' + campoIva('mini pct', 'data-k="iva"', x.iva) + '</label>' +
+      '<label class="minilbl cciva">Costo c/IVA<input class="mini" data-k="coi" inputmode="decimal" value="' + (x.co ? conIva(x) : '') + '"></label>' +
       '<label class="minilbl">PVP nuevo<input class="mini" data-k="pvN" inputmode="decimal" value="' + (x.pvN || '') + '"></label>' +
       '<span class="spacer"></span><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button></div></div>').join('') :
       '<div class="empty card">Agrega los productos de la factura del proveedor</div>';
-    const t = totCompra(D.it);
-    m.q('#ecFoot').innerHTML = D.it.length + ' productos · ' + numf(t.unid) + ' u. · Subtotal ' + cfg().iva + '%: ' + money(t.sub12) + ' · 0%: ' + money(t.sub0) + ' · IVA: ' + money(t.iva) + ' · <b>TOTAL ' + money(t.tot) + '</b>';
+    m.q('#ecFoot').innerHTML = casillasCompra(D.it);
   };
   m.q('#ecBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = D.it[+tr.dataset.i];
-    x[k] = parseFloat(String(e.target.value).replace(',', '.')) || 0; guardarD(); pintar(); };
+    const v = parseFloat(String(e.target.value).replace(',', '.')) || 0;
+    if (k === 'coi') x.co = Math.round(v / (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000; else x[k] = v;
+    guardarD(); pintar(); };
   m.q('#ecBody').onclick = (e) => { if (e.target.closest('[data-del]')) { D.it.splice(+e.target.closest('[data-i]').dataset.i, 1); guardarD(); pintar(); } };
-  m.q('#ecCan').onclick = () => m.close();
-  if (m.q('#ecBor')) m.q('#ecBor').onclick = async () => { if (await confirmar('¿Borrar el borrador de esta compra?', 'Borrar', true)) { ls.del('compraDraft'); m.close(); } };
+  m.q('#ecCan').onclick = async () => { await guardarYa(); m.close(); if (nueva && (D.pr || D.it.length || D.num)) toast('Compra guardada en Borradores.'); if (RUTA === 'compras') render(); };
+  if (m.q('#ecBor')) m.q('#ecBor').onclick = async () => { if (await confirmar('¿Borrar este borrador de compra?', 'Borrar', true)) { clearTimeout(tGuardar); if (S.bor.has(D.id)) await borrar('bor', D.id); await quitarFotoFactura(D.id); m.close(); if (RUTA === 'compras') render(); } };
   m.q('#ecOk').onclick = async () => {
     if (!D.pr) return toast('Elige el proveedor.', true);
     if (!D.it.length) return toast('Agrega productos.', true);
     if (D.it.some((x) => !(x.q > 0))) return toast('Hay productos con cantidad 0.', true);
+    clearTimeout(tGuardar);
     const t = totCompra(D.it);
-    const rec = Object.assign({}, D, t, { ts: nueva ? Date.now() : c.ts, v: nueva ? USR.id : c.v, venc: D.fp === 'cr' ? sumarDias(D.f, D.pl) : '', pl: D.fp === 'cr' ? D.pl : 0 });
+    const rec = Object.assign({}, D, t, { ts: nueva ? Date.now() : c.ts, v: nueva ? USR.id : c.v, venc: D.fp === 'cr' ? sumarDias(D.f, D.pl) : '', pl: D.fp === 'cr' ? D.pl : 0, foto: fotoFactura(D.id) ? 1 : 0 });
     delete rec.act;
     await put('com', rec);
     if (D.act) {
@@ -2012,7 +2132,7 @@ function editarCompra(c){
         if (ch) cambios.push(n); });
       if (cambios.length) await putMuchos('prod', cambios);
     }
-    if (nueva) ls.del('compraDraft');
+    if (nueva && S.bor.has(D.id)) await borrar('bor', D.id);
     m.close(); toast('Compra guardada. Stock actualizado.'); render();
   };
   pintar();
@@ -2128,7 +2248,7 @@ function verTercero(t, c){
   m.q('#vtEd').onclick = () => { m.close(); editarTercero(t, c); };
   if (m.q('#vtWa')) m.q('#vtWa').onclick = () => { const tel = telWA(c.tel); if (!tel) return toast('Este cliente no tiene teléfono.', true); window.open('https://wa.me/' + tel, '_blank'); };
   if (m.q('#vtV')) m.q('#vtV').onclick = () => { CART.cli = { id: c.id, ruc: c.ruc, nombre: c.nombre, tel: c.tel, correo: c.correo, dir: c.dir }; guardarCart(); m.close(); irA('vender'); toast('Cliente elegido: ' + c.nombre); };
-  if (m.q('#vtC')) m.q('#vtC').onclick = () => { const d = ls.get('compraDraft', null) || { id: uid('co'), pr: '', num: '', f: hoyISO(), fp: 'co', pl: c.pl || 30, it: [], nota: '', act: true }; d.pr = c.id; ls.set('compraDraft', d); m.close(); irA('compras'); setTimeout(() => editarCompra(null), 80); };
+  if (m.q('#vtC')) m.q('#vtC').onclick = () => { m.close(); irA('compras'); setTimeout(() => editarCompra(null, { id: uid('co'), pr: c.id, num: '', f: hoyISO(), fp: (c.pl ? 'cr' : 'co'), pl: c.pl || 30, it: [], nota: '', act: true }), 80); };
 }
 
 /* ---------- Vendedores ---------- */
