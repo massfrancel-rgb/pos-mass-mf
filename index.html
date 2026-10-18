@@ -425,6 +425,8 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 :root[data-theme="dark"] .pedbar{background:linear-gradient(180deg,#3A2C10,#2A2008);border-color:#6B5320;color:#F6D58E}
 .tbl select.selprov{width:150px;text-align:left;font-size:14px;font-weight:600}.tbl input.selq{width:64px}
 .tbl .chkped{width:22px;height:22px;accent-color:#E07A1F;cursor:pointer}
+.ordbar{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.ordbar>span{display:inline-flex;white-space:nowrap;align-items:center;gap:6px;font-weight:700;font-size:14px}.ordbar>span .ico{width:18px;height:18px}.ordbar select{width:auto;min-width:220px;flex:1 1 220px;max-width:380px;min-height:40px}
+.tbl th.sortable{cursor:pointer;user-select:none;white-space:nowrap}.tbl th.sortable:hover{filter:brightness(1.25)}.tbl th .sarr{font-style:normal;font-size:11px;opacity:.55;margin-left:4px}
 </style>
 </head>
 <body>
@@ -451,7 +453,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18g';
+const APP_VER = '2026-10-18h';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2788,17 +2790,25 @@ function pgReportes(){
   const pintar = () => {
     let R;
     try { R = REP[def[0]](F); } catch (e) { R = { html: '<div class="note warn">No se pudo generar: ' + h(e.message) + '</div>' }; }
+    const so = RSORT[def[0]];
+    if (R.cab && R.filas && R.filas.length > 1) { R._so = so; R._ord = ordenarRep(R, so);
+      if (so && R.raw && R.raw.length === R.filas.length) R.raw = R._ord.map((i) => R.raw[i]); }
     ultimo = Object.assign({ nombre: def[1], titulo: def[1] + (sinPeriodo ? '' : ' · ' + F.txt) }, R);
+    if (ultimo.raw == null && R._ord && so) ultimo.filasExp = R._ord.map((i) => R.filas[i]);
     $('rOut').innerHTML = '<h3 style="margin:2px 0 10px">' + h(ultimo.titulo) + (F.vend && !sinPeriodo ? ' · ' + h(nomVend(F.vend)) : '') + (RO.cat && (def[6] || []).includes('cat') ? ' · ' + h(RO.cat) : '') + '</h3>' +
       (R.kpis ? '<div class="kpis" style="margin-bottom:12px">' + R.kpis.map((k, i) => '<div class="kpi ' + (i === 0 ? 'gold' : '') + '"><span>' + h(k[0]) + '</span><b>' + k[1] + '</b>' + (k[2] ? '<small>' + h(k[2]) + '</small>' : '') + '</div>').join('') + '</div>' : '') +
-      (R.html || '') + (R.cab ? tablaRep(R) : '');
+      (R.html || '') + (R.cab && R._ord ? barraOrden(R, so) : '') + (R.cab ? tablaRep(R) : '');
     if (R.after) R.after($('rOut'));
   };
+  const cambiarOrden = (v) => { if (v == null) delete RSORT[def[0]]; else RSORT[def[0]] = v; guardarOrden(); pintar(); };
+  $('rOut').addEventListener('change', (e) => { if (e.target.id === 'rOrd') { const v = e.target.value; cambiarOrden(v ? { c: +v.split(':')[0], d: v.split(':')[1] === '1' } : null); } });
+  $('rOut').addEventListener('click', (e) => { const th = e.target.closest('th[data-sc]'); if (!th) return; const c = +th.dataset.sc; const so = RSORT[def[0]];
+    cambiarOrden(so && so.c === c ? (so.d ? null : { c, d: true }) : { c, d: false }); });
   controlesRep($('rCtl'), def[6] || [], pintar);
   $('rX').onclick = () => { if (!ultimo || !ultimo.cab) return toast('Este reporte no tiene tabla para exportar.', true);
     const ta = document.createElement('textarea');
     const limpio = (c) => { if (typeof c !== 'string') return c; ta.innerHTML = c.replace(/<[^>]+>/g, '').trim(); return ta.value; };
-    exportarFilas(ultimo.nombre, ultimo.rawCab || ultimo.cab, ultimo.raw || ultimo.filas.map((f) => f.map(limpio)), ultimo.extra); };
+    exportarFilas(ultimo.nombre, ultimo.rawCab || ultimo.cab, ultimo.raw || (ultimo.filasExp || ultimo.filas).map((f) => f.map(limpio)), ultimo.extra); };
   $('rP').onclick = () => window.print();
   filtroPeriodo($('rPer'), 'rep', (f) => { F = f; pintar(); }, true);
 }
@@ -2852,12 +2862,52 @@ function controlesRep(cont, ctls, onChange){
       if (multi) RO.prods = RO.prods.filter((x) => x !== id); else RO.prod = ''; guardarRO(); controlesRep(cont, ctls, onChange); onChange(); };
   }
 }
+/* ---------- ordenar cualquier reporte por cualquier columna ---------- */
+let RSORT = {}; try { RSORT = JSON.parse(localStorage.getItem('posRSort') || '{}') || {}; } catch (e) { RSORT = {}; }
+const guardarOrden = () => { try { localStorage.setItem('posRSort', JSON.stringify(RSORT)); } catch (e) {} };
+const colOrdenable = (R, i) => { const c = String(R.cab[i] || '').trim(); return c && c !== '✓' && c !== '#'; };
+function claveOrden(c){
+  if (typeof c === 'number') return c;
+  let t = String(c == null ? '' : c);
+  if (/<select/i.test(t)) { const m = t.match(/<option[^>]*selected[^>]*>([^<]*)/i); t = m ? m[1] : ''; }
+  else if (/<input[^>]*checkbox/i.test(t)) return / checked/.test(t) ? 1 : 0;
+  else if (/<input/i.test(t)) { const m = t.match(/value="([^"]*)"/); t = m ? m[1] : ''; }
+  t = t.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = t.replace(/[$,\s%]/g, '');
+  if (/^-?\d+(\.\d+)?$/.test(m) && !/^0\d/.test(m)) return parseFloat(m);
+  return t === '—' || t === '-' ? '' : t;
+}
+function cmpOrden(a, b){
+  const va = a === '' || a == null, vb = b === '' || b == null;
+  if (va || vb) return va && vb ? 0 : (va ? 1 : -1);          // vacíos siempre al final
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  if (typeof a === 'number') return -1; if (typeof b === 'number') return 1;
+  return String(a).localeCompare(String(b), 'es', { numeric: true, sensitivity: 'base' });
+}
+function ordenarRep(R, so){
+  const idx = R.filas.map((f, i) => i);
+  if (!so || so.c == null || so.c >= R.cab.length || !colOrdenable(R, so.c)) return idx;
+  const k = R.filas.map((f) => claveOrden(f[so.c]));
+  return idx.sort((a, b) => { const va = k[a], vb = k[b]; const ea = va === '' || va == null, eb = vb === '' || vb == null;
+    if (ea || eb) return ea && eb ? a - b : (ea ? 1 : -1);
+    return (so.d ? -1 : 1) * cmpOrden(va, vb) || a - b; });
+}
+function barraOrden(R, so){
+  const n = R.num || []; let o = '<option value="">Orden del reporte</option>';
+  R.cab.forEach((c, i) => { if (!colOrdenable(R, i)) return; const num = n.includes(i);
+    o += '<option value="' + i + ':0"' + (so && so.c === i && !so.d ? ' selected' : '') + '>' + h(c) + (num ? ' (menor → mayor)' : ' (A → Z)') + '</option>' +
+      '<option value="' + i + ':1"' + (so && so.c === i && so.d ? ' selected' : '') + '>' + h(c) + (num ? ' (mayor → menor)' : ' (Z → A)') + '</option>'; });
+  return '<div class="ordbar noprint"><span>' + ic('list') + 'Ordenar por</span><select class="in" id="rOrd">' + o + '</select></div>';
+}
 function tablaRep(R){
   const n = R.num || [];
   const max = R.max || 1500;
-  const filas = R.filas.slice(0, max);
-  return '<div class="tblwrap"><table class="tbl"><thead><tr>' + R.cab.map((c, i) => '<th class="' + (n.includes(i) ? 'n' : '') + '">' + h(c) + '</th>').join('') + '</tr></thead><tbody>' +
-    (filas.length ? filas.map((f, j) => '<tr' + (R.clic ? ' class="click" data-j="' + j + '"' : '') + '>' + f.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + R.cab.length + '" class="center muted" style="padding:20px">Sin datos para este filtro</td></tr>') +
+  const ord = R._ord || R.filas.map((f, i) => i);
+  const filas = ord.slice(0, max);
+  const so = R._so;
+  return '<div class="tblwrap"><table class="tbl"><thead><tr>' + R.cab.map((c, i) => '<th class="' + (n.includes(i) ? 'n' : '') + (R._ord && colOrdenable(R, i) ? ' sortable' : '') + '"' + (R._ord && colOrdenable(R, i) ? ' data-sc="' + i + '" title="Ordenar"' : '') + '>' + h(c) +
+      (R._ord && colOrdenable(R, i) ? '<i class="sarr">' + (so && so.c === i ? (so.d ? '▼' : '▲') : '↕') + '</i>' : '') + '</th>').join('') + '</tr></thead><tbody>' +
+    (filas.length ? filas.map((j) => [R.filas[j], j]).map(([f, j]) => '<tr' + (R.clic ? ' class="click" data-j="' + j + '"' : '') + '>' + f.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr>').join('') : '<tr><td colspan="' + R.cab.length + '" class="center muted" style="padding:20px">Sin datos para este filtro</td></tr>') +
     '</tbody>' + (R.pie ? '<tfoot><tr>' + R.pie.map((c, i) => '<td class="' + (n.includes(i) ? 'n' : '') + '">' + (R.fmt && R.fmt[i] && typeof c === 'number' ? R.fmt[i](c) : (typeof c === 'number' ? numf(c) : c)) + '</td>').join('') + '</tr></tfoot>' : '') + '</table></div>' +
     (R.filas.length > max ? '<p class="small muted">Se muestran ' + max + ' de ' + R.filas.length + ' filas. El botón Excel exporta todas.</p>' : '');
 }
