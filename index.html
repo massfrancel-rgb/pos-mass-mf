@@ -421,6 +421,10 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
   .card,.kpi{box-shadow:none}
   body{background:#fff;color:#000}
 }
+.pedbar{position:sticky;top:0;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin:0 0 10px;border-radius:14px;background:linear-gradient(180deg,#FFF4DA,#F6E2B0);border:1px solid #E2C477;color:#3E2C06;box-shadow:0 3px 10px rgba(0,0,0,.08)}
+:root[data-theme="dark"] .pedbar{background:linear-gradient(180deg,#3A2C10,#2A2008);border-color:#6B5320;color:#F6D58E}
+.tbl select.selprov{width:150px;text-align:left;font-size:14px;font-weight:600}.tbl input.selq{width:64px}
+.tbl .chkped{width:22px;height:22px;accent-color:#E07A1F;cursor:pointer}
 </style>
 </head>
 <body>
@@ -447,7 +451,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18d';
+const APP_VER = '2026-10-18e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -617,7 +621,7 @@ function thumb(p, cls){
     : '<span class="th ph ' + (cls || '') + '"></span>';
 }
 
-const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj'];
+const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj', 'ped'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
@@ -2052,13 +2056,15 @@ const nomProv = (id) => (S.prov.get(id) || {}).nombre || '—';
 
 function pgCompras(){
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d co" id="coBor">' + ic('clip') + 'Borradores <span class="nbadge" id="coBorN"></span></button><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d co" id="coBor">' + ic('clip') + 'Borradores <span class="nbadge" id="coBorN"></span></button><button class="btn sm c3d cp" id="coPed">' + ic('list') + 'Pedidos a proveedores <span class="nbadge" id="coPedN"></span></button><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
     '<div class="stack"><div id="coPer"></div><div class="row"><select class="in" id="coProv" style="flex:1 1 200px;width:auto"><option value="">Todos los proveedores</option>' +
     vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join('') + '</select><input class="in" id="coQ" type="search" placeholder="Buscar N° o producto" style="flex:1 1 200px"></div>' +
     '<div class="small muted" id="coRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="coList"></div></div></div>';
   $('coNueva').onclick = () => editarCompra(null);
   migrarBorradorLocal();
   $('coBor').onclick = verBorradores;
+  $('coPed').onclick = verPedidos;
+  const np = vivos('ped').filter((p) => p.est !== 'rec').length; $('coPedN').textContent = np; $('coPedN').style.display = np ? '' : 'none';
   const nb = borradores().length; $('coBorN').textContent = nb; $('coBorN').style.display = nb ? '' : 'none';
   let F;
   const pintar = () => {
@@ -2166,6 +2172,7 @@ function editarCompra(c, borr){
     const rec = Object.assign({}, D, t, { ts: nueva ? Date.now() : c.ts, v: nueva ? USR.id : c.v, venc: D.fp === 'cr' ? sumarDias(D.f, D.pl) : '', pl: D.fp === 'cr' ? D.pl : 0, foto: fotoFactura(D.id) ? 1 : 0 });
     delete rec.act;
     await put('com', rec);
+    if (D.ped && S.ped && S.ped.get(D.ped) && S.ped.get(D.ped).est !== 'rec') await put('ped', Object.assign({}, S.ped.get(D.ped), { est: 'rec', comp: rec.id, recF: hoyISO() }));
     if (D.act) {
       const cambios = [];
       D.it.forEach((x) => { const p = S.prod.get(x.p); if (!p) return; const n = Object.assign({}, p); let ch = false;
@@ -2742,7 +2749,7 @@ function pgReportes(){
   $('rX').onclick = () => { if (!ultimo || !ultimo.cab) return toast('Este reporte no tiene tabla para exportar.', true);
     const ta = document.createElement('textarea');
     const limpio = (c) => { if (typeof c !== 'string') return c; ta.innerHTML = c.replace(/<[^>]+>/g, '').trim(); return ta.value; };
-    exportarFilas(ultimo.nombre, ultimo.cab, ultimo.raw || ultimo.filas.map((f) => f.map(limpio)), ultimo.extra); };
+    exportarFilas(ultimo.nombre, ultimo.rawCab || ultimo.cab, ultimo.raw || ultimo.filas.map((f) => f.map(limpio)), ultimo.extra); };
   $('rP').onclick = () => window.print();
   filtroPeriodo($('rPer'), 'rep', (f) => { F = f; pintar(); }, true);
 }
@@ -3172,6 +3179,228 @@ Object.assign(REP, {
       cab: ['Código', 'Producto', 'Vendido', 'Promedio diario', 'Stock', 'Alcanza para'], num: [2, 3, 4, 5], fmt: { 2: N0, 3: (c) => numf(c, 2), 4: N0, 5: cob }, filas: l };
   }
 });
+
+/* =====================================================================
+   PEDIDOS A PROVEEDORES (no son compras: no mueven stock)
+   Se arman desde el reporte "Stock bajo y agotados" o a mano.
+   ===================================================================== */
+const SELPED = new Map();          // productos marcados en el reporte: id -> { pr, q }
+
+/** Último proveedor que nos vendió el producto (según compras registradas) */
+function provHabitual(pid){
+  const p = S.prod.get(pid); if (p && p.prov && S.prov.get(p.prov) && !S.prov.get(p.prov)._d) return p.prov;
+  let best = null, bf = '';
+  S.com.forEach((c) => { if (!c._d && !c.an && c.td !== 'ND' && c.f >= bf && (c.it || []).some((x) => x.p === pid)) { best = c.pr; bf = c.f; } });
+  return best || '';
+}
+const opcionesProv = (sel) => '<option value="">— Proveedor —</option>' + vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + h(p.nombre) + '</option>').join('');
+function sugerido(p, s, vend30){
+  const mi = Number(p.mi) || 0;
+  return Math.max(1, Math.ceil(Math.max(mi * 2 - s, vend30 - Math.max(0, s), mi - s)));
+}
+
+/* ---------- Reporte "Stock bajo y agotados" con casillas para pedir ---------- */
+Object.assign(REP, {
+  stockbajo(){
+    const ps = vivos('prod').filter((p) => enFiltro(p.id)).map((p) => ({ p, s: stockDe(p.id) })).filter((x) => x.s <= 0 || (Number(x.p.mi) > 0 && x.s <= Number(x.p.mi)));
+    const vend = new Map(); const d30 = sumarDias(hoyISO(), -30);
+    vivos('vta').forEach((v) => { if (!v.an && v.tp !== 'P' && v.f >= d30) (v.it || []).forEach((x) => vend.set(x.p, (vend.get(x.p) || 0) + (Number(x.q) || 0))); });
+    ps.sort((a, b) => (vend.get(b.p.id) || 0) - (vend.get(a.p.id) || 0) || a.s - b.s);
+    const pedir = puede('compras');
+    const lista = ps.slice(0, 1500);
+    const celdaProv = (x) => { const sel = SELPED.get(x.p.id); const pr = sel ? sel.pr : provHabitual(x.p.id);
+      return sel ? '<select class="mini selprov" data-prov="' + h(x.p.id) + '">' + opcionesProv(pr) + '</select>' : '<span class="small">' + h(pr ? nomProv(pr) : '—') + '</span>'; };
+    const celdaQ = (x) => { const sel = SELPED.get(x.p.id); return sel ? '<input class="mini pct selq" data-q="' + h(x.p.id) + '" inputmode="decimal" value="' + numf(sel.q) + '">' : ''; };
+    const filas = lista.map((x) => (pedir ? ['<input type="checkbox" class="chkped" data-ck="' + h(x.p.id) + '"' + (SELPED.has(x.p.id) ? ' checked' : '') + '>'] : [])
+      .concat([h(x.p.id), h(x.p.n) + '<div class="small muted">' + h(x.p.c || '') + '</div>'], pedir ? [celdaProv(x), celdaQ(x)] : [], [x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0, estadoStock(x.p, x.s)]));
+    const o = pedir ? 1 : 0;   // columnas antes de Código
+    const barra = pedir ? '<div class="pedbar" id="pedBar"></div>' : '';
+    return { html: '<p class="small muted" style="margin-top:0">Primero los que más se vendieron en los últimos 30 días.' + (pedir ? ' <b>Marca la casilla</b> de lo que necesitas, elige el <b>proveedor</b> y la cantidad, y pulsa <b>Crear pedido</b>.' : '') + '</p>' + barra,
+      kpis: [['Agotados', String(ps.filter((x) => x.s <= 0).length)], ['Bajo el mínimo', String(ps.filter((x) => x.s > 0).length)]],
+      cab: (pedir ? ['✓'] : []).concat(['Código', 'Producto'], pedir ? ['Proveedor', 'Pedir'] : [], ['Stock', 'Mínimo', 'Vendido 30 días', 'Costo', 'Estado']),
+      num: [2, 3, 4, 5].map((n) => n + (pedir ? 3 : 0)),
+      fmt: { [pedir ? 8 : 5]: M$ },
+      filas,
+      raw: lista.map((x) => [x.p.id, x.p.n, x.p.c || '', nomProv(provHabitual(x.p.id)) === '—' ? '' : nomProv(provHabitual(x.p.id)), x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0]),
+      rawCab: ['Código', 'Producto', 'Categoría', 'Proveedor habitual', 'Stock', 'Mínimo', 'Vendido 30 días', 'Costo'],
+      after: (out) => {
+        if (!pedir) return;
+        const bar = qs('#pedBar', out);
+        const pintaBar = () => {
+          const n = SELPED.size; const sinProv = Array.from(SELPED.values()).filter((s) => !s.pr).length;
+          const provs = new Set(Array.from(SELPED.values()).map((s) => s.pr).filter(Boolean));
+          bar.innerHTML = '<b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') +
+            '<span class="spacer"></span>' + (n ? '<select class="in" id="pbProv" style="width:auto;min-height:36px"><option value="">Poner a todos…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
+            '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar</button><button class="btn sm c3d co" id="pbCrear">' + ic('clip') + 'Crear pedido</button>' : '');
+          if (!n) return;
+          qs('#pbProv', bar).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
+          qs('#pbLimp', bar).onclick = () => { SELPED.clear(); render(); };
+          qs('#pbCrear', bar).onclick = crearPedidosDesdeSeleccion;
+        };
+        out.onchange = (e) => {
+          const ck = e.target.closest('[data-ck]');
+          if (ck) { const id = ck.dataset.ck; const x = lista.find((y) => y.p.id === id);
+            if (ck.checked) SELPED.set(id, { pr: provHabitual(id), q: sugerido(x.p, x.s, vend.get(id) || 0) }); else SELPED.delete(id);
+            const tr = ck.closest('tr'); tr.children[3].innerHTML = celdaProv(x); tr.children[4].innerHTML = celdaQ(x); pintaBar(); return; }
+          const sp = e.target.closest('[data-prov]'); if (sp) { const s = SELPED.get(sp.dataset.prov); if (s) s.pr = sp.value; pintaBar(); return; }
+          const sq = e.target.closest('[data-q]'); if (sq) { const s = SELPED.get(sq.dataset.q); if (s) s.q = Math.max(0, parseFloat(String(sq.value).replace(',', '.')) || 0); }
+        };
+        pintaBar();
+      } };
+  }
+});
+
+async function crearPedidosDesdeSeleccion(){
+  const sel = Array.from(SELPED.entries());
+  if (sel.some(([, s]) => !s.pr)) return toast('Elige el proveedor de todos los productos marcados.', true);
+  const grupos = new Map(); sel.forEach(([id, s]) => { if (!(s.q > 0)) return; if (!grupos.has(s.pr)) grupos.set(s.pr, []); grupos.get(s.pr).push([id, s.q]); });
+  if (!grupos.size) return toast('Pon una cantidad mayor a 0.', true);
+  // recuerda el proveedor habitual de cada producto
+  const prods = []; sel.forEach(([id, s]) => { const p = S.prod.get(id); if (p && p.prov !== s.pr) prods.push(Object.assign({}, p, { prov: s.pr })); });
+  if (prods.length) await putMuchos('prod', prods);
+  const creados = [];
+  for (const [pr, its] of grupos) {
+    const existente = vivos('ped').find((x) => x.pr === pr && x.est === 'pend');
+    const it = its.map(([id, q]) => { const p = S.prod.get(id) || { n: id }; return { p: id, n: p.n, q, co: Number(p.co) || 0, un: p.un || 'UND' }; });
+    if (existente) {
+      const e = Object.assign({}, existente, { it: existente.it.slice() });
+      it.forEach((x) => { const y = e.it.find((z) => z.p === x.p); if (y) y.q = x.q; else e.it.push(x); });
+      await put('ped', e); creados.push(e);
+    } else {
+      const ped = { id: uid('pp'), num: siguientePedidoProv(), pr, f: hoyISO(), ts: Date.now(), v: USR.id, it, est: 'pend', nota: '' };
+      await put('ped', ped); creados.push(ped);
+    }
+  }
+  SELPED.clear();
+  toast(creados.length === 1 ? 'Pedido ' + creados[0].num + ' listo' : creados.length + ' pedidos creados (uno por proveedor)');
+  render();
+  if (creados.length === 1) verPedido(S.ped.get(creados[0].id)); else verPedidos();
+}
+function siguientePedidoProv(){
+  let max = 0; S.ped.forEach((p) => { const n = parseInt(String(p.num || '').replace(/\D/g, ''), 10); if (n > max) max = n; });
+  return 'PP-' + pad(max + 1, 6);
+}
+const EST_PED = { pend: ['Por enviar', 'gold'], env: ['Enviado', 'info'], rec: ['Recibido', 'ok'] };
+
+/* ---------- Lista de pedidos agrupados por proveedor ---------- */
+function verPedidos(){
+  const l = vivos('ped');
+  const grupos = new Map(); l.forEach((p) => { const k = nomProv(p.pr); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(p); });
+  const ks = Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b));
+  const m = modal({ title: 'Pedidos a proveedores (' + l.length + ')', wide: true, body: l.length ? ks.map((k) => {
+    const ps = grupos.get(k).sort((a, b) => (a.est === 'rec') - (b.est === 'rec') || (b.ts || 0) - (a.ts || 0));
+    return '<h3 class="rgh" style="margin:10px 0 6px">' + ico3d('truck', ['#F2BC4A', '#C08510']) + h(k) + ' <span class="badge">' + ps.length + '</span></h3><div class="card" style="padding:4px 10px"><div class="list">' +
+      ps.map((p) => '<div class="li" data-id="' + h(p.id) + '"><div class="grow"><div class="t">' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
+        '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf((p.it || []).reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' u.' + (p.nota ? ' · ' + h(p.nota) : '') + '</div></div>' +
+        '<div class="v">' + money((p.it || []).reduce((s, x) => s + (Number(x.q) || 0) * (Number(x.co) || 0), 0)) + '<div class="small muted" style="font-weight:400">costo ref.</div></div></div>').join('') + '</div></div>';
+  }).join('') : '<div class="empty"><b>No hay pedidos a proveedores</b>Créalos desde Reportes → Stock bajo y agotados marcando lo que necesitas, o con “Nuevo pedido”.</div>',
+    foot: '<button class="btn" data-x>Cerrar</button><a class="btn c3d co" href="#rep?r=stockbajo" id="vpSb">' + ic('alert') + 'Ver stock bajo</a><button class="btn c3d cv" id="vpN">' + ic('plus') + 'Nuevo pedido</button>' });
+  m.q('#vpN').onclick = () => { m.close(); verPedido(null); };
+  m.q('#vpSb').onclick = () => m.close();
+  m.b.onclick = (e) => { const li = e.target.closest('[data-id]'); if (li) { m.close(); verPedido(S.ped.get(li.dataset.id)); } };
+}
+
+/* ---------- Editar / ver un pedido ---------- */
+function verPedido(p0){
+  const nuevo = !p0;
+  const P = nuevo ? { id: uid('pp'), num: siguientePedidoProv(), pr: '', f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' } : JSON.parse(JSON.stringify(p0));
+  delete P._u; delete P._d;
+  const bloqueado = P.est === 'rec';
+  const m = modal({ title: 'Pedido a proveedor ' + P.num, wide: true, sticky: true, body:
+    '<div class="grid3"><label class="f">Proveedor<select class="in" id="ppPr"' + (bloqueado ? ' disabled' : '') + '>' + opcionesProv(P.pr) + '</select></label>' +
+    '<label class="f">Fecha<input class="in" type="date" id="ppF" value="' + h(P.f) + '"' + (bloqueado ? ' disabled' : '') + '></label>' +
+    '<label class="f">Estado<select class="in" id="ppE"><option value="pend">Por enviar</option><option value="env">Enviado</option><option value="rec">Recibido</option></select></label></div>' +
+    (bloqueado ? '' : '<div style="margin:10px 0" id="ppBus"></div>') + '<div class="cart" id="ppBody" style="margin-top:0"></div><div id="ppFoot" style="margin-top:8px"></div>' +
+    '<label class="f" style="margin-top:8px">Nota para el proveedor<input class="in" id="ppN" value="' + h(P.nota || '') + '" placeholder="Ej.: entregar el lunes, confirmar precios"></label>',
+    foot: '<button class="btn" id="ppX">' + (nuevo ? 'Cancelar' : 'Cerrar') + '</button>' + (!nuevo ? '<button class="btn danger" id="ppDel">' + ic('trash') + 'Eliminar</button>' : '') +
+      '<button class="btn c3d cb" id="ppPdf">' + ic('pdf') + 'PDF</button><button class="btn c3d cv" id="ppWa">' + ic('wa') + 'Enviar por WhatsApp</button>' +
+      (!bloqueado ? '<button class="btn c3d cp" id="ppCo">' + ic('truck') + 'Convertir en compra</button>' : '') + '<button class="btn c3d co" id="ppOk">' + ic('check') + 'Guardar</button>' });
+  m.q('#ppE').value = P.est;
+  const leer = () => { P.pr = m.q('#ppPr').value; P.f = m.q('#ppF').value || hoyISO(); P.est = m.q('#ppE').value; P.nota = m.q('#ppN').value.trim(); };
+  const pintar = () => {
+    m.q('#ppBody').innerHTML = P.it.length ? P.it.map((x, i) => '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.co ? ' · último costo ' + money(x.co) : '') + '</div></div></div>' +
+      '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
+      '<div class="ctrl np"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + (bloqueado ? ' disabled' : '') + '></label></div></div>').join('') :
+      '<div class="empty card">Agrega los productos que vas a pedir</div>';
+    const u = P.it.reduce((s, x) => s + (Number(x.q) || 0), 0), c = P.it.reduce((s, x) => s + (Number(x.q) || 0) * (Number(x.co) || 0), 0);
+    m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div><div class="tcas tot"><span>Costo referencial</span><b>' + money(c) + '</b></div></div>';
+  };
+  if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else P.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, un: p.un || 'UND' });
+    if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; } pintar(); }, { ph: 'Agregar producto al pedido…' });
+  m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); if (!tr) return; P.it[+tr.dataset.i].q = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); pintar(); };
+  m.q('#ppBody').onclick = (e) => { if (e.target.closest('[data-del]')) { P.it.splice(+e.target.closest('[data-i]').dataset.i, 1); pintar(); } };
+  const guardar = async () => { leer(); if (!P.pr) { toast('Elige el proveedor.', true); return false; } if (!P.it.length) { toast('Agrega productos.', true); return false; }
+    await put('ped', Object.assign({}, P)); return true; };
+  m.q('#ppX').onclick = () => m.close();
+  m.q('#ppOk').onclick = async () => { if (await guardar()) { m.close(); toast('Pedido guardado'); if (RUTA === 'compras') render(); } };
+  if (m.q('#ppDel')) m.q('#ppDel').onclick = async () => { if (await confirmar('¿Eliminar el pedido ' + P.num + '?', 'Eliminar', true)) { await borrar('ped', P.id); m.close(); if (RUTA === 'compras') render(); } };
+  m.q('#ppPdf').onclick = async () => { if (!(await guardar())) return; const d = await pdfPedidoProv(P); descargar(d.output('blob'), 'Pedido-' + P.num + '.pdf'); };
+  m.q('#ppWa').onclick = async () => {
+    if (!(await guardar())) return;
+    const prov = S.prov.get(P.pr) || {};
+    try {
+      const d = await pdfPedidoProv(P); const blob = d.output('blob'); const nom = 'Pedido-' + P.num + '.pdf';
+      const txt = 'Buen día' + (prov.cont ? ' ' + prov.cont : '') + ', le envío el pedido ' + P.num + ' de MASS FERRETERÍA (' + P.it.length + ' productos). Por favor confirmar disponibilidad y precios. Gracias.';
+      const file = new File([blob], nom, { type: 'application/pdf' });
+      let ok = false;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: nom, text: txt }); ok = true; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      if (!ok) { descargar(blob, nom); window.open('https://wa.me/' + telWA(prov.ctel || prov.tel) + '?text=' + encodeURIComponent(txt + ' (adjunto el PDF)'), '_blank'); toast('PDF descargado. Adjúntalo en el chat de WhatsApp.'); }
+      if (P.est === 'pend') { P.est = 'env'; P.envF = hoyISO(); m.q('#ppE').value = 'env'; await put('ped', Object.assign({}, P)); }
+    } catch (e) { toast('No se pudo compartir: ' + e.message, true); }
+  };
+  if (m.q('#ppCo')) m.q('#ppCo').onclick = async () => {
+    if (!(await guardar())) return;
+    const prov = S.prov.get(P.pr) || {};
+    m.close(); irA('compras');
+    setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
+      it: P.it.filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(p.co) || x.co || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), 120);
+  };
+  pintar();
+}
+
+/* ---------- PDF del pedido ---------- */
+async function pdfPedidoProv(P){
+  const J = await libPDF(); const C = cfg(); const prov = S.prov.get(P.pr) || {};
+  const doc = new J({ unit: 'mm', format: 'a4' });
+  const W = 210, Mg = 15, oro = [201, 154, 46], osc = [26, 24, 20], gris = [94, 88, 76];
+  let y = 15;
+  const logo = await logoData(); if (logo) doc.addImage(logo, 'PNG', Mg, y, 22, 25.3);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...osc); doc.text(C.nombre, Mg + 27, y + 7);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...gris);
+  let yy = y + 12.5; [C.ruc ? 'RUC ' + C.ruc : '', C.dir, C.ciudad, 'WhatsApp ' + C.tel].filter(Boolean).forEach((l) => { doc.text(l, Mg + 27, yy); yy += 4.3; });
+  doc.setDrawColor(...oro); doc.setLineWidth(0.6); doc.roundedRect(W - Mg - 62, y, 62, 26, 2, 2);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...osc); doc.text('PEDIDO A PROVEEDOR', W - Mg - 31, y + 7.5, { align: 'center' });
+  doc.setFontSize(12); doc.setTextColor(...oro); doc.text('N° ' + P.num, W - Mg - 31, y + 14.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...gris); doc.text(fechaTxt(P.f), W - Mg - 31, y + 20.5, { align: 'center' });
+  y += 33;
+  const filas = [['Proveedor', prov.nombre], ['Razón social', prov.rs], ['RUC', prov.ruc], ['Vendedor', [prov.cont, prov.ctel].filter(Boolean).join(' · ')], ['Teléfono', prov.tel], ['Solicitado por', nomVend(P.v)]].filter((f) => f[1]);
+  doc.setFillColor(243, 233, 207); const alto = 5 + Math.ceil(filas.length / 2) * 5.5;
+  doc.roundedRect(Mg, y, W - 2 * Mg, alto, 2, 2, 'F');
+  filas.forEach(([k, v], i) => { const x = Mg + 4 + (i % 2) * 90, yr = y + 6 + Math.floor(i / 2) * 5.5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...osc); doc.text(k + ':', x, yr); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(String(v), 58)[0], x + 26, yr); });
+  y += alto + 6;
+  const col = { n: Mg, cant: Mg + 10, un: Mg + 28, cod: Mg + 44, desc: Mg + 66 };
+  const cab = () => { doc.setFillColor(...osc); doc.rect(Mg, y, W - 2 * Mg, 8, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(243, 233, 207);
+    doc.text('#', col.n + 2, y + 5.4); doc.text('CANT.', col.cant + 2, y + 5.4); doc.text('UNID.', col.un + 1, y + 5.4); doc.text('CÓDIGO', col.cod + 1, y + 5.4); doc.text('DESCRIPCIÓN', col.desc, y + 5.4); y += 8; };
+  cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  P.it.filter((x) => x.q > 0).forEach((x, i) => {
+    const desc = doc.splitTextToSize(x.n, W - Mg - col.desc - 2); const hh = Math.max(7, desc.length * 4.4 + 2.6);
+    if (y + hh > 268) { doc.addPage(); y = 15; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); }
+    if (i % 2) { doc.setFillColor(251, 250, 246); doc.rect(Mg, y, W - 2 * Mg, hh, 'F'); }
+    doc.setTextColor(...gris); doc.text(String(i + 1), col.n + 2, y + 4.8);
+    doc.setTextColor(...osc); doc.setFont('helvetica', 'bold'); doc.text(numf(x.q), col.cant + 2, y + 4.8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...gris); doc.text(String(x.un || 'UND'), col.un + 1, y + 4.8); doc.text(String(x.p).slice(0, 12), col.cod + 1, y + 4.8);
+    doc.setTextColor(...osc); doc.text(desc, col.desc, y + 4.8);
+    y += hh; doc.setDrawColor(231, 226, 214); doc.setLineWidth(0.2); doc.line(Mg, y, W - Mg, y);
+  });
+  y += 7; if (y > 260) { doc.addPage(); y = 20; }
+  doc.setFontSize(9.5); doc.setTextColor(...osc);
+  doc.text('Total: ' + P.it.filter((x) => x.q > 0).length + ' productos · ' + numf(P.it.reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' unidades', Mg, y); y += 7;
+  if (P.nota) { doc.setFont('helvetica', 'bold'); doc.text('Nota:', Mg, y); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(P.nota, W - 2 * Mg - 14), Mg + 12, y); y += 8; }
+  doc.setFontSize(8.5); doc.setTextColor(...gris);
+  doc.text(doc.splitTextToSize('Por favor confirmar disponibilidad, precios y fecha de entrega. Este pedido no es una factura.', W - 2 * Mg), Mg, Math.min(y + 4, 285));
+  return doc;
+}
 
 /* =====================================================================
    ARRANQUE
