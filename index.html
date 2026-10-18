@@ -453,7 +453,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18i';
+const APP_VER = '2026-10-18k';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -628,7 +628,7 @@ const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
 const FPNC = { ef: 'Devolución en efectivo', tr: 'Devolución por transferencia', ab: 'Abono a la deuda del cliente', sf: 'Saldo a favor (cambio de producto)' };
-const nomFp = (v) => (v.tp === 'C' ? FPNC[v.fp] : FPAGO[v.fp]) || (v.fp === 'nc' ? 'Nota de crédito' : '');
+const nomFp = (v) => (v.tp === 'C' ? FPNC[v.fp] : FPAGO[v.fp]) || (v.fp === 'nc' ? 'Nota de crédito' : v.fp === 'anf' ? 'Anfibius (sin detalle)' : '');
 /** Las notas de crédito se guardan en negativo (restan ventas y devuelven stock). Para mostrarlas se usan en positivo. */
 function vistaDoc(v){
   if (v.tp !== 'C') return v;
@@ -1214,7 +1214,7 @@ function siguienteNumero(tp, pto){
   const C = cfg(); pto = pad(pto || '001', 3);
   const pref = tp === 'F' ? pad(C.estab || '001', 3) + '-' + pto + '-' : ({ N: 'NV-', C: 'NC-', P: 'PD-' }[tp] || 'PD-') + pto + '-';
   let max = 0;
-  S.vta.forEach((v) => { if (v.tp === tp && v.num && v.num.startsWith(pref)) { const n = parseInt(v.num.slice(pref.length), 10); if (n > max) max = n; } });
+  S.vta.forEach((v) => { if (!v.anf && v.tp === tp && v.num && v.num.startsWith(pref)) { const n = parseInt(v.num.slice(pref.length), 10); if (n > max) max = n; } });
   return pref + pad(max + 1, tp === 'F' ? 9 : 6);
 }
 
@@ -1453,7 +1453,7 @@ function pgDocs(){
     const tot = l.filter((d) => !d.an && d.tp !== 'P').reduce((s, d) => s + d.tot, 0);   // las NC restan
     $('dRes').textContent = l.length + ' documentos' + (tp !== 'P' ? ' · Vendido: ' + money(tot) : '');
     $('dList').innerHTML = l.length ? l.slice(0, 300).map((d) => '<div class="li" data-id="' + h(d.id) + '"><div class="grow"><div class="t">' + h(DOC[d.tp]) + ' ' + h(d.num) + ' ' + estadoDoc(d) + '</div>' +
-      '<div class="s">' + fechaTxt(d.f) + ' ' + horaTxt(d.ts) + ' · ' + h(nomCli(d)) + ' · ' + h(nomVend(d.v)) + ' · ' + h(nomFp(d)) + (d.tp === 'C' ? ' · modifica ' + h(d.vrefNum || '') : '') + '</div></div>' +
+      '<div class="s">' + fechaTxt(d.f) + ' ' + (d.anf ? '' : horaTxt(d.ts)) + ' · ' + h(nomCli(d)) + ' · ' + h(nomVend(d.v)) + ' · ' + h(nomFp(d)) + (d.tp === 'C' ? ' · modifica ' + h(d.vrefNum || '') : '') + '</div></div>' +
       '<div class="v" style="' + (d.an ? 'text-decoration:line-through;opacity:.5' : '') + '">' + money(d.tot) + '</div></div>').join('') +
       (l.length > 300 ? '<div class="empty small">Se muestran los 300 más recientes. Usa el buscador o el período.</div>' : '') : '<div class="empty"><b>Sin documentos</b>Cambia el período o los filtros.</div>';
   };
@@ -1474,7 +1474,8 @@ function verDocumento(v0, recien){
     (recien ? '<div class="note ok" style="margin-bottom:12px"><b>✓ ' + DOC[v.tp] + ' guardada.</b> ' + (v.fp === 'ef' && v.rec > v.tot ? 'Cambio: <b>' + money(v.rec - v.tot) + '</b>' : '') + '</div>' : '') +
     (v.an ? '<div class="note warn" style="margin-bottom:12px">Anulado el ' + fechaTxt(v.an.f) + ' por ' + h(nomVend(v.an.v)) + (v.an.m ? ': ' + h(v.an.m) : '') + '</div>' : '') +
     '<div class="grid2" style="margin-bottom:12px"><div><div class="small muted">Cliente</div><b>' + h(nomCli(v)) + '</b><div class="small">' + h(v.cli ? [v.cli.ruc, v.cli.tel, v.cli.correo].filter(Boolean).join(' · ') : CONSUMIDOR.ruc) + '</div>' + (v.cli && v.cli.dir ? '<div class="small muted">' + h(v.cli.dir) + '</div>' : '') + '</div>' +
-    '<div><div class="small muted">Fecha · Vendedor</div><b>' + fechaTxt(v.f) + ' ' + horaTxt(v.ts) + '</b><div class="small">' + h(nomVend(v.v)) + ' · ' + h(nomFp(v)) + (v.ref ? ' · ' + h(v.ref) : '') + (v.venc ? ' · vence ' + fechaTxt(v.venc) : '') + '</div></div></div>' +
+    '<div><div class="small muted">Fecha · Vendedor</div><b>' + fechaTxt(v.f) + ' ' + (v.anf ? '' : horaTxt(v.ts)) + '</b><div class="small">' + h(nomVend(v.v)) + ' · ' + h(nomFp(v)) + (v.ref ? ' · ' + h(v.ref) : '') + (v.venc ? ' · vence ' + fechaTxt(v.venc) : '') + '</div></div></div>' +
+    (v.anf ? '<div class="note" style="margin-bottom:10px">Venta importada de <b>Anfibius</b> (' + h(v.tda || '') + '): solo totales, sin detalle de productos.' + (v.riva || v.rfte ? ' Retención IVA ' + money(v.riva || 0) + ' · Retención fuente ' + money(v.rfte || 0) : '') + '</div>' : '') +
     (v.sri ? '<p class="small" style="margin:0 0 8px">Factura SRI: <b>' + h(v.sri) + '</b></p>' : '') +
     (v.tp === 'C' ? '<div class="note warn" style="margin-bottom:10px">Modifica: <b>' + h(DOC[(vref || {}).tp] || 'Documento') + ' ' + h(v.vrefNum || '') + '</b>' + (vref ? ' del ' + fechaTxt(vref.f) : '') + ' · Motivo: <b>' + h(v.mot || '') + '</b></div>' : '') +
     (ncs.length ? '<div class="note" style="margin-bottom:10px">Notas de crédito emitidas: ' + ncs.map((n) => '<b>' + h(n.num) + '</b> (' + money(Math.abs(n.tot)) + ')').join(', ') + '</div>' : '') +
@@ -1483,10 +1484,10 @@ function verDocumento(v0, recien){
       (v.fp === 'cr' && v.tp !== 'P' ? '<div class="card" style="padding:10px"><b>Abonos</b>' + (ab || '<div class="small muted">Sin abonos</div>') + '<div class="row" style="margin-top:6px"><span>Saldo</span><span class="spacer"></span><b>' + money(s) + '</b></div></div>' : '') + '</div>' +
     '<div class="card">' + desgloseHTML(t) + '</div></div>',
     foot: '<button class="btn c3d cb" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn c3d cv" id="dvWa">' + ic('wa') + 'WhatsApp</button>' +
-      ((v.tp === 'F' || v.tp === 'N') && !v.an && puede('anular') ? '<button class="btn c3d cr" id="dvNc">' + ic('rotate') + 'Nota de crédito</button>' : '') +
+      ((v.tp === 'F' || v.tp === 'N') && !v.an && !v.anf && puede('anular') ? '<button class="btn c3d cr" id="dvNc">' + ic('rotate') + 'Nota de crédito</button>' : '') +
       (v.tp === 'P' && !v.cv && !v.an ? '<button class="btn" id="dvEd">' + ic('edit') + 'Editar</button><button class="btn pri" id="dvCv">' + ic('check') + 'Facturar</button>' : '') +
       (s > 0 ? '<button class="btn pri" id="dvAb">' + ic('cash') + 'Abono</button>' : '') +
-      (v.tp !== 'C' ? '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' : '') +
+      (v.tp !== 'C' && !v.anf ? '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' : '') +
       (puedeAnular ? '<button class="btn danger" id="dvAn">' + ic('x') + 'Anular</button>' : '') +
       (recien ? '<button class="btn dark" data-x>' + ic('plus') + 'Nueva venta</button>' : '') });
   m.q('#dvPdf').onclick = () => opcionesImpresion(v0);
@@ -2560,6 +2561,8 @@ function pgExcel(){
   $('view').innerHTML = '<div class="pagehead"><h2>Excel</h2></div><div class="stack">' +
     (pp ? '<div class="card stack"><h3>Importar productos (lista de Anfibus)</h3><p class="small muted" style="margin:0">Sube el Excel exportado de Anfibus. La app reconoce las columnas (código, descripción, PVP, costo, stock…) y te deja revisarlas antes de importar. Los productos se identifican por el código interno.</p>' +
       '<div class="row"><label class="btn pri">' + ic('upload') + 'Elegir archivo Excel<input type="file" id="xProd" accept=".xlsx,.xls,.xlsm,.csv" hidden></label><button class="btn" id="xPlant">' + ic('download') + 'Descargar plantilla</button></div></div>' : '') +
+    (adm ? '<div class="card stack"><h3>Importar ventas de Anfibius (histórico)</h3><p class="small muted" style="margin:0">Sube el reporte <b>Ventas y retenciones por tipo</b> exportado de Anfibius. Se guardan los totales de cada factura o nota (sin productos): sirven para los reportes de ventas, IVA y clientes, sin tocar el stock ni la numeración del POS.</p>' +
+      '<label class="btn c3d cb" style="align-self:flex-start">' + ic('upload') + 'Elegir archivo de ventas<input type="file" id="xVtaAnf" accept=".xlsx,.xls,.xlsm" hidden></label></div>' : '') +
     '<div class="card stack"><h3>Importar clientes o proveedores</h3><div class="row"><label class="btn">' + ic('users') + 'Clientes<input type="file" id="xCli" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' +
       (puede('compras') ? '<label class="btn">' + ic('truck') + 'Proveedores<input type="file" id="xProv" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' : '') + '</div></div>' +
     '<div class="card stack"><h3>Exportar</h3><p class="small muted" style="margin:0">Un solo libro de Excel con hojas de productos y stock, ventas, detalle de ventas, compras, clientes, proveedores y ajustes.</p>' +
@@ -2576,6 +2579,7 @@ function pgExcel(){
   $('xTodo').onclick = exportarTodo;
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
+  if ($('xVtaAnf')) $('xVtaAnf').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarVentasAnfibius(f); };
   const infoFotos = () => { const i2 = ls.get('fotosInfo', null); $('xFotosInfo').innerHTML = i2 ? 'Fotos disponibles: <b>' + i2.n + '</b>' + (i2.fecha ? ' · catálogo del ' + fechaTxt(i2.fecha) : '') + ' · actualizado ' + fechaTxt(fechaISO(new Date(i2.ts))) + ' ' + horaTxt(i2.ts) + ' (' + h(i2.origen) + ')' : 'Fotos disponibles: <b>' + FOTOS.size + '</b>'; };
   infoFotos();
   $('xFotos').onclick = async () => {
@@ -2602,7 +2606,7 @@ function exportarTodo(){
   const est = (v) => v.an ? 'ANULADO' : v.tp === 'P' ? (v.cv ? 'FACTURADO ' + (v.cvNum || '') : 'PENDIENTE') : (saldo(v) > 0 ? 'POR COBRAR' : 'PAGADO');
   exportarFilas('Productos', pc, pf, [
     ['Ventas', ['Tipo', 'Número', 'Fecha', 'Hora', 'Vendedor', 'Cliente', 'Cédula/RUC', 'Forma de pago', 'Subtotal IVA', 'Subtotal 0%', 'Descuento', 'IVA', 'Total', 'Costo', 'Utilidad', 'Abonado', 'Saldo', 'Estado', 'Factura SRI', 'Nota'],
-      vs.map((v) => [DOC[v.tp], v.num, v.f, horaTxt(v.ts), nomVend(v.v), nomCli(v), (v.cli && v.cli.ruc) || CONSUMIDOR.ruc, FPAGO[v.fp] || '', v.sub12, v.sub0, v.desc, v.iva, v.tot, r2(v.costo || 0), r2(v.sub12 + v.sub0 - (v.costo || 0)), pagado(v), saldo(v), est(v), v.sri || '', v.nota || ''])],
+      vs.map((v) => [DOC[v.tp], v.num, v.f, horaTxt(v.ts), nomVend(v.v), nomCli(v), (v.cli && v.cli.ruc) || CONSUMIDOR.ruc, nomFp(v), v.sub12, v.sub0, v.desc, v.iva, v.tot, r2(v.costo || 0), r2(v.sub12 + v.sub0 - (v.costo || 0)), pagado(v), saldo(v), est(v), v.sri || '', v.nota || ''])],
     ['Detalle ventas', ['Número', 'Tipo', 'Fecha', 'Vendedor', 'Cliente', 'Código', 'Producto', 'Cantidad', 'P. unit.', 'Desc. %', 'IVA %', 'Total', 'Costo unit.', 'Estado'],
       [].concat(...vs.map((v) => (v.it || []).map((x) => [v.num, DOC[v.tp], v.f, nomVend(v.v), nomCli(v), x.p, x.n, x.q, x.pu, x.d || 0, x.iva, r2(calcItem(x).neto), x.co || 0, est(v)])))],
     ['Compras', ['Tipo', 'N° documento', 'Fecha', 'Proveedor', 'Pago', 'Plazo', 'Vence', 'Subtotal IVA', 'Subtotal 0%', 'IVA', 'Total', 'Registró', 'Estado'],
@@ -2763,6 +2767,91 @@ async function importarTerceros(file, t){
   if (!(await confirmar('Se importarán ' + recs.length + (t === 'cli' ? ' clientes' : ' proveedores') + ' (los existentes se actualizan). ¿Continuar?', 'Importar'))) return;
   await putMuchos(t, recs); toast(recs.length + ' registros importados.');
   if (RUTA === 'proveedores' || RUTA === 'clientes') render();
+}
+
+/* =====================================================================
+   VENTAS HISTÓRICAS DE ANFIBIUS ("ven_ventas_retenciones_tipo")
+   Columnas: FECHA | SERIE | N° | CED/RUC | COMPRADOR | V/LÍQUIDO | IVA | TOTAL | RET. IVA | RET. FUENTE | TOTAL | ESTADO
+   Se guardan como ventas marcadas "anf": sin productos (no tocan el stock), contado ya cobrado
+   (no crean cuentas por cobrar) y no cambian la numeración de las facturas del POS.
+   ===================================================================== */
+const fechaExcel = (n) => { if (typeof n === 'number') return new Date(Math.round((n - 25569) * 864e5)).toISOString().slice(0, 10);
+  const m = String(n || '').match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/); if (m) return m[3] + '-' + pad(m[2], 2) + '-' + pad(m[1], 2);
+  const m2 = String(n || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m2 ? m2[0] : ''; };
+const tpAnfibius = (sec) => (/fac/i.test(sec) || /^mass ferreteria$/i.test(norm(sec)) ? 'F' : 'N');   // "MASS FERRETERIA" = facturas preimpresas
+function leerVentasAnfibius(hojas){
+  const out = []; let sec = '', vistoCab = false; const st = { anuladas: 0, filas: 0 };
+  hojas.forEach((H) => H.filas.forEach((r) => {
+    const c0 = r[0];
+    if (typeof c0 !== 'number' && !/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(String(c0).trim())) {
+      const t = String(c0 || '').trim();
+      if (/^fecha$/i.test(t)) { vistoCab = true; return; }
+      if (t && !/total/i.test(t) && (r.slice(1).every((x) => x === '' || x == null))) sec = t;   // título del tipo de documento
+      return;
+    }
+    const f = fechaExcel(c0); if (!f) return;
+    st.filas++;
+    if (/anulad/i.test(String(r[11] || ''))) { st.anuladas++; return; }
+    const serie = String(r[1] || '').replace(/\D/g, ''), n = parseInt(r[2], 10) || 0;
+    const base = Number(r[5]) || 0, iva = Number(r[6]) || 0, tot = Number(r[7]) || 0;
+    out.push({ f, sec: sec || 'VENTA', serie, n, ruc: String(r[3] || '').trim(), nom: String(r[4] || '').trim(), base, iva, tot, riva: Number(r[8]) || 0, rfte: Number(r[9]) || 0 });
+  }));
+  return { ventas: out, vistoCab, st };
+}
+async function importarVentasAnfibius(file){
+  toast('Leyendo el archivo… (puede tardar unos segundos)');
+  let hojas; try { hojas = await leerExcel(file); } catch (e) { return toast('No se pudo leer el archivo: ' + e.message, true); }
+  const { ventas, vistoCab, st } = leerVentasAnfibius(hojas);
+  if (!vistoCab || !ventas.length) return toast('No reconocí el formato de ventas de Anfibius (columnas FECHA, # FACTURA, CED/RUC, COMPRADOR, V/LIQUIDO…).', true);
+  // clientes: busca por cédula/RUC; los que no existen se crean
+  const porRuc = new Map(); vivos('cli').forEach((c) => { if (c.ruc) porRuc.set(c.ruc, c); });
+  const nuevosCli = [];
+  const recs = ventas.map((x) => {
+    let ruc = x.ruc.replace(/\D/g, ''); if (ruc.length === 9 || ruc.length === 12) ruc = '0' + ruc;
+    let cli = null;
+    if (ruc && !/^9+$/.test(ruc)) {
+      let c = porRuc.get(ruc);
+      if (!c) { c = { id: 'cl' + ruc, nombre: x.nom.toUpperCase() || ruc, ruc, tel: '', correo: '', dir: '', _d: 0 }; porRuc.set(ruc, c); nuevosCli.push(c); }
+      cli = { id: c.id, nombre: c.nombre, ruc: c.ruc, tel: c.tel || '', correo: c.correo || '', dir: c.dir || '' };
+    }
+    // separa la parte con IVA de la parte 0% (Ecuador: 12 % hasta 31/03/2024, 15 % desde el 01/04/2024)
+    let tasa = 0, b12 = 0;
+    if (x.iva > 0.004) {
+      const imp = x.base ? x.iva / x.base * 100 : 0;
+      tasa = Math.abs(imp - 15) < 0.3 ? 15 : Math.abs(imp - 12) < 0.3 ? 12 : (x.f < '2024-04-01' ? 12 : 15);
+      b12 = Math.min(x.base, r2(x.iva / (tasa / 100)));
+    }
+    const sub12 = r2(b12), sub0 = r2(Math.max(0, x.base - b12)), iva = r2(x.iva);
+    const tasas = {}; if (sub12) tasas[tasa] = { b: sub12, i: iva }; if (sub0 || !sub12) tasas[0] = { b: sub0, i: 0 };
+    const cod = norm(x.sec).replace(/[^a-z0-9]/g, '').slice(0, 14);
+    const num = x.serie.length === 6 ? x.serie.slice(0, 3) + '-' + x.serie.slice(3) + '-' + pad(x.n, 9) : (x.serie ? x.serie + '-' : '') + pad(x.n, 9);
+    const rec = { id: 'anf-' + cod + '-' + x.serie + '-' + x.n, tp: tpAnfibius(x.sec), num, f: x.f, ts: new Date(x.f + 'T12:00:00').getTime(), v: '', ab: [], cli, it: [],
+      fp: 'anf', ref: '', rec: 0, pl: 0, venc: '', sri: '', nota: 'Importada de Anfibius · ' + x.sec,
+      sub12, sub0, iva, desc: 0, tot: r2(x.tot), costo: 0, tasas, anf: 1, tda: x.sec, _d: 0 };
+    if (x.riva || x.rfte) { rec.riva = r2(x.riva); rec.rfte = r2(x.rfte); }
+    return rec;
+  });
+  const ya = recs.filter((r) => S.vta.has(r.id)).length;
+  const f1 = recs.reduce((a, r) => (r.f < a ? r.f : a), '9'), f2 = recs.reduce((a, r) => (r.f > a ? r.f : a), '0');
+  const totF = recs.reduce((s, r) => s + r.tot, 0);
+  const tipos = {}; recs.forEach((r) => { tipos[r.tda] = (tipos[r.tda] || 0) + 1; });
+  const ok = await new Promise((res) => {
+    const m = modal({ title: 'Importar ventas de Anfibius', wide: true, body:
+      '<div class="kpis" style="margin-bottom:10px"><div class="kpi gold"><span>Ventas válidas</span><b>' + recs.length.toLocaleString('es') + '</b><small>' + fechaTxt(f1) + ' al ' + fechaTxt(f2) + '</small></div>' +
+      '<div class="kpi"><span>Total vendido</span><b>' + money(totF) + '</b></div><div class="kpi"><span>Anuladas (se omiten)</span><b>' + st.anuladas.toLocaleString('es') + '</b></div>' +
+      '<div class="kpi"><span>Clientes nuevos</span><b>' + nuevosCli.length + '</b></div></div>' +
+      '<table class="tbl"><thead><tr><th>Tipo en Anfibius</th><th>Se guarda como</th><th class="n">Documentos</th></tr></thead><tbody>' +
+      Object.entries(tipos).map(([k, n]) => '<tr><td>' + h(k) + '</td><td>' + DOC[tpAnfibius(k)] + '</td><td class="n">' + n.toLocaleString('es') + '</td></tr>').join('') + '</tbody></table>' +
+      '<div class="note" style="margin-top:10px">Estas ventas <b>no tienen detalle de productos</b>: suman en los reportes de ventas, IVA, clientes y por fecha, pero <b>no cambian el stock</b>, no crean cuentas por cobrar y no cambian la numeración de tus facturas en el POS. ' +
+      (ya ? '<b>' + ya.toLocaleString('es') + ' ya estaban importadas</b> y solo se actualizan (no se duplican).' : 'Si vuelves a importar el mismo archivo, no se duplican.') + '</div>' +
+      '<p class="small muted">Después se suben a la nube poco a poco; la primera sincronización puede tardar varios minutos.</p>',
+      foot: '<button class="btn" id="ivNo">Cancelar</button><button class="btn c3d cv" id="ivSi">' + ic('upload') + 'Importar ' + recs.length.toLocaleString('es') + ' ventas</button>', onClose: () => res(false) });
+    m.q('#ivNo').onclick = () => m.close(); m.q('#ivSi').onclick = () => { res(true); m.close(); };
+  });
+  if (!ok) return;
+  if (nuevosCli.length) await putMuchos('cli', nuevosCli);
+  for (let i = 0; i < recs.length; i += 5000) { await putMuchos('vta', recs.slice(i, i + 5000)); toast('Guardando ventas… ' + Math.min(recs.length, i + 5000).toLocaleString('es') + ' de ' + recs.length.toLocaleString('es')); }
+  toast(recs.length.toLocaleString('es') + ' ventas de Anfibius importadas.');
 }
 
 /* =====================================================================
@@ -2938,7 +3027,9 @@ function tablaRep(R){
     (R.filas.length > max ? '<p class="small muted">Se muestran ' + max + ' de ' + R.filas.length + ' filas. El botón Excel exporta todas.</p>' : '');
 }
 function ventasDe(F, conPedidos){ return vivos('vta').filter((v) => !v.an && (conPedidos || v.tp !== 'P') && enRango(v.f, F) && (!F.vend || v.v === F.vend)); }
-const util = (v) => r2((v.sub12 || 0) + (v.sub0 || 0) - (v.costo || 0));
+const util = (v) => (v.anf ? 0 : r2((v.sub12 || 0) + (v.sub0 || 0) - (v.costo || 0)));   // ventas de Anfibius: costo desconocido
+const baseU = (v) => (v.anf ? 0 : (v.sub12 || 0) + (v.sub0 || 0));
+const FPREP = Object.assign({}, FPAGO, { anf: 'Anfibius' });
 const pct = (a, b) => (b ? Math.round(a / b * 1000) / 10 + '%' : '—');
 const M$ = (c) => money(c);
 function agrupar(lista, key, val){ const m = new Map(); lista.forEach((x) => { const k = key(x); const o = m.get(k) || {}; val(o, x); m.set(k, o); }); return m; }
@@ -2998,7 +3089,7 @@ function lineasSvg(labels, series){   // series: [{n, d:[valores]}]
 
 const REP = {
   resumen(F){
-    const vs = ventasDe(F); const tot = vs.reduce((s, v) => s + v.tot, 0); const ut = vs.reduce((s, v) => s + util(v), 0); const base = vs.reduce((s, v) => s + v.sub12 + v.sub0, 0);
+    const vs = ventasDe(F); const tot = vs.reduce((s, v) => s + v.tot, 0); const ut = vs.reduce((s, v) => s + util(v), 0); const base = vs.reduce((s, v) => s + baseU(v), 0); const nAnf = vs.filter((v) => v.anf).length;
     const cs = vivos('com').filter((c) => !c.an && enRango(c.f, F)); const ctot = cs.reduce((s, c) => s + c.tot, 0);
     const cxc = vivos('vta').filter((v) => (!F.vend || v.v === F.vend)).reduce((s, v) => s + saldo(v), 0);
     const ped = vivos('vta').filter((v) => v.tp === 'P' && !v.cv && !v.an && (!F.vend || v.v === F.vend));
@@ -3007,38 +3098,38 @@ const REP = {
     const top = Array.from(agrupar([].concat(...vs.map((v) => v.it || [])), (x) => x.p, (o, x) => { o.n = x.n; o.q = (o.q || 0) + x.q; o.t = (o.t || 0) + calcItem(x).neto; }).values()).sort((a, b) => b.t - a.t).slice(0, 8);
     const dias = serieDias(vs, F);
     return {
-      kpis: [['Ventas', money(tot), vs.length + ' documentos'], ['Ticket promedio', money(vs.length ? tot / vs.length : 0)], ['Utilidad bruta', money(ut), 'Margen ' + pct(ut, base) + (sinCosto ? ' · hay productos sin costo' : '')],
+      kpis: [['Ventas', money(tot), vs.length + ' documentos'], ['Ticket promedio', money(vs.length ? tot / vs.length : 0)], ['Utilidad bruta', money(ut), 'Margen ' + pct(ut, base) + (sinCosto ? ' · hay productos sin costo' : '') + (nAnf ? ' · sin ' + nAnf + ' ventas de Anfibius (sin costo)' : '')],
         ['IVA cobrado', money(vs.reduce((s, v) => s + v.iva, 0))], ['Compras', money(ctot), cs.length + ' facturas'], ['Por cobrar (total)', money(cxc)], ['Pedidos pendientes', String(ped.length), money(ped.reduce((s, v) => s + v.tot, 0))]]
         .concat(puede('rep') ? [['Inventario a costo', money(vivos('prod').reduce((s, p) => s + Math.max(0, stockDe(p.id)) * (Number(p.co) || 0), 0))]] : []),
       html: (dias.length > 1 ? '<h3 style="margin:4px 0 8px">Ventas por día</h3>' + barras(dias.map((d) => [d[0], d[1]])) : '') +
-        '<div class="grid2"><div class="card"><h3 style="margin-bottom:8px">Formas de pago</h3>' + (Object.keys(FPAGO).map((k) => { const t = (fp.get(k) || {}).t || 0; return '<div class="row small" style="margin:6px 0"><span style="width:100px">' + FPAGO[k] + '</span><div class="grow"><div class="hbar" style="width:' + (tot ? t / tot * 100 : 0) + '%"></div></div><b class="num">' + money(t) + '</b></div>'; }).join('')) + '</div>' +
+        '<div class="grid2"><div class="card"><h3 style="margin-bottom:8px">Formas de pago</h3>' + (Object.keys(FPREP).filter((k) => k !== 'anf' || fp.get(k)).map((k) => { const t = (fp.get(k) || {}).t || 0; return '<div class="row small" style="margin:6px 0"><span style="width:100px">' + FPREP[k] + '</span><div class="grow"><div class="hbar" style="width:' + (tot ? t / tot * 100 : 0) + '%"></div></div><b class="num">' + money(t) + '</b></div>'; }).join('')) + '</div>' +
         '<div class="card"><h3 style="margin-bottom:8px">Más vendidos</h3>' + (top.map((x) => '<div class="row small" style="margin:5px 0"><span class="grow">' + h(x.n) + ' <span class="muted">×' + numf(x.q) + '</span></span><b class="num">' + money(x.t) + '</b></div>').join('') || '<div class="muted small">Sin ventas</div>') + '</div></div>'
     };
   },
   caja(F){
     const vs = ventasDe(F); const an = vivos('vta').filter((v) => v.an && v.tp !== 'P' && enRango(v.an.f, F) && (!F.vend || v.v === F.vend));
     const abonos = []; vivos('vta').forEach((v) => (v.ab || []).forEach((a) => { if (a.fp !== 'nc' && enRango(a.f, F) && (!F.vend || a.v === F.vend)) abonos.push({ v, a }); }));
-    const porFp = {}; Object.keys(FPAGO).forEach((k) => { porFp[k] = 0; });
+    const porFp = {}; Object.keys(FPREP).forEach((k) => { porFp[k] = 0; });
     vs.forEach((v) => { porFp[v.fp] = (porFp[v.fp] || 0) + v.tot; });
     const abFp = { ef: 0, tr: 0, tj: 0 }; abonos.forEach(({ a }) => { abFp[a.fp] = (abFp[a.fp] || 0) + a.m; });
     const ingresoEf = porFp.ef + abFp.ef;
     return {
       kpis: [['Efectivo a entregar', money(ingresoEf), 'Ventas ' + money(porFp.ef) + ' + abonos ' + money(abFp.ef)], ['Transferencias', money(porFp.tr + abFp.tr)], ['Tarjeta', money(porFp.tj + (abFp.tj || 0))], ['Ventas a crédito', money(porFp.cr)], ['Total vendido', money(vs.reduce((s, v) => s + v.tot, 0)), vs.length + ' documentos'], ['Anulados', String(an.length), money(an.reduce((s, v) => s + v.tot, 0))]],
       cab: ['Hora', 'Documento', 'Cliente', 'Vendedor', 'Forma', 'Total'], num: [5], fmt: { 5: M$ },
-      filas: vs.sort((a, b) => a.ts - b.ts).map((v) => [fechaTxt(v.f) + ' ' + horaTxt(v.ts), DOC[v.tp] + ' ' + v.num, h(nomCli(v)), h(nomVend(v.v)), FPAGO[v.fp], v.tot])
+      filas: vs.sort((a, b) => a.ts - b.ts).map((v) => [fechaTxt(v.f) + ' ' + horaTxt(v.ts), DOC[v.tp] + ' ' + v.num, h(nomCli(v)), h(nomVend(v.v)), FPREP[v.fp] || '', v.tot])
         .concat(abonos.map(({ v, a }) => [fechaTxt(a.f), 'Abono a ' + v.num, h(nomCli(v)), h(nomVend(a.v)), FPAGO[a.fp], a.m])),
       pie: ['', '', '', '', 'Total', r2(vs.reduce((s, v) => s + v.tot, 0) + abonos.reduce((s, x) => s + x.a.m, 0))]
     };
   },
   vendedores(F){
-    const vs = ventasDe(F); const m = agrupar(vs, (v) => v.v, (o, v) => { o.n = (o.n || 0) + 1; o.t = (o.t || 0) + v.tot; o.b = (o.b || 0) + v.sub12 + v.sub0; o.u = (o.u || 0) + util(v); });
+    const vs = ventasDe(F); const m = agrupar(vs, (v) => v.v, (o, v) => { o.n = (o.n || 0) + 1; o.t = (o.t || 0) + v.tot; o.b = (o.b || 0) + baseU(v); o.u = (o.u || 0) + util(v); });
     const l = Array.from(m.entries()).map(([id, o]) => { const ve = S.vend.get(id) || {}; return [h(ve.nombre || id), o.n, o.t, o.n ? o.t / o.n : 0, o.u, r2(o.b * (Number(ve.com) || 0) / 100)]; }).sort((a, b) => b[2] - a[2]);
     return { html: barras(l.map((x) => [x[0].slice(0, 10), x[2]])), cab: ['Vendedor', 'Documentos', 'Ventas', 'Ticket prom.', 'Utilidad', 'Comisión'], num: [1, 2, 3, 4, 5], fmt: { 2: M$, 3: M$, 4: M$, 5: M$ }, filas: l,
       pie: ['Total', l.reduce((s, x) => s + x[1], 0), r2(l.reduce((s, x) => s + x[2], 0)), '', r2(l.reduce((s, x) => s + x[4], 0)), r2(l.reduce((s, x) => s + x[5], 0))] };
   },
   formas(F){
     const vs = ventasDe(F); const tot = vs.reduce((s, v) => s + v.tot, 0);
-    const l = Object.keys(FPAGO).map((k) => { const x = vs.filter((v) => v.fp === k); const t = x.reduce((s, v) => s + v.tot, 0); return [FPAGO[k], x.length, t, pct(t, tot)]; });
+    const l = Object.keys(FPREP).filter((k) => k !== 'anf' || vs.some((v) => v.fp === 'anf')).map((k) => { const x = vs.filter((v) => v.fp === k); const t = x.reduce((s, v) => s + v.tot, 0); return [FPREP[k], x.length, t, pct(t, tot)]; });
     return { cab: ['Forma de pago', 'Documentos', 'Total', '%'], num: [1, 2, 3], fmt: { 2: M$ }, filas: l, pie: ['Total', vs.length, r2(tot), '100%'] };
   },
   dias(F){
