@@ -333,6 +333,9 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .factfoto{margin-top:10px}
 .nbadge{background:#fff;color:#7A3D06;border-radius:999px;padding:0 7px;font-size:12px;line-height:18px;margin-left:2px;text-shadow:none}
 
+.ctab{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.provf label.f{font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
+
 /* login */
 #login{position:fixed;inset:0;z-index:70;background:var(--dark);color:var(--on-dark);overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
 #login .box{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;align-items:stretch}
@@ -406,7 +409,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18a';
+const APP_VER = '2026-10-18b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2186,25 +2189,61 @@ function verNotaDebito(n){
    CLIENTES, PROVEEDORES, VENDEDORES, MENÚ Y AJUSTES
    ===================================================================== */
 function editarCliente(c, onDone, pre){ editarTercero('cli', c, onDone, pre); }
+const BANCOS = ['Banco Pichincha', 'Banco Guayaquil', 'Banco del Pacífico', 'Produbanco', 'Banco Bolivariano', 'Banco Internacional', 'Banco del Austro', 'Banco de Machala', 'Banco Solidario', 'BanEcuador', 'Coop. JEP', 'Coop. Jardín Azuayo', 'Coop. 29 de Octubre', 'Coop. Policía Nacional', 'Coop. Alianza del Valle'];
 function editarTercero(t, rec, onDone, pre){
   const nuevo = !rec; const esP = t === 'prov';
   rec = rec || { id: uid(esP ? 'pr' : 'cl'), nombre: '', ruc: '', tel: '', correo: '', dir: '' };
   if (nuevo && pre) { if (/^\d{10,13}$/.test(pre.trim())) rec.ruc = pre.trim(); else if (/^0?9\d{8}$/.test(pre.trim())) rec.tel = pre.trim(); else rec.nombre = pre.trim().toUpperCase(); }
-  const m = modal({ title: (nuevo ? 'Nuevo ' : 'Editar ') + (esP ? 'proveedor' : 'cliente'), body:
-    '<div class="stack"><label class="f">' + (esP ? 'Razón social / nombre' : 'Nombre o razón social') + '<input class="in" id="etN" value="' + h(rec.nombre) + '" autofocus></label>' +
+  let ctas = JSON.parse(JSON.stringify(rec.ctas || []));
+  const m = modal({ title: (nuevo ? 'Nuevo ' : 'Editar ') + (esP ? 'proveedor' : 'cliente'), cls: esP ? 'narrow' : '', body: esP ?
+    '<datalist id="dlBancos">' + BANCOS.map((b) => '<option value="' + b + '">').join('') + '</datalist>' +
+    '<div class="stack provf"><label class="f">Nombre<input class="in" id="etN" value="' + h(rec.nombre) + '" autofocus placeholder="Nombre comercial"></label>' +
+    '<label class="f">Razón social (beneficiario)<input class="in" id="etRs" value="' + h(rec.rs || '') + '" placeholder="Como aparece en el RUC y en las transferencias"></label>' +
+    '<div class="grid2"><label class="f">RUC<input class="in" id="etR" inputmode="numeric" maxlength="13" value="' + h(rec.ruc) + '"></label>' +
+    '<label class="f">Teléfono / WhatsApp<input class="in" id="etT" inputmode="tel" value="' + h(rec.tel) + '"></label></div>' +
+    '<label class="f">Correo electrónico<input class="in" id="etC" type="email" inputmode="email" value="' + h(rec.correo) + '"></label>' +
+    '<div class="grid2"><label class="f">Dirección<input class="in" id="etD" value="' + h(rec.dir) + '"></label>' +
+    '<label class="f">Ciudad<input class="in" id="etCi" value="' + h(rec.ciu || '') + '"></label></div>' +
+    '<div class="grid2"><label class="f">Nombre del vendedor<input class="in" id="etCo" value="' + h(rec.cont || '') + '"></label>' +
+    '<label class="f">Teléfono del vendedor<input class="in" id="etCt" inputmode="tel" value="' + h(rec.ctel || '') + '"></label></div>' +
+    '<div class="grid2"><label class="f">Cupo que otorga el proveedor<input class="in" id="etCu" inputmode="decimal" placeholder="$ 0.00" value="' + (rec.cupo || '') + '"></label>' +
+    '<label class="f">Plazo habitual (días)<input class="in" id="etPl" inputmode="numeric" value="' + h(rec.pl || '') + '"></label></div>' +
+    '<h3 class="rgh" style="margin:6px 0 0">' + ico3d('wallet', ['#9DB3FF', '#3B57D6']) + 'Cuentas bancarias</h3><div id="etCtas" class="stack"></div>' +
+    '<button class="btn sm" id="etCtaN" type="button" style="align-self:flex-start">' + ic('plus') + 'Agregar otra cuenta</button></div>'
+    :
+    '<div class="stack"><label class="f">Nombre o razón social<input class="in" id="etN" value="' + h(rec.nombre) + '" autofocus></label>' +
     '<div class="grid2"><label class="f">Cédula / RUC<input class="in" id="etR" inputmode="numeric" maxlength="13" value="' + h(rec.ruc) + '"></label>' +
     '<label class="f">Teléfono / WhatsApp<input class="in" id="etT" inputmode="tel" value="' + h(rec.tel) + '"></label></div>' +
     '<label class="f">Correo<input class="in" id="etC" type="email" value="' + h(rec.correo) + '"></label>' +
-    '<label class="f">Dirección<input class="in" id="etD" value="' + h(rec.dir) + '"></label>' +
-    (esP ? '<div class="grid2"><label class="f">Contacto / vendedor<input class="in" id="etCo" value="' + h(rec.cont || '') + '"></label><label class="f">Plazo habitual (días)<input class="in" id="etPl" inputmode="numeric" value="' + h(rec.pl || '') + '"></label></div>' : '') + '</div>',
-    foot: '<button class="btn" data-x>Cancelar</button>' + (!nuevo && esAdmin() ? '<button class="btn danger" id="etDel">' + ic('trash') + 'Eliminar</button>' : '') + '<button class="btn pri" id="etOk">' + ic('check') + 'Guardar</button>' });
+    '<label class="f">Dirección<input class="in" id="etD" value="' + h(rec.dir) + '"></label></div>',
+    foot: '<button class="btn" data-x>Cancelar</button>' + (!nuevo && esAdmin() ? '<button class="btn danger" id="etDel">' + ic('trash') + 'Eliminar</button>' : '') + '<button class="btn c3d cv" id="etOk">' + ic('check') + 'Guardar</button>' });
+  const leerCtas = () => { if (!m.q('#etCtas')) return; ctas = m.qa('.ctab').map((b) => ({ b: qs('[data-c="b"]', b).value.trim(), t: qs('[data-c="t"]', b).value, n: qs('[data-c="n"]', b).value.trim(), ti: qs('[data-c="ti"]', b).value.trim() })); };
+  const pintaCtas = () => {
+    const box = m.q('#etCtas'); if (!box) return;
+    if (!ctas.length) ctas.push({ b: '', t: '', n: '', ti: '' });
+    box.innerHTML = ctas.map((c, i) => '<div class="ctab" data-i="' + i + '"><div class="grid2">' +
+      '<label class="f">Banco<input class="in" data-c="b" list="dlBancos" placeholder="Ej. Banco Pichincha" value="' + h(c.b) + '"></label>' +
+      '<label class="f">Tipo de cuenta<select class="in" data-c="t"><option value="">—</option><option' + (c.t === 'Ahorros' ? ' selected' : '') + '>Ahorros</option><option' + (c.t === 'Corriente' ? ' selected' : '') + '>Corriente</option></select></label>' +
+      '<label class="f">N° de cuenta<input class="in" data-c="n" inputmode="numeric" value="' + h(c.n) + '"></label>' +
+      '<label class="f">Titular (opcional)<input class="in" data-c="ti" value="' + h(c.ti) + '"></label></div>' +
+      '<button class="btn sm danger block" type="button" data-q="' + i + '" style="margin-top:8px">' + ic('trash') + 'Quitar esta cuenta</button></div>').join('');
+  };
+  pintaCtas();
+  if (m.q('#etCtaN')) m.q('#etCtaN').onclick = () => { leerCtas(); ctas.push({ b: '', t: '', n: '', ti: '' }); pintaCtas(); const l = m.qa('.ctab'); qs('[data-c="b"]', l[l.length - 1]).focus(); };
+  if (m.q('#etCtas')) m.q('#etCtas').onclick = (e) => { const q = e.target.closest('[data-q]'); if (!q) return; leerCtas(); ctas.splice(+q.dataset.q, 1); pintaCtas(); };
   m.q('#etOk').onclick = async () => {
     const n = m.q('#etN').value.trim().toUpperCase(); if (!n) return toast('Escribe el nombre.', true);
     const ruc = m.q('#etR').value.trim();
-    if (ruc && !/^\d{10}(\d{3})?$/.test(ruc)) return toast('La cédula tiene 10 dígitos y el RUC 13.', true);
+    if (ruc && !/^\d{10}(\d{3})?$/.test(ruc)) return toast(esP ? 'El RUC tiene 13 dígitos (o cédula de 10).' : 'La cédula tiene 10 dígitos y el RUC 13.', true);
     const dup = ruc && vivos(t).find((x) => x.ruc === ruc && x.id !== rec.id); if (dup) return toast('Ya existe: ' + dup.nombre, true);
-    Object.assign(rec, { nombre: n, ruc, tel: m.q('#etT').value.trim(), correo: m.q('#etC').value.trim(), dir: m.q('#etD').value.trim(), _d: 0 });
-    if (esP) { rec.cont = m.q('#etCo').value.trim(); rec.pl = parseInt(m.q('#etPl').value, 10) || 0; }
+    const correo = m.q('#etC').value.trim(); if (correo && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) return toast('El correo no es válido.', true);
+    Object.assign(rec, { nombre: n, ruc, tel: m.q('#etT').value.trim(), correo, dir: m.q('#etD').value.trim(), _d: 0 });
+    if (esP) {
+      leerCtas();
+      Object.assign(rec, { rs: m.q('#etRs').value.trim().toUpperCase(), ciu: m.q('#etCi').value.trim(), cont: m.q('#etCo').value.trim(), ctel: m.q('#etCt').value.trim(),
+        cupo: r2(parseFloat(String(m.q('#etCu').value).replace(/[$\s]/g, '').replace(',', '.')) || 0), pl: parseInt(m.q('#etPl').value, 10) || 0,
+        ctas: ctas.filter((c) => c.b || c.n).map((c) => Object.assign(c, { b: c.b, n: c.n })) });
+    }
     await put(t, rec); m.close(); toast('Guardado');
     if (onDone) onDone({ id: rec.id, ruc: rec.ruc, nombre: rec.nombre, tel: rec.tel, correo: rec.correo, dir: rec.dir }); else render();
   };
@@ -2241,11 +2280,23 @@ function verTercero(t, c){
   const esP = t === 'prov';
   const docs = esP ? vivos('com').filter((x) => x.pr === c.id) : vivos('vta').filter((x) => x.cli && x.cli.id === c.id);
   docs.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-  const m = modal({ title: c.nombre, wide: true, body: '<p style="margin-top:0" class="muted">' + h([c.ruc, c.tel, c.correo, c.dir].filter(Boolean).join(' · ')) + '</p>' +
+  const deuda = esP ? vivos('com').filter((x) => x.pr === c.id && !x.an && x.fp === 'cr').reduce((s2, x) => s2 + x.tot, 0) : 0;
+  const det = esP ? '<div class="grid2" style="margin-bottom:10px"><div class="card" style="padding:10px 12px">' +
+      (c.rs ? '<div><b>Razón social:</b> ' + h(c.rs) + '</div>' : '') + '<div><b>RUC:</b> ' + h(c.ruc || '—') + '</div>' +
+      '<div><b>Teléfono:</b> ' + h(c.tel || '—') + (telWA(c.tel) ? ' <a href="https://wa.me/' + telWA(c.tel) + '" target="_blank" rel="noopener">WhatsApp</a>' : '') + '</div>' +
+      (c.correo ? '<div><b>Correo:</b> ' + h(c.correo) + '</div>' : '') + '<div><b>Dirección:</b> ' + h([c.dir, c.ciu].filter(Boolean).join(', ') || '—') + '</div>' +
+      (c.cont || c.ctel ? '<div><b>Vendedor:</b> ' + h(c.cont || '') + ' ' + h(c.ctel || '') + (telWA(c.ctel) ? ' <a href="https://wa.me/' + telWA(c.ctel) + '" target="_blank" rel="noopener">WhatsApp</a>' : '') + '</div>' : '') +
+      '<div><b>Cupo:</b> ' + (c.cupo ? money(c.cupo) + ' · compras a crédito registradas ' + money(deuda) : '—') + (c.pl ? ' · plazo ' + c.pl + ' días' : '') + '</div></div>' +
+      '<div class="card" style="padding:10px 12px"><b>Cuentas bancarias</b>' + ((c.ctas || []).length ? (c.ctas || []).map((k, i) => '<div class="row small" style="margin-top:6px"><span class="grow"><b>' + h(k.b) + '</b> · ' + h(k.t || '') + ' · <span class="num">' + h(k.n) + '</span>' + (k.ti || c.rs ? '<br>' + h(k.ti || c.rs) : '') + '</span>' +
+        '<button class="btn sm" data-copia="' + i + '" type="button">' + ic('copy') + 'Copiar</button></div>').join('') : '<div class="small muted">Sin cuentas registradas</div>') + '</div></div>' : '';
+  const m = modal({ title: c.nombre, wide: true, body: (esP ? det : '<p style="margin-top:0" class="muted">' + h([c.ruc, c.tel, c.correo, c.dir].filter(Boolean).join(' · ')) + '</p>') +
     '<div class="card" style="padding:4px 10px"><div class="list">' + (docs.slice(0, 100).map((d) => '<div class="li" data-id="' + h(d.id) + '"><div class="grow"><div class="t">' + h(esP ? 'Compra ' + (d.num || '') : DOC[d.tp] + ' ' + d.num) + ' ' + (esP ? (d.an ? '<span class="badge warn">Anulada</span>' : '') : estadoDoc(d)) + '</div><div class="s">' + fechaTxt(d.f) + ' · ' + (d.it || []).length + ' productos</div></div><div class="v">' + money(d.tot) + '</div></div>').join('') || '<div class="empty small">Sin documentos</div>') + '</div></div>',
     foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vtEd">' + ic('edit') + 'Editar</button>' + (!esP ? '<button class="btn wa" id="vtWa">' + ic('wa') + 'WhatsApp</button><button class="btn pri" id="vtV">' + ic('cart') + 'Venderle</button>' : '<button class="btn pri" id="vtC">' + ic('truck') + 'Nueva compra</button>') });
   m.q('.list').onclick = (e) => { const d = e.target.closest('[data-id]'); if (!d) return; if (esP) verCompra(S.com.get(d.dataset.id)); else verDocumento(S.vta.get(d.dataset.id)); };
   m.q('#vtEd').onclick = () => { m.close(); editarTercero(t, c); };
+  m.el.addEventListener('click', async (e) => { const b = e.target.closest('[data-copia]'); if (!b) return; const k = c.ctas[+b.dataset.copia];
+    const txt = (k.ti || c.rs || c.nombre) + '\nRUC ' + (c.ruc || '') + '\n' + k.b + ' · Cuenta ' + (k.t || '') + ' ' + k.n;
+    try { await navigator.clipboard.writeText(txt); toast('Datos de la cuenta copiados'); } catch (err) { pedirTexto('Datos de la cuenta', 'Copia estos datos', txt.replace(/\n/g, ' · ')); } });
   if (m.q('#vtWa')) m.q('#vtWa').onclick = () => { const tel = telWA(c.tel); if (!tel) return toast('Este cliente no tiene teléfono.', true); window.open('https://wa.me/' + tel, '_blank'); };
   if (m.q('#vtV')) m.q('#vtV').onclick = () => { CART.cli = { id: c.id, ruc: c.ruc, nombre: c.nombre, tel: c.tel, correo: c.correo, dir: c.dir }; guardarCart(); m.close(); irA('vender'); toast('Cliente elegido: ' + c.nombre); };
   if (m.q('#vtC')) m.q('#vtC').onclick = () => { m.close(); irA('compras'); setTimeout(() => editarCompra(null, { id: uid('co'), pr: c.id, num: '', f: hoyISO(), fp: (c.pl ? 'cr' : 'co'), pl: c.pl || 30, it: [], nota: '', act: true }), 80); };
@@ -2467,7 +2518,8 @@ function exportarTodo(){
     ['Detalle compras', ['N° factura', 'Fecha', 'Proveedor', 'Código', 'Producto', 'Cantidad', 'Costo', 'IVA %', 'Subtotal', 'Estado'],
       [].concat(...cs.map((c) => (c.it || []).map((x) => [c.num, c.f, nomProv(c.pr), x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q), c.an ? 'ANULADA' : ''])))],
     ['Clientes', ['Nombre', 'Cédula/RUC', 'Teléfono', 'Correo', 'Dirección'], vivos('cli').map((c) => [c.nombre, c.ruc, c.tel, c.correo, c.dir])],
-    ['Proveedores', ['Nombre', 'RUC', 'Teléfono', 'Correo', 'Dirección', 'Contacto', 'Plazo'], vivos('prov').map((c) => [c.nombre, c.ruc, c.tel, c.correo, c.dir, c.cont || '', c.pl || ''])],
+    ['Proveedores', ['Nombre', 'Razón social', 'RUC', 'Teléfono', 'Correo', 'Dirección', 'Ciudad', 'Vendedor', 'Tel. vendedor', 'Cupo', 'Plazo', 'Cuentas bancarias'],
+      vivos('prov').map((c) => [c.nombre, c.rs || '', c.ruc, c.tel, c.correo, c.dir, c.ciu || '', c.cont || '', c.ctel || '', c.cupo || '', c.pl || '', (c.ctas || []).map((k) => k.b + ' ' + (k.t || '') + ' ' + k.n + (k.ti ? ' (' + k.ti + ')' : '')).join(' | ')])],
     ['Ajustes inventario', ['Fecha', 'Código', 'Producto', 'Tipo', 'Motivo', 'Cantidad', 'Usuario'], vivos('mov').sort((a, b) => a.ts - b.ts).map((x) => [x.f, x.p, (S.prod.get(x.p) || {}).n || '', x.tp, x.mot || '', x.q, nomVend(x.v)])]
   ]);
 }
