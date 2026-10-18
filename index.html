@@ -453,7 +453,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18h';
+const APP_VER = '2026-10-18i';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2709,20 +2709,45 @@ async function importarProductos(file){
   };
 }
 
+/* Listado de clientes exportado de Anfibius: # CEDULA | APELLIDOS | NOMBRES | ZONA | GRUPO | CODIGO INTERNO (cabecera corrida) */
+function clientesAnfibius(filas){
+  const hi = filas.slice(0, 15).findIndex((r) => (r || []).some((c) => /^#?\s*c[eé]dula$/i.test(String(c).trim())) && (r || []).some((c) => /^cliente$/i.test(String(c).trim())));
+  if (hi < 0) return null;
+  const out = [['Nombre', 'Cédula/RUC', 'Zona', 'Código Anfibius']];
+  for (let i = hi + 1; i < filas.length; i++) {
+    const r = filas[i] || []; const ced = String(r[0] == null ? '' : r[0]).trim().replace(/\.0$/, '');
+    if (!/^\d{6,13}$/.test(ced)) continue;                       // títulos de sucursal y totales
+    if (/^9{10,13}$/.test(ced) && /consumidor/i.test(r[1])) continue;  // consumidor final ya existe en la app
+    const ape = String(r[1] || '').trim(); let nom = String(r[2] || '').trim();
+    let com = ''; nom = nom.replace(/\(([^)]*)\)\s*$/, (m, a) => { com = a.trim(); return ''; }).trim();
+    let nombre = (ape && ape !== '.' ? ape + ' ' : '') + nom;
+    const sl = (x) => norm(x).replace(/[^a-z0-9]/g, '');
+    if (com && sl(com) !== sl(nom) && sl(com) !== sl(nombre)) nombre += ' (' + com + ')';
+    nombre = nombre.replace(/\s+/g, ' ').trim(); if (!nombre) continue;
+    const zona = String(r[3] || '').trim();
+    out.push([nombre, /^9+$/.test(ced) ? '' : ced, /^sin /i.test(zona) ? '' : zona, r[5] === '' ? '' : String(r[5])]);
+  }
+  return out;
+}
 async function importarTerceros(file, t){
   let hojas; try { hojas = await leerExcel(file); } catch (e) { return toast('No se pudo leer el archivo: ' + e.message, true); }
   const H = hojas.find((x) => x.filas.length > 1); if (!H) return toast('El archivo está vacío.', true);
-  const det = detectarCabecera(H.filas, CAMPOS_TER);
+  const anf = t === 'cli' ? clientesAnfibius(H.filas) : null;
+  if (anf) { H.filas = anf; toast('Listado de clientes de Anfibius reconocido: ' + (anf.length - 1) + ' clientes.'); }
+  const det = detectarCabecera(H.filas, anf ? CAMPOS_TER.concat([['zona', 'Zona', /^zona$/], ['ca', 'Código Anfibius', /codigo anfibius/]]) : CAMPOS_TER);
   if (det.map.nombre == null && det.map.rs != null) { det.map.nombre = det.map.rs; if (t !== 'prov') delete det.map.rs; }
   if (det.map.nombre == null) return toast('No encontré la columna de nombre.', true);
   const existentes = vivos(t); const recs = [];
+  const enLote = new Map();
+  const porRuc = new Map(), porNom = new Map(); existentes.forEach((c) => { if (c.ruc) porRuc.set(c.ruc, c); porNom.set(norm(c.nombre), c); });
   const nombresArch = new Set(H.filas.slice(det.fila + 1).map((r) => norm(r[det.map.nombre])).filter(Boolean));
   for (let i = det.fila + 1; i < H.filas.length; i++) {
     const r = H.filas[i]; const g = (k) => (det.map[k] == null ? '' : String(r[det.map[k]] == null ? '' : r[det.map[k]]).trim().replace(/\.0$/, ''));
     const nombre = g('nombre').toUpperCase(); if (!nombre) continue;
     let ruc = g('ruc').replace(/\D/g, ''); if (ruc.length === 9 || ruc.length === 12) ruc = '0' + ruc;
-    const ex = existentes.find((c) => norm(c.nombre) === norm(nombre)) || (ruc ? existentes.find((c) => c.ruc === ruc && !nombresArch.has(norm(c.nombre)) && !recs.some((x) => x.id === c.id)) : null);
+    const ex = (t === 'cli' && ruc ? porRuc.get(ruc) : null) || porNom.get(norm(nombre)) || (ruc ? existentes.find((c) => c.ruc === ruc && !nombresArch.has(norm(c.nombre)) && !recs.some((x) => x.id === c.id)) : null);
     const rec = Object.assign(ex ? Object.assign({}, ex) : { id: uid(t === 'cli' ? 'cl' : 'pr') + i }, { nombre, ruc: ruc || (ex && ex.ruc) || '', tel: g('tel') || (ex && ex.tel) || '', correo: g('correo') || (ex && ex.correo) || '', dir: g('dir') || (ex && ex.dir) || '', _d: 0 });
+    if (anf) { if (g('zona')) rec.zona = g('zona'); if (g('ca')) rec.ca = g('ca'); }
     if (t === 'prov') {
       ['rs', 'ciu', 'cont', 'ctel'].forEach((k) => { const v = g(k); if (v) rec[k] = k === 'rs' ? v.toUpperCase() : v; });
       ['cupo', 'pl'].forEach((k) => { const v = aNum(g(k)); if (v > 0) rec[k] = v; });
@@ -2731,7 +2756,8 @@ async function importarTerceros(file, t){
       leerCtas(g('ctas')).forEach((k) => ct.push(k));
       if (ct.length) rec.ctas = ct;
     }
-    if (recs.some((x) => x.id === rec.id)) Object.assign(recs.find((x) => x.id === rec.id), rec); else recs.push(rec);
+    const prev = enLote.get(rec.id); if (prev) Object.assign(prev, rec); else { enLote.set(rec.id, rec); recs.push(rec); }
+    if (!ex) { if (rec.ruc) porRuc.set(rec.ruc, rec); porNom.set(norm(rec.nombre), rec); }
   }
   if (!recs.length) return toast('No hay filas para importar.', true);
   if (!(await confirmar('Se importarán ' + recs.length + (t === 'cli' ? ' clientes' : ' proveedores') + ' (los existentes se actualizan). ¿Continuar?', 'Importar'))) return;
