@@ -451,7 +451,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18f';
+const APP_VER = '2026-10-18g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2496,8 +2496,12 @@ const CAMPOS_PROD = [
 const CAMPOS_TER = [
   ['ctel', 'Tel. vendedor', /^tel.*(vendedor|contacto)|(celular|whats).*(vendedor|contacto)/],
   ['rs', 'Razón social', /^razon social$/],
-  ['cont', 'Vendedor / contacto', /^(vendedor|contacto|asesor|agente)( de ventas)?$/],
-  ['ctas', 'Cuentas bancarias', /cuenta|banc/],
+  ['cont', 'Vendedor / contacto', /vendedor|contacto|asesor|agente/],
+  ['cb', 'Banco', /^(banco|institucion financiera|entidad)$/],
+  ['ctp', 'Tipo de cuenta', /tipo.*cuenta/],
+  ['cn', 'N° de cuenta', /^(n|no|nro|num|numero|#)\W*\s*(de )?cuenta|^cuenta$/],
+  ['cti', 'Titular', /^titular/],
+  ['ctas', 'Cuentas bancarias', /otras cuentas|cuentas? bancarias?|^cuentas$/],
   ['nombre', 'Nombre / razón social *', /nombre|raz[oó]n|cliente|proveedor/],
   ['ruc', 'Cédula / RUC', /ruc|c[eé]dula|identific|^ci$|documento/],
   ['tel', 'Teléfono', /tel[eé]f|celular|whats|m[oó]vil/],
@@ -2512,7 +2516,7 @@ const ctasTxt = (l) => (l || []).map((k) => [k.b, k.t, k.n].filter(Boolean).join
 function leerCtas(txt){
   return String(txt || '').split(/\s*[|;\n]\s*/).map((s) => s.trim()).filter(Boolean).map((s) => {
     let ti = ''; s = s.replace(/\(([^)]*)\)\s*$/, (m, a) => { ti = a.trim(); return ''; }).trim();
-    let n = ''; s = s.replace(/[\d-]{4,}\s*$/, (m) => { n = m.replace(/\D/g, ''); return ''; }).trim();
+    let n = ''; s = s.replace(/(\d[\d-]{3,})(.*)$/, (m, num, resto) => { n = num.replace(/\D/g, ''); if (!ti && resto.trim()) ti = resto.trim(); return ''; }).trim();
     let t = ''; s = s.replace(/\b(ahorros?|corriente)\b/i, (m) => { t = /^a/i.test(m) ? 'Ahorros' : 'Corriente'; return ''; }).replace(/\s+/g, ' ').trim();
     return { b: s, t, n, ti };
   }).filter((k) => k.b || k.n);
@@ -2710,16 +2714,20 @@ async function importarTerceros(file, t){
   if (det.map.nombre == null && det.map.rs != null) { det.map.nombre = det.map.rs; if (t !== 'prov') delete det.map.rs; }
   if (det.map.nombre == null) return toast('No encontré la columna de nombre.', true);
   const existentes = vivos(t); const recs = [];
+  const nombresArch = new Set(H.filas.slice(det.fila + 1).map((r) => norm(r[det.map.nombre])).filter(Boolean));
   for (let i = det.fila + 1; i < H.filas.length; i++) {
     const r = H.filas[i]; const g = (k) => (det.map[k] == null ? '' : String(r[det.map[k]] == null ? '' : r[det.map[k]]).trim().replace(/\.0$/, ''));
     const nombre = g('nombre').toUpperCase(); if (!nombre) continue;
     let ruc = g('ruc').replace(/\D/g, ''); if (ruc.length === 9 || ruc.length === 12) ruc = '0' + ruc;
-    const ex = existentes.find((c) => (ruc && c.ruc === ruc) || norm(c.nombre) === norm(nombre));
+    const ex = existentes.find((c) => norm(c.nombre) === norm(nombre)) || (ruc ? existentes.find((c) => c.ruc === ruc && !nombresArch.has(norm(c.nombre)) && !recs.some((x) => x.id === c.id)) : null);
     const rec = Object.assign(ex ? Object.assign({}, ex) : { id: uid(t === 'cli' ? 'cl' : 'pr') + i }, { nombre, ruc: ruc || (ex && ex.ruc) || '', tel: g('tel') || (ex && ex.tel) || '', correo: g('correo') || (ex && ex.correo) || '', dir: g('dir') || (ex && ex.dir) || '', _d: 0 });
     if (t === 'prov') {
       ['rs', 'ciu', 'cont', 'ctel'].forEach((k) => { const v = g(k); if (v) rec[k] = k === 'rs' ? v.toUpperCase() : v; });
       ['cupo', 'pl'].forEach((k) => { const v = aNum(g(k)); if (v > 0) rec[k] = v; });
-      const ct = leerCtas(g('ctas')); if (ct.length) rec.ctas = ct;
+      const ct = [];
+      const n1 = g('cn').replace(/\D/g, ''); if (n1 || g('cb')) ct.push({ b: g('cb'), t: /^c/i.test(g('ctp')) ? 'Corriente' : (g('ctp') ? 'Ahorros' : ''), n: n1, ti: g('cti') });
+      leerCtas(g('ctas')).forEach((k) => ct.push(k));
+      if (ct.length) rec.ctas = ct;
     }
     if (recs.some((x) => x.id === rec.id)) Object.assign(recs.find((x) => x.id === rec.id), rec); else recs.push(rec);
   }
