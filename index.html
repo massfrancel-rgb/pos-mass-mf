@@ -6,6 +6,7 @@
 <title>POS MASS MF</title>
 <meta name="description" content="Punto de venta de MASS FERRETERÍA para vendedores: ventas, facturas, pedidos, compras, inventario y reportes.">
 <meta name="theme-color" content="#1A1814">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="pos-192.png">
@@ -336,6 +337,43 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .ctab{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .provf label.f{font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}
 
+/* ===== línea del carrito: casillas alineadas y de color ===== */
+.ci .totw{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.ci .ctrl{display:grid;grid-template-columns:auto 96px 76px 76px;gap:8px;align-items:end;justify-content:start}
+.ci .ctrl.np{grid-template-columns:auto 76px}
+.ci .ctrl .minilbl{font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.03em}
+.ci .ctrl .mini,.ci .ctrl .ivabox,.ci .ctrl .ivabox input{width:100%}
+.ci .ctrl .ivabox{display:flex}
+.mini,.qty input,.ivabox input{font-weight:800!important;color:var(--fg);font-size:16px;font-variant-numeric:tabular-nums}
+.lpre .mini{background:#E6F0FB;border-color:#8DB3E2;color:#12316E}
+.liva input{background:#FFF1D6;border-color:#E2B45C;color:#7A4A06}
+.ldes .mini{background:#F5ECFB;border-color:#C7A3E0;color:#4A1F6E}
+:root[data-theme="dark"] .lpre .mini{background:#1E2D3D;color:#CFE2FA}:root[data-theme="dark"] .liva input{background:#3A2C10;color:#F6D58E}:root[data-theme="dark"] .ldes .mini{background:#2E1F3A;color:#E3CCF5}
+@media (max-width:520px){
+  .ci{padding:9px 10px}
+  .ci .ctrl{grid-template-columns:112px 1fr 1fr 1fr;gap:6px;width:100%}
+  .ci .ctrl.np{grid-template-columns:112px 1fr}
+  .ci .qty button{width:34px;height:38px}.ci .qty input{width:44px;height:38px}
+  .ci .ctrl .mini,.ci .ctrl .ivabox input{min-height:38px;padding:5px 6px;font-size:15px}
+  .ci .ctrl .ivabox input{padding-right:18px!important}.ci .ctrl .ivabox i{right:5px;font-size:12px}
+}
+@media (max-width:520px){
+  .pagehead{gap:6px}.pagehead h2{font-size:20px;flex:1 1 100%}
+  .pagehead .btn.sm.c3d{font-size:13px;padding:4px 8px;min-height:34px;letter-spacing:.02em}
+  .pagehead .btn.sm.c3d > svg{width:20px!important;height:20px!important}
+  nav#bottom a{font-size:10.5px;letter-spacing:0}
+}
+/* ===== totales en columna (PC y tablet) ===== */
+@media (min-width:621px){
+  .pb-tot{flex-direction:column;align-items:stretch;flex-wrap:nowrap;gap:2px;min-width:230px;background:rgba(255,255,255,.06);border-radius:12px;padding:6px 10px}
+  .pb-c{flex-direction:row;justify-content:space-between;align-items:baseline;gap:16px}
+  .pb-c span{font-size:12px}.pb-c b{font-size:16px}
+  .pb-c.big{margin-top:3px;padding:4px 10px}.pb-c.big b{font-size:24px}
+  .paybar{align-items:flex-end}
+  main#view{padding-bottom:calc(var(--nav-h) + 190px)}
+}
+@media (min-width:900px){main#view{padding-bottom:180px}}
+
 /* login */
 #login{position:fixed;inset:0;z-index:70;background:var(--dark);color:var(--on-dark);overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:30px 16px}
 #login .box{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;align-items:stretch}
@@ -409,7 +447,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18b';
+const APP_VER = '2026-10-18c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1138,11 +1176,11 @@ function pintarCarrito(){
     const k = calcItem(x); const s = stockDe(x.p);
     return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb(x) + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · ' + money(x.pu) + ' c/u ' +
       '<span class="stockchip ' + (s - x.q < 0 ? 'no' : '') + '">Stock ' + numf(s) + '</span>' + (Number(x.iva) !== Number(cfg().iva) ? ' <span class="badge gold">IVA ' + (Number(x.iva) || 0) + '%</span>' : '') + '</div></div></div>' +
-      '<div class="tot">' + money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '') + '</div>' +
-      '<div class="ctrl"><div class="qty"><button data-a="menos" aria-label="Menos">−</button><input data-a="q" inputmode="decimal" value="' + numf(x.q) + '"><button data-a="mas" aria-label="Más">+</button></div>' +
-      (precios ? '<label class="minilbl">Precio<input class="mini" data-a="pu" inputmode="decimal" value="' + Number(x.pu).toFixed(2) + '"></label><label class="minilbl">Desc. %<input class="mini pct" data-a="d" inputmode="decimal" value="' + (Number(x.d) || '') + '" placeholder="0"></label>' : '') +
-      '<label class="minilbl">IVA' + campoIva('mini pct', 'data-a="iva"', x.iva) + '</label>' +
-      '<span class="spacer"></span><button class="btn sm icon danger" data-a="del" aria-label="Quitar">' + ic('trash') + '</button></div></div>';
+      '<div class="totw"><div class="tot">' + money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '') + '</div>' +
+      '<button class="btn sm icon danger" data-a="del" aria-label="Quitar">' + ic('trash') + '</button></div>' +
+      '<div class="ctrl' + (precios ? '' : ' np') + '"><div class="qty"><button data-a="menos" aria-label="Menos">−</button><input data-a="q" inputmode="decimal" value="' + numf(x.q) + '"><button data-a="mas" aria-label="Más">+</button></div>' +
+      (precios ? '<label class="minilbl lpre">Precio<input class="mini" data-a="pu" inputmode="decimal" value="' + Number(x.pu).toFixed(2) + '"></label><label class="minilbl ldes">Desc. %<input class="mini pct" data-a="d" inputmode="decimal" value="' + (Number(x.d) || '') + '" placeholder="0"></label>' : '') +
+      '<label class="minilbl liva">IVA' + campoIva('mini pct', 'data-a="iva"', x.iva) + '</label></div></div>';
   }).join('');
   c.oninput = (e) => {
     const a = e.target.dataset.a; const i = +e.target.closest('[data-i]').dataset.i; const x = CART.it[i]; if (!x) return;
