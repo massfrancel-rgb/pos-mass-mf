@@ -447,7 +447,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18c';
+const APP_VER = '2026-10-18d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2344,10 +2344,12 @@ function verTercero(t, c){
 function pgVendedores(){
   const v = $('view');
   const l = vivos('vend').sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const ptos = {}; l.forEach((x) => { const k = x.pto || '001'; ptos[k] = (ptos[k] || 0) + 1; });
   v.innerHTML = '<div class="pagehead"><h2>Vendedores</h2><button class="btn sm c3d cv" id="veN">' + ic('plus') + 'Nuevo vendedor</button></div>' +
     '<p class="muted" style="margin-top:0">Cada vendedor entra con su PIN y tiene su propio punto de emisión, así las facturas de cada teléfono no repiten número.</p>' +
+    (Object.values(ptos).some((n) => n > 1) ? '<div class="note warn" style="margin-bottom:10px">Hay vendedores con el <b>mismo punto de emisión</b>: sus facturas pueden repetir número. Toca uno y cámbiale el punto (002, 003…) o elimínalo si ya no se usa.</div>' : '') +
     '<div class="card" style="padding:4px 10px"><div class="list" id="veL">' + l.map((x) => '<div class="li" data-id="' + h(x.id) + '"><span class="userb" style="display:flex;align-items:center;justify-content:center">' + h(iniciales(x.nombre)) + '</span><div class="grow"><div class="t">' + h(x.nombre) + ' ' + (x.act === false ? '<span class="badge warn">Inactivo</span>' : '') + '</div>' +
-      '<div class="s">' + (x.rol === 'admin' ? 'Administrador' : 'Vendedor') + ' · Punto ' + h(x.pto || '001') + (x.com ? ' · Comisión ' + x.com + '%' : '') + '</div></div></div>').join('') + '</div></div>';
+      '<div class="s">' + (x.rol === 'admin' ? 'Administrador' : 'Vendedor') + ' · Punto ' + h(x.pto || '001') + (ptos[x.pto || '001'] > 1 ? ' <span class="badge warn">Punto repetido</span>' : '') + (x.com ? ' · Comisión ' + x.com + '%' : '') + '</div></div></div>').join('') + '</div></div>';
   $('veN').onclick = () => editarVendedor(null);
   $('veL').onclick = (e) => { const d = e.target.closest('[data-id]'); if (d) editarVendedor(S.vend.get(d.dataset.id)); };
 }
@@ -2363,8 +2365,14 @@ function editarVendedor(x){
     '<label class="f">' + (nuevo ? 'PIN (4 a 6 números)' : 'Nuevo PIN <span class="hint">(déjalo vacío para no cambiarlo)</span>') + '<input class="in" id="evPin" type="password" inputmode="numeric" maxlength="6"></label>' +
     '<div id="evPerm"><div class="small muted" style="font-weight:700">Permisos del vendedor</div>' + Object.keys(PERMISOS).map((k) => '<label class="chk"><input type="checkbox" data-p="' + k + '"' + (x.perm && x.perm[k] ? ' checked' : '') + '> ' + PERMISOS[k] + '</label>').join('') + '</div>' +
     '<label class="chk"><input type="checkbox" id="evA"' + (x.act !== false ? ' checked' : '') + '> Activo (puede iniciar sesión)</label></div>',
-    foot: '<button class="btn" data-x>Cancelar</button><button class="btn pri" id="evOk">' + ic('check') + 'Guardar</button>' });
+    foot: '<button class="btn" data-x>Cancelar</button>' + (!nuevo && x.id !== USR.id ? '<button class="btn c3d cr" id="evDel">' + ic('trash') + 'Eliminar</button>' : '') + '<button class="btn c3d cv" id="evOk">' + ic('check') + 'Guardar</button>' });
   m.q('#evR').value = x.rol;
+  if (m.q('#evDel')) m.q('#evDel').onclick = async () => {
+    if (x.rol === 'admin' && vivos('vend').filter((v) => v.rol === 'admin' && v.act !== false && v.id !== x.id).length === 0) return toast('Debe quedar al menos un administrador activo.', true);
+    const nd = vivos('vta').filter((d) => d.v === x.id).length;
+    if (!(await confirmar('¿Eliminar a ' + x.nombre + '? Ya no podrá entrar a la app en ningún equipo. ' + (nd ? 'Sus ' + nd + ' documentos y ventas se conservan en los reportes con su nombre.' : ''), 'Eliminar', true))) return;
+    await borrar('vend', x.id); m.close(); toast(x.nombre + ' eliminado'); render();
+  };
   const permVis = () => { m.q('#evPerm').style.display = m.q('#evR').value === 'admin' ? 'none' : ''; }; permVis(); m.q('#evR').onchange = permVis;
   m.q('#evOk').onclick = async () => {
     const n = m.q('#evN').value.trim(); if (!n) return toast('Escribe el nombre.', true);
