@@ -451,7 +451,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18e';
+const APP_VER = '2026-10-18f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2298,9 +2298,12 @@ function editarTercero(t, rec, onDone, pre){
 function pgTerceros(t){
   const esP = t === 'prov';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>' + (esP ? 'Proveedores' : 'Clientes') + '</h2><button class="btn sm c3d cv" id="tNuevo">' + ic('plus') + 'Nuevo</button></div>' +
+  v.innerHTML = '<div class="pagehead"><h2>' + (esP ? 'Proveedores' : 'Clientes') + '</h2><label class="btn sm c3d cb">' + ic('upload') + 'Importar Excel<input type="file" id="tImp" accept=".xlsx,.xls,.xlsm,.csv" hidden></label><button class="btn sm c3d ce" id="tExp">' + ic('download') + 'Exportar Excel</button><button class="btn sm c3d cs" id="tPla">' + ic('sheet') + 'Plantilla</button><button class="btn sm c3d cv" id="tNuevo">' + ic('plus') + 'Nuevo</button></div>' +
     '<div class="stack"><input class="in" id="tQ" type="search" placeholder="Buscar nombre, cédula/RUC o teléfono"><div class="small muted" id="tRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="tList"></div></div></div>';
   $('tNuevo').onclick = () => editarTercero(t, null);
+  $('tImp').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarTerceros(f, t); };
+  $('tExp').onclick = () => exportarTerceros(t);
+  $('tPla').onclick = () => plantillaTerceros(t);
   const resumen = (c) => {
     if (esP) { const l = vivos('com').filter((x) => x.pr === c.id && !x.an); return { n: l.length, tot: l.reduce((s, x) => s + x.tot, 0), sal: 0 }; }
     const l = vivos('vta').filter((x) => x.cli && x.cli.id === c.id && !x.an && x.tp !== 'P'); return { n: l.length, tot: l.reduce((s, x) => s + x.tot, 0), sal: l.reduce((s, x) => s + saldo(x), 0) };
@@ -2491,12 +2494,42 @@ const CAMPOS_PROD = [
   ['un', 'Unidad', /^unidad|^u\.?\s?m\.?|medida/]
 ];
 const CAMPOS_TER = [
+  ['ctel', 'Tel. vendedor', /^tel.*(vendedor|contacto)|(celular|whats).*(vendedor|contacto)/],
+  ['rs', 'Razón social', /^razon social$/],
+  ['cont', 'Vendedor / contacto', /^(vendedor|contacto|asesor|agente)( de ventas)?$/],
+  ['ctas', 'Cuentas bancarias', /cuenta|banc/],
   ['nombre', 'Nombre / razón social *', /nombre|raz[oó]n|cliente|proveedor/],
   ['ruc', 'Cédula / RUC', /ruc|c[eé]dula|identific|^ci$|documento/],
   ['tel', 'Teléfono', /tel[eé]f|celular|whats|m[oó]vil/],
   ['correo', 'Correo', /correo|e-?mail/],
-  ['dir', 'Dirección', /direcc/]
+  ['dir', 'Dirección', /direcc/],
+  ['ciu', 'Ciudad', /^ciudad|canton/],
+  ['cupo', 'Cupo', /cupo|limite/],
+  ['pl', 'Plazo (días)', /plazo|dias/]
 ];
+const CAB_PROV = ['Nombre', 'Razón social', 'RUC', 'Teléfono', 'Correo', 'Dirección', 'Ciudad', 'Vendedor', 'Tel. vendedor', 'Cupo', 'Plazo', 'Cuentas bancarias'];
+const ctasTxt = (l) => (l || []).map((k) => [k.b, k.t, k.n].filter(Boolean).join(' ') + (k.ti ? ' (' + k.ti + ')' : '')).join(' | ');
+function leerCtas(txt){
+  return String(txt || '').split(/\s*[|;\n]\s*/).map((s) => s.trim()).filter(Boolean).map((s) => {
+    let ti = ''; s = s.replace(/\(([^)]*)\)\s*$/, (m, a) => { ti = a.trim(); return ''; }).trim();
+    let n = ''; s = s.replace(/[\d-]{4,}\s*$/, (m) => { n = m.replace(/\D/g, ''); return ''; }).trim();
+    let t = ''; s = s.replace(/\b(ahorros?|corriente)\b/i, (m) => { t = /^a/i.test(m) ? 'Ahorros' : 'Corriente'; return ''; }).replace(/\s+/g, ' ').trim();
+    return { b: s, t, n, ti };
+  }).filter((k) => k.b || k.n);
+}
+function filaTercero(t, c){
+  return t === 'prov' ? [c.nombre, c.rs || '', c.ruc || '', c.tel || '', c.correo || '', c.dir || '', c.ciu || '', c.cont || '', c.ctel || '', c.cupo || '', c.pl || '', ctasTxt(c.ctas)]
+    : [c.nombre, c.ruc || '', c.tel || '', c.correo || '', c.dir || ''];
+}
+function exportarTerceros(t){
+  const l = vivos(t).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  if (!l.length) return toast('No hay ' + (t === 'prov' ? 'proveedores' : 'clientes') + ' para exportar.', true);
+  exportarFilas(t === 'prov' ? 'Proveedores' : 'Clientes', t === 'prov' ? CAB_PROV : ['Nombre', 'Cédula/RUC', 'Teléfono', 'Correo', 'Dirección'], l.map((c) => filaTercero(t, c)));
+}
+function plantillaTerceros(t){
+  if (t === 'prov') exportarFilas('Plantilla proveedores', CAB_PROV, [['ADHEPLAST', 'ADHEPLAST S.A.', '0190099725001', '0959907822', 'ventas@ejemplo.com', 'Av. Principal 123', 'Cuenca', 'Luis Pérez', '0991234567', 5000, 30, 'Banco Pichincha Corriente 2100123456 (ADHEPLAST S.A.) | Produbanco Ahorros 12345678']]);
+  else exportarFilas('Plantilla clientes', ['Nombre', 'Cédula/RUC', 'Teléfono', 'Correo', 'Dirección'], [['JUAN PÉREZ', '1712345678', '0991234567', 'juan@ejemplo.com', 'Santo Domingo']]);
+}
 
 async function leerExcel(file){
   const X = await libXLSX();
@@ -2572,7 +2605,7 @@ function exportarTodo(){
       [].concat(...cs.map((c) => (c.it || []).map((x) => [c.num, c.f, nomProv(c.pr), x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q), c.an ? 'ANULADA' : ''])))],
     ['Clientes', ['Nombre', 'Cédula/RUC', 'Teléfono', 'Correo', 'Dirección'], vivos('cli').map((c) => [c.nombre, c.ruc, c.tel, c.correo, c.dir])],
     ['Proveedores', ['Nombre', 'Razón social', 'RUC', 'Teléfono', 'Correo', 'Dirección', 'Ciudad', 'Vendedor', 'Tel. vendedor', 'Cupo', 'Plazo', 'Cuentas bancarias'],
-      vivos('prov').map((c) => [c.nombre, c.rs || '', c.ruc, c.tel, c.correo, c.dir, c.ciu || '', c.cont || '', c.ctel || '', c.cupo || '', c.pl || '', (c.ctas || []).map((k) => k.b + ' ' + (k.t || '') + ' ' + k.n + (k.ti ? ' (' + k.ti + ')' : '')).join(' | ')])],
+      vivos('prov').map((c) => filaTercero('prov', c))],
     ['Ajustes inventario', ['Fecha', 'Código', 'Producto', 'Tipo', 'Motivo', 'Cantidad', 'Usuario'], vivos('mov').sort((a, b) => a.ts - b.ts).map((x) => [x.f, x.p, (S.prod.get(x.p) || {}).n || '', x.tp, x.mot || '', x.q, nomVend(x.v)])]
   ]);
 }
@@ -2674,6 +2707,7 @@ async function importarTerceros(file, t){
   let hojas; try { hojas = await leerExcel(file); } catch (e) { return toast('No se pudo leer el archivo: ' + e.message, true); }
   const H = hojas.find((x) => x.filas.length > 1); if (!H) return toast('El archivo está vacío.', true);
   const det = detectarCabecera(H.filas, CAMPOS_TER);
+  if (det.map.nombre == null && det.map.rs != null) { det.map.nombre = det.map.rs; if (t !== 'prov') delete det.map.rs; }
   if (det.map.nombre == null) return toast('No encontré la columna de nombre.', true);
   const existentes = vivos(t); const recs = [];
   for (let i = det.fila + 1; i < H.filas.length; i++) {
@@ -2681,11 +2715,18 @@ async function importarTerceros(file, t){
     const nombre = g('nombre').toUpperCase(); if (!nombre) continue;
     let ruc = g('ruc').replace(/\D/g, ''); if (ruc.length === 9 || ruc.length === 12) ruc = '0' + ruc;
     const ex = existentes.find((c) => (ruc && c.ruc === ruc) || norm(c.nombre) === norm(nombre));
-    recs.push(Object.assign(ex ? Object.assign({}, ex) : { id: uid(t === 'cli' ? 'cl' : 'pr') + i }, { nombre, ruc: ruc || (ex && ex.ruc) || '', tel: g('tel') || (ex && ex.tel) || '', correo: g('correo') || (ex && ex.correo) || '', dir: g('dir') || (ex && ex.dir) || '', _d: 0 }));
+    const rec = Object.assign(ex ? Object.assign({}, ex) : { id: uid(t === 'cli' ? 'cl' : 'pr') + i }, { nombre, ruc: ruc || (ex && ex.ruc) || '', tel: g('tel') || (ex && ex.tel) || '', correo: g('correo') || (ex && ex.correo) || '', dir: g('dir') || (ex && ex.dir) || '', _d: 0 });
+    if (t === 'prov') {
+      ['rs', 'ciu', 'cont', 'ctel'].forEach((k) => { const v = g(k); if (v) rec[k] = k === 'rs' ? v.toUpperCase() : v; });
+      ['cupo', 'pl'].forEach((k) => { const v = aNum(g(k)); if (v > 0) rec[k] = v; });
+      const ct = leerCtas(g('ctas')); if (ct.length) rec.ctas = ct;
+    }
+    if (recs.some((x) => x.id === rec.id)) Object.assign(recs.find((x) => x.id === rec.id), rec); else recs.push(rec);
   }
   if (!recs.length) return toast('No hay filas para importar.', true);
   if (!(await confirmar('Se importarán ' + recs.length + (t === 'cli' ? ' clientes' : ' proveedores') + ' (los existentes se actualizan). ¿Continuar?', 'Importar'))) return;
   await putMuchos(t, recs); toast(recs.length + ' registros importados.');
+  if (RUTA === 'proveedores' || RUTA === 'clientes') render();
 }
 
 /* =====================================================================
