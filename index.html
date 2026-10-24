@@ -462,7 +462,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24i';
+const APP_VER = '2026-10-24j';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3703,7 +3703,7 @@ const ETQ_MEDIDAS = [
   ['r80', 'Rollo de ticket 80 mm (80 × 40 mm)', 80, 40, 1, 0],
   ['custom', 'Personalizada…', 50, 25, 1, 0]
 ];
-const ETQ_DEF = { met: '', leng: 'escpos', med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
+const ETQ_DEF = { met: '', leng: 'escpos', papel: 384, med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
   sT: 100, sN: 100, sC: 100, sP: 100, lays: {} };
 const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
 /** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
@@ -3843,6 +3843,7 @@ function imprimirEtiquetas(items, titulo){
       '<div class="small muted" style="align-self:end;padding-bottom:6px">Si la impresora detecta sola la separación del rollo, deja 0. Si las etiquetas se montan, pon 2 o 3 mm.</div></div>' +
       '<div class="card etqimp"><b>Impresora</b><div class="grid2" style="margin-top:6px"><label class="f">Imprimir con<select class="in" id="eMet">' + ETQ_METODOS.map((x) => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '</select></label>' +
         '<label class="f" id="eLengL">Lenguaje de la impresora<select class="in" id="eLeng">' + ETQ_LENG.map((x) => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '</select></label></div>' +
+        '<label class="f" id="ePapL" style="margin-top:6px">Ancho del rollo de la impresora (para centrar)<select class="in" id="ePap"><option value="384">58 mm (384 puntos) — POS-5802 y similares</option><option value="576">80 mm (576 puntos)</option><option value="432">58 mm de 432 puntos</option><option value="0">No centrar</option></select></label>' +
         '<div class="row" id="eBTrow" style="margin-top:6px"><button class="btn sm c3d cb" id="eBTbus" type="button">' + ic('search') + 'Buscar impresora Bluetooth</button><span class="small" id="eBTnom"></span></div>' +
         '<div class="small muted" id="eMetAyuda" style="margin-top:6px"></div></div>' +
       '<div class="grid3"><label class="f">Resolución<select class="in" id="eDpi"><option value="203">203 dpi (la mayoría)</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>' +
@@ -3864,14 +3865,14 @@ function imprimirEtiquetas(items, titulo){
     C.gap = Math.max(0, Math.min(20, num('#eGap', 0))); C.gv = Math.max(0, Math.min(20, num('#eGv', 0)));
     const M = ETQ_MEDIDAS.find((x) => x[0] !== 'custom' && x[2] === C.w && x[3] === C.h && x[4] === C.cols);
     C.med = M ? M[0] : 'custom'; q('#eMed').value = C.med;
-    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.met = q('#eMet').value; C.leng = q('#eLeng').value;
+    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.met = q('#eMet').value; C.leng = q('#eLeng').value; C.papel = +q('#ePap').value;
     C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
     C.offX = num('#eOx', 0); C.offY = num('#eOy', 0);
     ls.set('etqCfg', C);
   };
   const ponerCampos = () => {
     q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
-    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eMet').value = C.met || (esCelular() ? 'bt' : 'sistema'); q('#eLeng').value = C.leng || 'tspl'; ayudaMet();
+    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eMet').value = C.met || (esCelular() ? 'bt' : 'sistema'); q('#eLeng').value = C.leng || 'escpos'; q('#ePap').value = String(C.papel == null ? 384 : C.papel); ayudaMet();
     q('#eTi').checked = C.tienda; q('#eNo').checked = C.nombre; q('#ePr').checked = C.precio; q('#eCt').checked = C.codTxt; q('#eIv').checked = C.ivaTxt; q('#eOx').value = C.offX || ''; q('#eOy').value = C.offY || '';
   };
   const prevW = () => Math.max(120, Math.min(360, (q('#ePrev').clientWidth || 330) - 36));
@@ -3922,7 +3923,7 @@ function imprimirEtiquetas(items, titulo){
     rawbt: 'Instala gratis <b>RawBT</b> desde Play Store. Dentro de RawBT, en <b>Ajustes</b>, elige tu impresora (Bluetooth, USB o WiFi), su <b>tipo/driver</b> y el <b>ancho del papel</b>, y prueba con su botón de prueba. Luego elige aquí el <b>lenguaje</b> de tu impresora: <b>ESC/POS</b> para impresoras de tickets como la POS-5802.',
     pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
   };
-  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none';
+  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none'; q('#ePapL').style.display = (v === 'bt' || v === 'rawbt') && /^escpos/.test(q('#eLeng').value) ? '' : 'none';
     q('#eBTrow').style.display = v === 'bt' ? '' : 'none'; q('#eBTnom').textContent = BT && BT.car ? '✓ Conectada: ' + BT.nombre : (ls.get('etqBT', '') ? 'Última usada: ' + ls.get('etqBT', '') : ''); }
   q('#eBTbus').onclick = async () => { try { await conectarBT(true); ayudaMet(); toast('Impresora conectada: ' + BT.nombre); } catch (e) { if (e && e.name !== 'NotFoundError') toast(e.message, true); } };
   const imprimir = async (l) => {
@@ -4057,6 +4058,13 @@ function bitsCanvas(cv){
   for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11 < 150) out[y * bpr + (x >> 3)] |= 0x80 >> (x & 7); }
   return { bpr, h: hgt, bits: out };
 }
+/** Centra la imagen en el ancho real del rollo de la impresora de tickets (58 mm = 384 puntos, 80 mm = 576) */
+function centrarBits(B, puntos){
+  const tot = Math.ceil((Number(puntos) || 0) / 8); if (!tot || tot <= B.bpr) return B;
+  const izq = Math.floor((tot - B.bpr) / 2), out = new Uint8Array(tot * B.h);
+  for (let y = 0; y < B.h; y++) out.set(B.bits.subarray(y * B.bpr, (y + 1) * B.bpr), y * tot + izq);
+  return { bpr: tot, h: B.h, bits: out };
+}
 const txtBytes = (s) => new TextEncoder().encode(s);
 const unirBytes = (arr) => { const n = arr.reduce((s, a) => s + a.length, 0); const o = new Uint8Array(n); let i = 0; arr.forEach((a) => { o.set(a, i); i += a.length; }); return o; };
 /** Comandos para la impresora según su lenguaje */
@@ -4065,7 +4073,8 @@ function comandosEtq(lista, C, leng){
   const filas = []; for (let i = 0; i < todas.length; i += C.cols) filas.push(todas.slice(i, i + C.cols));
   const PW = C.cols * C.w + (C.cols - 1) * C.gap, partes = [];
   filas.forEach((f) => {
-    const B = bitsCanvas(canvasFila(f, C));
+    let B = bitsCanvas(canvasFila(f, C));
+    if (leng === 'escpos' || leng === 'escpos2') B = centrarBits(B, C.papel == null ? 384 : C.papel);
     if (leng === 'tspl') {
       const inv = B.bits.map((v) => 255 - v);   // en TSPL 0 = punto negro
       partes.push(txtBytes('SIZE ' + PW + ' mm,' + C.h + ' mm\r\nGAP ' + (Number(C.gv) || 2) + ' mm,0 mm\r\nDIRECTION 1,0\r\nREFERENCE 0,0\r\nDENSITY 10\r\nCLS\r\nBITMAP 0,0,' + B.bpr + ',' + B.h + ',0,'), inv, txtBytes('\r\nPRINT 1,1\r\n'));
