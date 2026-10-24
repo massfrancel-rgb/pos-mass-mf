@@ -432,6 +432,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .etqtam{padding:8px 10px}.tamrow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:9px;cursor:pointer}.tamrow.on{background:#FDECEA;box-shadow:inset 3px 0 0 #E0322B}.tamrow .btn.icon{width:34px;min-width:34px;font-size:20px;font-weight:800;padding:0}.tamrow .mini{width:58px;text-align:center}.etqprev [data-el]{cursor:pointer}
 .movpad{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;padding:6px 8px;background:var(--surface2);border-radius:9px}.movpad .btn.icon{width:36px;min-width:36px;font-size:18px;font-weight:800;padding:0}
 .estbar{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px}.estbar .seg{flex:1 1 auto}.estbar .seg button{min-height:34px;font-size:13px;padding:5px 8px}.estbar select{flex:1 1 160px;width:auto}
+.etqimp{padding:10px 12px;border:2px solid #8DB3E2;background:#F2F7FD}:root[data-theme="dark"] .etqimp{background:#1E2D3D;border-color:#3B5B80}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
 .etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
@@ -461,7 +462,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24e';
+const APP_VER = '2026-10-24f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3702,7 +3703,7 @@ const ETQ_MEDIDAS = [
   ['r80', 'Rollo de ticket 80 mm (80 × 40 mm)', 80, 40, 1, 0],
   ['custom', 'Personalizada…', 50, 25, 1, 0]
 ];
-const ETQ_DEF = { med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
+const ETQ_DEF = { met: '', leng: 'tspl', med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
   sT: 100, sN: 100, sC: 100, sP: 100, lays: {} };
 const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
 /** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
@@ -3840,7 +3841,11 @@ function imprimirEtiquetas(items, titulo){
       '<div class="grid3" id="eCus"><label class="f">Ancho de la etiqueta (mm)<input class="in" id="eW" inputmode="decimal"></label><label class="f">Alto de la etiqueta (mm)<input class="in" id="eH" inputmode="decimal"></label><label class="f">Etiquetas por fila<select class="in" id="eCols"><option>1</option><option>2</option><option>3</option><option>4</option></select></label></div>' +
       '<div class="grid3"><label class="f">Espacio entre etiquetas ↕ (mm)<input class="in" id="eGv" inputmode="decimal" placeholder="0"></label><label class="f">Espacio entre columnas ↔ (mm)<input class="in" id="eGap" inputmode="decimal" placeholder="0"></label>' +
       '<div class="small muted" style="align-self:end;padding-bottom:6px">Si la impresora detecta sola la separación del rollo, deja 0. Si las etiquetas se montan, pon 2 o 3 mm.</div></div>' +
-      '<div class="grid3"><label class="f">Impresora<select class="in" id="eDpi"><option value="203">203 dpi (la mayoría)</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>' +
+      '<div class="card etqimp"><b>Impresora</b><div class="grid2" style="margin-top:6px"><label class="f">Imprimir con<select class="in" id="eMet">' + ETQ_METODOS.map((x) => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '</select></label>' +
+        '<label class="f" id="eLengL">Lenguaje de la impresora<select class="in" id="eLeng">' + ETQ_LENG.map((x) => '<option value="' + x[0] + '">' + x[1] + '</option>').join('') + '</select></label></div>' +
+        '<div class="row" id="eBTrow" style="margin-top:6px"><button class="btn sm c3d cb" id="eBTbus" type="button">' + ic('search') + 'Buscar impresora Bluetooth</button><span class="small" id="eBTnom"></span></div>' +
+        '<div class="small muted" id="eMetAyuda" style="margin-top:6px"></div></div>' +
+      '<div class="grid3"><label class="f">Resolución<select class="in" id="eDpi"><option value="203">203 dpi (la mayoría)</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>' +
       '<label class="f">Código<select class="in" id="eTipo"><option value="auto">De barras (o interno)</option><option value="interno">Siempre el interno</option></select></label>' +
       '</div>' +
       '<div class="row" style="gap:6px 14px"><label class="chk"><input type="checkbox" id="eTi"> Nombre de la tienda</label><label class="chk"><input type="checkbox" id="eNo"> Descripción</label>' +
@@ -3850,7 +3855,7 @@ function imprimirEtiquetas(items, titulo){
     '</div><div><div class="small muted" style="margin-bottom:4px">Vista previa</div><div class="etqprev" id="ePrev"></div><div class="small muted" id="eInfo" style="margin-top:6px"></div></div></div>' +
     '<div id="eBus" style="margin:12px 0 8px"></div><div class="row small" style="margin-bottom:6px"><b id="eTot"></b><span class="spacer"></span><button class="btn sm" id="eStock" type="button">Cantidad = stock</button><button class="btn sm" id="eUno" type="button">1 de cada uno</button><button class="btn sm danger" id="eVac" type="button">' + ic('trash') + 'Vaciar</button></div>' +
     '<div class="card" style="padding:4px 10px"><div class="list" id="eList"></div></div>' +
-    '<div class="note small" style="margin-top:10px"><b>Al imprimir:</b> en la ventana que se abre elige tu <b>impresora térmica</b> (Zebra, Xprinter, TSC, 3nStar…), <b>Márgenes: Ninguno</b>, <b>Escala: 100 %</b> y en <i>Más ajustes → Tamaño del papel</i> la misma medida de la etiqueta. La primera vez, configura esa medida en las <i>Preferencias de impresión</i> de la impresora en Windows.</div>',
+    '<div class="note small" style="margin-top:10px"><b>Primera vez:</b> pulsa <b>Imprimir 1 de prueba</b> para revisar que la medida y la posición estén bien antes de gastar el rollo.</div>',
     foot: '<button class="btn" data-x>Cerrar</button><button class="btn c3d cs" id="ePrueba">' + ic('ticket') + 'Imprimir 1 de prueba</button><button class="btn c3d cb" id="ePdf">' + ic('pdf') + 'PDF</button><button class="btn c3d cv" id="eImp">' + ic('barcode') + 'Imprimir etiquetas</button>' });
   const q = m.q;
   const num = (id, d) => { const v = parseFloat(String(q(id).value).replace(',', '.')); return isNaN(v) ? d : v; };
@@ -3859,14 +3864,14 @@ function imprimirEtiquetas(items, titulo){
     C.gap = Math.max(0, Math.min(20, num('#eGap', 0))); C.gv = Math.max(0, Math.min(20, num('#eGv', 0)));
     const M = ETQ_MEDIDAS.find((x) => x[0] !== 'custom' && x[2] === C.w && x[3] === C.h && x[4] === C.cols);
     C.med = M ? M[0] : 'custom'; q('#eMed').value = C.med;
-    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value;
+    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.met = q('#eMet').value; C.leng = q('#eLeng').value;
     C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
     C.offX = num('#eOx', 0); C.offY = num('#eOy', 0);
     ls.set('etqCfg', C);
   };
   const ponerCampos = () => {
     q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
-    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo;
+    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eMet').value = C.met || (esCelular() ? 'bt' : 'sistema'); q('#eLeng').value = C.leng || 'tspl'; ayudaMet();
     q('#eTi').checked = C.tienda; q('#eNo').checked = C.nombre; q('#ePr').checked = C.precio; q('#eCt').checked = C.codTxt; q('#eIv').checked = C.ivaTxt; q('#eOx').value = C.offX || ''; q('#eOy').value = C.offY || '';
   };
   const prevW = () => Math.max(120, Math.min(360, (q('#ePrev').clientWidth || 330) - 36));
@@ -3908,11 +3913,32 @@ function imprimirEtiquetas(items, titulo){
   m.b.addEventListener('change', (e) => { if (!e.target.closest('.etqgrid')) return;
     if (e.target.id === 'eMed') { const M = ETQ_MEDIDAS.find((x) => x[0] === e.target.value); if (M && M[0] !== 'custom') { C.w = M[2]; C.h = M[3]; C.cols = M[4]; C.gap = M[5]; ponerCampos(); }
       else { C.med = 'custom'; leer(); q('#eMed').value = 'custom'; pintarPrev(); pintarTam(); q('#eW').focus(); return; } }
-    leer(); pintarPrev(); pintarTam(); });
+    leer(); ayudaMet(); pintarPrev(); pintarTam(); });
   const lista = () => L.filter((x) => x.q > 0);
   const listo = () => { leer(); if (!lista().length) { toast('Agrega productos para imprimir.', true); return false; } return true; };
-  q('#eImp').onclick = () => { if (!listo()) return; const n = lista().reduce((s, x) => s + x.q, 0); if (n > 500) toast('Son ' + n + ' etiquetas: la impresión puede tardar.'); imprimirHTML(documentoEtiquetas(lista(), C)); };
-  q('#ePrueba').onclick = () => { if (!listo()) return; imprimirHTML(documentoEtiquetas([{ p: lista()[0].p, q: C.cols }], C)); };
+  const AYUDA = {
+    sistema: 'Se abre la ventana de impresión: en la PC elige tu impresora térmica; en el celular aparecen las impresoras WiFi o de red (Mopria). <b>Márgenes: Ninguno</b> y <b>Escala 100 %</b>.',
+    bt: 'Enciende la impresora y el Bluetooth del teléfono, pulsa <b>Buscar impresora Bluetooth</b> y elígela de la lista. Funciona en <b>Google Chrome</b> (Android o PC) con impresoras Bluetooth BLE. Si tu impresora no aparece, usa <b>App RawBT</b>.',
+    rawbt: 'Instala gratis <b>RawBT</b> desde Play Store, empareja ahí tu impresora (Bluetooth, USB o WiFi) una sola vez, y luego imprime desde aquí. Sirve para casi todas las impresoras térmicas chinas.',
+    pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
+  };
+  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = AYUDA[v] || ''; q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none';
+    q('#eBTrow').style.display = v === 'bt' ? '' : 'none'; q('#eBTnom').textContent = BT && BT.car ? '✓ Conectada: ' + BT.nombre : (ls.get('etqBT', '') ? 'Última usada: ' + ls.get('etqBT', '') : ''); }
+  q('#eBTbus').onclick = async () => { try { await conectarBT(true); ayudaMet(); toast('Impresora conectada: ' + BT.nombre); } catch (e) { if (e && e.name !== 'NotFoundError') toast(e.message, true); } };
+  const imprimir = async (l) => {
+    leer(); const met = C.met || 'sistema';
+    try {
+      if (met === 'sistema') return imprimirSistema(documentoEtiquetas(l, C));
+      if (met === 'pdf') return await compartirPDFEtq(l, C);
+      toast('Preparando etiquetas…');
+      const bytes = comandosEtq(l, C, C.leng || 'tspl');
+      if (met === 'rawbt') return enviarRawBT(bytes);
+      await enviarBT(bytes, (f) => { q('#eBTnom').textContent = 'Enviando… ' + Math.round(f * 100) + ' %'; });
+      ayudaMet(); toast('Etiquetas enviadas a ' + BT.nombre);
+    } catch (e) { ayudaMet(); if (e && e.name === 'NotFoundError') return; toast('No se pudo imprimir: ' + (e.message || e), true); }
+  };
+  q('#eImp').onclick = () => { if (!listo()) return; const n = lista().reduce((s, x) => s + x.q, 0); if (n > 500) toast('Son ' + n + ' etiquetas: la impresión puede tardar.'); imprimir(lista()); };
+  q('#ePrueba').onclick = () => { if (!listo()) return; imprimir([{ p: lista()[0].p, q: C.cols }]); };
   q('#ePdf').onclick = async () => { if (!listo()) return; try { const d = await pdfEtiquetas(lista(), C); descargar(d.output('blob'), 'Etiquetas ' + C.w + 'x' + C.h + ' ' + hoyISO() + '.pdf'); } catch (e) { toast(e.message, true); } };
   const pintarTam = () => {
     q('#eTam').innerHTML = '<div class="small muted" style="margin:0 0 6px">Toca una casilla en la vista previa: <b>arrástrala</b> para moverla y usa los <b>cuadritos de las esquinas y los lados</b> para alargarla o acortarla en cualquier dirección. Si el texto no entra, agranda la casilla hacia abajo y pasa a 2 filas.</div>' +
@@ -3969,6 +3995,134 @@ function imprimirEtiquetas(items, titulo){
   pintarTam();
   ponerCampos(); pintarLista();
   setTimeout(pintarPrev, 60);
+}
+
+/* =====================================================================
+   IMPRESIÓN DIRECTA (celular y PC)
+   - Bluetooth directo (Web Bluetooth: Chrome en Android / PC)
+   - App RawBT (Android: Bluetooth clásico, USB o WiFi)
+   - Compartir PDF a la app de la impresora / Mopria (WiFi)
+   - Ventana de impresión del sistema
+   Lenguajes: TSPL (Xprinter, TSC, HPRT, iDPRT…), ZPL (Zebra), ESC/POS (tickets 58/80 mm)
+   ===================================================================== */
+const esCelular = () => /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
+const ETQ_METODOS = [['sistema', 'Ventana de impresión (PC, WiFi, Mopria)'], ['bt', 'Bluetooth directo (Chrome en Android o PC)'], ['rawbt', 'App RawBT (Android: Bluetooth, USB o WiFi)'], ['pdf', 'Compartir PDF a la app de la impresora']];
+const ETQ_LENG = [['tspl', 'TSPL — Xprinter, TSC, HPRT, iDPRT, Gprinter (etiquetadoras)'], ['zpl', 'ZPL — Zebra'], ['escpos', 'ESC/POS — impresoras de tickets 58/80 mm']];
+
+/** Ajusta un texto a varias filas dentro de un ancho (canvas) */
+function filasTexto(ctx, t, ancho, max){
+  const pal = String(t).split(/\s+/).filter(Boolean); const out = []; let lin = '';
+  pal.forEach((w) => { const prueba = lin ? lin + ' ' + w : w; if (ctx.measureText(prueba).width <= ancho || !lin) lin = prueba; else { out.push(lin); lin = w; } });
+  if (lin) out.push(lin);
+  if (out.length > max) { const r = out.slice(0, max); r[max - 1] = r[max - 1].replace(/\s*\S*$/, '') + '…'; return r; }
+  return out;
+}
+/** Dibuja una fila de etiquetas en un canvas a la resolución de la impresora */
+function canvasFila(prods, C){
+  const dpm = (C.dpi || 203) / 25.4, PW = C.cols * C.w + (C.cols - 1) * C.gap;
+  const cw = Math.ceil(PW * dpm / 8) * 8, ch = Math.round(C.h * dpm);
+  const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = '#000'; ctx.textBaseline = 'alphabetic';
+  const K = cajasEtq(C), fs = letrasEtq(C), d = (mm) => mm * dpm;
+  prods.forEach((p, col) => {
+    const X0 = col * (C.w + C.gap) + (C.offX || 0), Y0 = C.offY || 0;
+    ETQ_EL.forEach(([k]) => {
+      if (!elVisible(C, k)) return; const b = K[k], E = estiloEl(C, k);
+      if (k === 'B') { const z = barrasEtq(p, C, b); const md = Math.max(1, Math.round(z.mw * dpm)); const bx = Math.round(d(X0 + b.x + (b.w - z.bw) / 2));
+        for (let i = 0; i < z.bc.mods.length;) { if (z.bc.mods[i] === '1') { let j = i; while (z.bc.mods[j] === '1') j++; ctx.fillRect(bx + i * md, Math.round(d(Y0 + b.y)), (j - i) * md, Math.round(d(b.h))); i = j; } else i++; }
+        return; }
+      const t = textoEl(k, p, C); if (!t) return;
+      const fpx = d(fs[k]); ctx.font = (E.b ? 'bold ' : '') + fpx.toFixed(1) + 'px ' + E.css;
+      const iva = k === 'P' && C.ivaTxt ? ' inc. IVA' : ''; let anchoIva = 0;
+      if (iva) { ctx.font = (fpx * 0.4).toFixed(1) + 'px ' + E.css; anchoIva = ctx.measureText(iva).width; ctx.font = (E.b ? 'bold ' : '') + fpx.toFixed(1) + 'px ' + E.css; }
+      const max = Math.max(1, Math.floor((b.h + 0.2) / (fs[k] * 1.1)));
+      const lns = filasTexto(ctx, t, d(b.w) - anchoIva, max);
+      let y = d(Y0 + b.y) + (d(b.h) - lns.length * fpx * 1.1) / 2 + fpx * 0.82;
+      lns.forEach((l, i) => {
+        const wl = ctx.measureText(l).width + (i === lns.length - 1 ? anchoIva : 0);
+        const x = E.al === 'left' ? d(X0 + b.x) : E.al === 'right' ? d(X0 + b.x + b.w) - wl : d(X0 + b.x) + (d(b.w) - wl) / 2;
+        ctx.fillText(l, x, y);
+        if (iva && i === lns.length - 1) { const f0 = ctx.font; ctx.font = (fpx * 0.4).toFixed(1) + 'px ' + E.css; ctx.fillText(iva, x + ctx.measureText(l).width + 0, y); ctx.font = f0; }
+        y += fpx * 1.1; });
+    });
+  });
+  return cv;
+}
+/** Canvas → bits (1 = punto negro), filas de bytes */
+function bitsCanvas(cv){
+  const w = cv.width, hgt = cv.height, bpr = w / 8, px = cv.getContext('2d').getImageData(0, 0, w, hgt).data;
+  const out = new Uint8Array(bpr * hgt);
+  for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11 < 150) out[y * bpr + (x >> 3)] |= 0x80 >> (x & 7); }
+  return { bpr, h: hgt, bits: out };
+}
+const txtBytes = (s) => new TextEncoder().encode(s);
+const unirBytes = (arr) => { const n = arr.reduce((s, a) => s + a.length, 0); const o = new Uint8Array(n); let i = 0; arr.forEach((a) => { o.set(a, i); i += a.length; }); return o; };
+/** Comandos para la impresora según su lenguaje */
+function comandosEtq(lista, C, leng){
+  const todas = []; lista.forEach((x) => { for (let i = 0; i < x.q; i++) todas.push(x.p); });
+  const filas = []; for (let i = 0; i < todas.length; i += C.cols) filas.push(todas.slice(i, i + C.cols));
+  const PW = C.cols * C.w + (C.cols - 1) * C.gap, partes = [];
+  filas.forEach((f) => {
+    const B = bitsCanvas(canvasFila(f, C));
+    if (leng === 'tspl') {
+      const inv = B.bits.map((v) => 255 - v);   // en TSPL 0 = punto negro
+      partes.push(txtBytes('SIZE ' + PW + ' mm,' + C.h + ' mm\r\nGAP ' + (Number(C.gv) || 2) + ' mm,0 mm\r\nDIRECTION 1,0\r\nREFERENCE 0,0\r\nDENSITY 10\r\nCLS\r\nBITMAP 0,0,' + B.bpr + ',' + B.h + ',0,'), inv, txtBytes('\r\nPRINT 1,1\r\n'));
+    } else if (leng === 'zpl') {
+      let hex = ''; for (let i = 0; i < B.bits.length; i++) hex += (B.bits[i] < 16 ? '0' : '') + B.bits[i].toString(16).toUpperCase();
+      partes.push(txtBytes('^XA^PW' + (B.bpr * 8) + '^LL' + B.h + '^FO0,0^GFA,' + B.bits.length + ',' + B.bits.length + ',' + B.bpr + ',' + hex + '^FS^XZ\n'));
+    } else {
+      partes.push(new Uint8Array([0x1b, 0x40, 0x1d, 0x76, 0x30, 0x00, B.bpr & 255, B.bpr >> 8, B.h & 255, B.h >> 8]), B.bits,
+        new Uint8Array([0x1b, 0x64, Math.max(1, Math.round((Number(C.gv) || 3) / 3.75))]));
+    }
+  });
+  return unirBytes(partes);
+}
+/* ---------- Bluetooth directo ---------- */
+let BT = null;   // { dev, car, nombre }
+const BT_SERV = ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', '49535343-fe7d-4ae5-8fa9-9fafd205e455', '0000ff00-0000-1000-8000-00805f9b34fb',
+  '0000fee7-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '0000ae30-0000-1000-8000-00805f9b34fb', '38eb4a80-c570-11e3-9507-0002a5d5c51b', '00001101-0000-1000-8000-00805f9b34fb'];
+async function conectarBT(nuevo){
+  if (!navigator.bluetooth) throw new Error(esCelular() ? 'Este navegador no permite Bluetooth directo. Usa Google Chrome en Android, o la opción "App RawBT".' : 'Usa Google Chrome o Edge para Bluetooth directo.');
+  if (BT && !nuevo && BT.dev.gatt.connected) return BT;
+  let dev = BT && !nuevo ? BT.dev : null;
+  if (!dev) dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BT_SERV });
+  const srv = await dev.gatt.connect();
+  let car = null;
+  for (const s of await srv.getPrimaryServices()) { for (const c of await s.getCharacteristics()) { if (c.properties.write || c.properties.writeWithoutResponse) { car = c; break; } } if (car) break; }
+  if (!car) throw new Error('La impresora se conectó pero no acepta datos por Bluetooth directo. Prueba con la app RawBT.');
+  BT = { dev, car, nombre: dev.name || 'Impresora Bluetooth' }; ls.set('etqBT', BT.nombre);
+  dev.addEventListener('gattserverdisconnected', () => { if (BT && BT.dev === dev) BT.car = null; });
+  return BT;
+}
+async function enviarBT(bytes, avance){
+  let b = await conectarBT(false); if (!b.car) b = await conectarBT(false);
+  const sinResp = b.car.properties.writeWithoutResponse; let paso = 180;
+  for (let i = 0; i < bytes.length;) {
+    const trozo = bytes.slice(i, i + paso);
+    try { if (sinResp) await b.car.writeValueWithoutResponse(trozo); else await b.car.writeValueWithResponse(trozo); i += trozo.length; }
+    catch (e) { if (paso > 20) { paso = 20; continue; } throw e; }
+    if (sinResp) await new Promise((r) => setTimeout(r, 12));
+    if (avance) avance(Math.min(1, i / bytes.length));
+  }
+}
+/* ---------- App RawBT (Android) ---------- */
+function enviarRawBT(bytes){
+  let bin = ''; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  location.href = 'intent:base64,' + btoa(bin) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+}
+/* ---------- Compartir PDF ---------- */
+async function compartirPDFEtq(lista, C){
+  const d = await pdfEtiquetas(lista, C); const blob = d.output('blob'); const nom = 'Etiquetas ' + C.w + 'x' + C.h + '.pdf';
+  const file = new File([blob], nom, { type: 'application/pdf' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: nom }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  descargar(blob, nom); toast('PDF descargado: ábrelo y usa Imprimir o Compartir.');
+}
+/* ---------- Ventana de impresión del sistema (en el celular se abre en una pestaña) ---------- */
+function imprimirSistema(html){
+  if (!esCelular()) return imprimirHTML(html);
+  const w = window.open('', '_blank');
+  if (!w) return imprimirHTML(html);
+  w.document.open(); w.document.write(html.replace('</body>', '<scr' + 'ipt>setTimeout(function(){window.print()},400)</scr' + 'ipt></body>')); w.document.close();
 }
 
 /* =====================================================================
