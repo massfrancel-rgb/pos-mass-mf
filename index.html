@@ -431,6 +431,8 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .etqprev{background:repeating-conic-gradient(#e9e4d8 0 25%,#f6f3ec 0 50%) 0 0/14px 14px;border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:center;overflow:hidden}.etqprev .etq{box-shadow:0 1px 4px rgba(0,0,0,.25);border-radius:1.5mm}
 .etqtam{padding:8px 10px}.tamrow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:9px;cursor:pointer}.tamrow.on{background:#FDECEA;box-shadow:inset 3px 0 0 #E0322B}.tamrow .btn.icon{width:34px;min-width:34px;font-size:20px;font-weight:800;padding:0}.tamrow .mini{width:58px;text-align:center}.etqprev [data-el]{cursor:pointer}
 .movpad{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;padding:6px 8px;background:var(--surface2);border-radius:9px}.movpad .btn.icon{width:36px;min-width:36px;font-size:18px;font-weight:800;padding:0}
+.etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
+.etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
 .etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
 </style>
 </head>
@@ -458,7 +460,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24c';
+const APP_VER = '2026-10-24d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3700,45 +3702,70 @@ const ETQ_MEDIDAS = [
   ['custom', 'Personalizada…', 50, 25, 1, 0]
 ];
 const ETQ_DEF = { med: '50x25', w: 50, h: 25, cols: 1, gap: 0, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
-  sT: 100, sN: 100, sB: 100, sW: 100, sC: 100, sP: 100, lin: 0 };
+  sT: 100, sN: 100, sC: 100, sP: 100, lays: {} };
 const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
-/** Elementos de la etiqueta que se pueden agrandar o reducir */
-const ETQ_TAM = [['sT', 'Nombre de la tienda', 'T'], ['sN', 'Descripción', 'N'], ['sB', 'Código de barras · alto', 'B'], ['sW', 'Código de barras · ancho', 'B'], ['sC', 'Número del código', 'C'], ['sP', 'Precio', 'P']];
+/** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
+const ETQ_EL = [['T', 'Nombre de la tienda', 'tienda', 'sT', 'center'], ['N', 'Descripción', 'nombre', 'sN', 'center'], ['B', 'Código de barras', '', '', 'center'],
+  ['C', 'Número del código', 'codTxt', 'sC', 'left'], ['P', 'Precio', 'precio', 'sP', 'right']];
+const elVisible = (C, k) => { const e = ETQ_EL.find((x) => x[0] === k); return !e[2] || !!C[e[2]]; };
 
-/** Desplazamiento (mm) que el usuario dio a cada parte arrastrándola */
-const posEtq = (C, k) => { const o = (C.pos || {})[k] || {}; return { x: Number(o.x) || 0, y: Number(o.y) || 0 }; };
-const movEtq = (C, k) => { const o = posEtq(C, k); return o.x || o.y ? 'position:relative;left:' + o.x + 'mm;top:' + o.y + 'mm;' : ''; };
-/** Calcula tamaños (en mm) de cada parte de la etiqueta */
-function medidasEtq(p, C){
-  const W = C.w, H = C.h, pad = Math.max(0.8, Math.min(2.5, H * 0.05)), f = (k) => (Number(C[k]) || 100) / 100;
-  const fsT = Math.max(1.5, Math.min(3.2, H * 0.075)) * f('sT'), fsN = Math.max(1.9, Math.min(5, H * 0.105)) * f('sN');
-  const fsC = Math.max(1.6, Math.min(3.6, H * 0.085)) * f('sC'), fsP = Math.max(2.4, Math.min(9, H * 0.17)) * f('sP');
-  const lineas = Number(C.lin) || (H >= 24 ? 2 : 1);
-  const gap = pad * 0.45;
-  const pieH = (C.codTxt || C.precio) ? Math.max(C.precio ? fsP : 0, C.codTxt ? fsC : 0) * 1.05 : 0;
-  const usado = 2 * pad + (C.tienda ? fsT * 1.05 + gap : 0) + (C.nombre ? fsN * 1.08 * lineas + gap : 0) + (pieH ? pieH + gap : 0);
-  const bh = Math.max(2, (H - usado) * f('sB'));
-  const bc = codigoEtiqueta(p, C.tipo);
-  const punto = 25.4 / (C.dpi || 203), ancho = W - 2 * pad;
-  let mw = Math.floor((ancho / (bc.mods.length + 20)) * f('sW') / punto) * punto;   // módulos exactos a los puntos de la impresora
-  mw = Math.max(punto, mw); while (mw > punto && mw * bc.mods.length > W - pad) mw -= punto;
-  return { W, H, pad, gap, fsT, fsN, fsC, fsP, lineas, pieH, bh, bc, mw, bw: mw * bc.mods.length, noCabe: usado + bh - H > 0.4 };
+/** Tamaños de letra (mm) según el alto de la etiqueta y el % elegido */
+function letrasEtq(C){
+  const H = C.h, f = (k) => (Number(C[k]) || 100) / 100;
+  return { T: Math.max(1.5, Math.min(3.2, H * 0.075)) * f('sT'), N: Math.max(1.9, Math.min(5, H * 0.105)) * f('sN'),
+    C: Math.max(1.6, Math.min(3.6, H * 0.085)) * f('sC'), P: Math.max(2.4, Math.min(9, H * 0.17)) * f('sP') };
 }
+/** Casillas por defecto (x, y, ancho, alto en mm) */
+function cajasDef(C){
+  const W = C.w, H = C.h, pad = Math.max(0.8, Math.min(2.5, H * 0.05)), gap = pad * 0.45, W2 = W - 2 * pad, fs = letrasEtq(C), r = (n) => Math.round(n * 4) / 4;
+  const o = {}; let y = pad;
+  o.T = { x: pad, y, w: W2, h: fs.T * 1.25 }; if (C.tienda) y += o.T.h + gap * 0.5;
+  const lin = H >= 24 ? 2 : 1; o.N = { x: pad, y, w: W2, h: fs.N * 1.12 * lin + 0.3 }; if (C.nombre) y += o.N.h + gap;
+  const conC = C.codTxt, conP = C.precio; const fh = (conC || conP) ? Math.max(conP ? fs.P : 0, conC ? fs.C : 0) * 1.2 : 0; const fy = H - pad - fh;
+  o.C = { x: pad, y: fy, w: conP ? W2 * 0.5 : W2, h: fh || fs.C * 1.2 };
+  o.P = { x: conC ? pad + W2 * 0.4 : pad, y: fy, w: conC ? W2 * 0.6 : W2, h: fh || fs.P * 1.2 };
+  o.B = { x: pad, y, w: W2, h: Math.max(2, fy - (fh ? gap : 0) - y) };
+  Object.keys(o).forEach((k) => { ['x', 'y', 'w', 'h'].forEach((z) => { o[k][z] = r(o[k][z]); }); });
+  return o;
+}
+const claveLay = (C) => C.w + 'x' + C.h;
+/** Casillas en uso: las que el usuario acomodó para esta medida, o las de por defecto */
+function cajasEtq(C){
+  const d = cajasDef(C), g = (C.lays || {})[claveLay(C)] || {};
+  const o = {}; ETQ_EL.forEach(([k]) => { o[k] = Object.assign({}, d[k], g[k] || {}); }); return o;
+}
+/** Barras dentro de su casilla: módulos exactos a los puntos de la impresora */
+function barrasEtq(p, C, caja){
+  const bc = codigoEtiqueta(p, C.tipo), punto = 25.4 / (C.dpi || 203);
+  let mw = Math.floor(caja.w / (bc.mods.length + 2) / punto) * punto; const angosto = mw < punto; if (angosto) mw = punto;
+  return { bc, mw, bw: mw * bc.mods.length, angosto };
+}
+const textoEl = (k, p, C) => (k === 'T' ? (cfg().nombre || 'MASS FERRETERÍA') : k === 'N' ? String(p.n || '') : k === 'C' ? codigoEtiqueta(p, C.tipo).txt : k === 'P' ? (Number(p.pv) ? money(p.pv) : '') : '');
 
-/** Dibujo de una etiqueta en HTML (medidas en mm) */
-function etiquetaHTML(p, C){
-  const M = medidasEtq(p, C), bc = M.bc, mw = M.mw, bw = M.bw;
-  let rects = '';
-  for (let i = 0; i < bc.mods.length;) { if (bc.mods[i] === '1') { let j = i; while (bc.mods[j] === '1') j++; rects += '<rect x="' + (i * mw).toFixed(4) + '" y="0" width="' + ((j - i) * mw).toFixed(4) + '" height="10"/>'; i = j; } else i++; }
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bw.toFixed(4) + ' 10" preserveAspectRatio="none" style="width:' + bw.toFixed(3) + 'mm;height:' + M.bh.toFixed(2) + 'mm;display:block;margin:0 auto">' + rects + '</svg>';
-  const precio = C.precio && Number(p.pv) ? money(p.pv) : '';
-  const pie = (C.codTxt || precio) ? '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1mm;line-height:1;flex:none">' +
-      (C.codTxt ? '<span data-el="C" style="' + movEtq(C, 'C') + 'font-size:' + M.fsC.toFixed(2) + 'mm;letter-spacing:.04em">' + h(bc.txt) + '</span>' : '<span></span>') +
-      (precio ? '<b data-el="P" style="' + movEtq(C, 'P') + 'font-size:' + M.fsP.toFixed(2) + 'mm;white-space:nowrap">' + precio + (C.ivaTxt ? '<small style="font-size:' + (M.fsP * 0.4).toFixed(2) + 'mm;font-weight:400"> inc. IVA</small>' : '') + '</b>' : '') + '</div>' : '';
-  return '<div class="etq" style="width:' + M.W + 'mm;height:' + M.H + 'mm;padding:' + M.pad + 'mm;box-sizing:border-box;display:flex;flex-direction:column;gap:' + M.gap.toFixed(2) + 'mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif">' +
-    (C.tienda ? '<div data-el="T" style="' + movEtq(C, 'T') + 'flex:none;font-size:' + M.fsT.toFixed(2) + 'mm;font-weight:700;text-align:center;line-height:1.05;white-space:nowrap;overflow:hidden">' + h(cfg().nombre || 'MASS FERRETERÍA') + '</div>' : '') +
-    (C.nombre ? '<div data-el="N" style="' + movEtq(C, 'N') + 'flex:none;font-size:' + M.fsN.toFixed(2) + 'mm;font-weight:700;line-height:1.08;text-align:center;display:-webkit-box;-webkit-line-clamp:' + M.lineas + ';-webkit-box-orient:vertical;overflow:hidden;word-break:break-word">' + h(p.n) + '</div>' : '') +
-    '<div style="flex:1 1 0;min-height:0;display:flex;align-items:center;justify-content:center"><div data-el="B" style="' + movEtq(C, 'B') + 'flex:none">' + svg + '</div></div>' + pie + '</div>';
+/** Dibujo de una etiqueta en HTML (medidas en mm). ed = vista de diseño con casillas */
+function etiquetaHTML(p, C, ed, sel){
+  const K = cajasEtq(C), fs = letrasEtq(C);
+  let html = '';
+  ETQ_EL.forEach(([k, , , , al]) => {
+    if (!elVisible(C, k)) return;
+    const b = K[k];
+    let cont = '';
+    if (k === 'B') {
+      const z = barrasEtq(p, C, b); let rects = '';
+      for (let i = 0; i < z.bc.mods.length;) { if (z.bc.mods[i] === '1') { let j = i; while (z.bc.mods[j] === '1') j++; rects += '<rect x="' + (i * z.mw).toFixed(4) + '" y="0" width="' + ((j - i) * z.mw).toFixed(4) + '" height="10"/>'; i = j; } else i++; }
+      cont = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + z.bw.toFixed(4) + ' 10" preserveAspectRatio="none" style="width:' + z.bw.toFixed(3) + 'mm;height:' + b.h + 'mm;display:block;flex:none">' + rects + '</svg>';
+    } else {
+      const t = textoEl(k, p, C); if (!t) return;
+      const lineas = Math.max(1, Math.floor((b.h + 0.2) / (fs[k] * 1.1)));
+      cont = '<div style="width:100%;font-size:' + fs[k].toFixed(2) + 'mm;line-height:1.1;font-weight:' + (k === 'C' ? 400 : 700) + ';text-align:' + al + ';letter-spacing:' + (k === 'C' ? '.04em' : '0') +
+        ';display:-webkit-box;-webkit-line-clamp:' + lineas + ';-webkit-box-orient:vertical;overflow:hidden;word-break:break-word">' + h(t) +
+        (k === 'P' && C.ivaTxt ? '<small style="font-size:' + (fs.P * 0.4).toFixed(2) + 'mm;font-weight:400"> inc. IVA</small>' : '') + '</div>';
+    }
+    html += '<div' + (ed ? ' data-el="' + k + '"' : '') + ' style="position:absolute;left:' + b.x + 'mm;top:' + b.y + 'mm;width:' + b.w + 'mm;height:' + b.h + 'mm;display:flex;align-items:center;justify-content:' +
+      (al === 'left' ? 'flex-start' : al === 'right' ? 'flex-end' : 'center') + ';overflow:hidden' + (ed ? ';outline:' + (sel === k ? '.35mm solid #E0322B' : '.2mm dashed rgba(0,0,0,.28)') + ';overflow:visible' : '') + '">' + cont +
+      (ed && sel === k ? ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map((d) => '<i class="hd hd-' + d + '" data-hd="' + d + '"></i>').join('') : '') + '</div>';
+  });
+  return '<div class="etq" style="position:relative;width:' + C.w + 'mm;height:' + C.h + 'mm;box-sizing:border-box;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif;flex:none">' + html + '</div>';
 }
 
 /** Documento completo para imprimir: una "página" por fila de etiquetas */
@@ -3767,23 +3794,29 @@ async function pdfEtiquetas(lista, C){
   const doc = new J({ unit: 'mm', format: [PW, PH], orientation: PW > PH ? 'l' : 'p' });
   const todas = []; lista.forEach((x) => { for (let i = 0; i < x.q; i++) todas.push(x.p); });
   const pt = (mm) => mm / 0.3528;
+  const K = cajasEtq(C), fs = letrasEtq(C);
   todas.forEach((p, idx) => {
     const col = idx % C.cols; if (idx && !col) doc.addPage([PW, PH], PW > PH ? 'l' : 'p');
-    const M = medidasEtq(p, C); const X = col * (C.w + C.gap) + C.offX, W = M.W, H = M.H, pad = M.pad;
-    let y = pad + C.offY; doc.setTextColor(0, 0, 0);
-    const oT = posEtq(C, 'T'), oN = posEtq(C, 'N'), oB = posEtq(C, 'B'), oC = posEtq(C, 'C'), oP = posEtq(C, 'P');
-    if (C.tienda) { doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(M.fsT)); doc.text(cfg().nombre || 'MASS FERRETERIA', X + W / 2 + oT.x, y + M.fsT * 0.8 + oT.y, { align: 'center', maxWidth: W - 2 * pad }); y += M.fsT * 1.05 + M.gap; }
-    if (C.nombre) { doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(M.fsN));
-      const ls2 = doc.splitTextToSize(String(p.n), W - 2 * pad).slice(0, M.lineas); ls2.forEach((l) => { doc.text(l, X + W / 2 + oN.x, y + M.fsN * 0.8 + oN.y, { align: 'center' }); y += M.fsN * 1.08; }); y += M.gap; }
-    const yPie = H - pad - (M.pieH ? M.pieH + M.gap : 0) + C.offY;
-    const by = y + Math.max(0, (yPie - y - M.bh) / 2), bx = X + (W - M.bw) / 2;
-    doc.setFillColor(0, 0, 0);
-    for (let i = 0; i < M.bc.mods.length;) { if (M.bc.mods[i] === '1') { let j = i; while (M.bc.mods[j] === '1') j++; doc.rect(bx + oB.x + i * M.mw, by + oB.y, (j - i) * M.mw, M.bh, 'F'); i = j; } else i++; }
-    const yb = H - pad + C.offY;
-    if (C.codTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(M.fsC)); doc.text(M.bc.txt, X + pad + oC.x, yb + oC.y); }
-    if (C.precio && Number(p.pv)) { doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(M.fsP)); let xr = X + W - pad + oP.x; const yp = yb + oP.y;
-      if (C.ivaTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(M.fsP * 0.4)); doc.text(' inc. IVA', xr, yp, { align: 'right' }); xr -= doc.getTextWidth(' inc. IVA'); doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(M.fsP)); }
-      doc.text(money(p.pv), xr, yp, { align: 'right' }); }
+    const X0 = col * (C.w + C.gap) + C.offX, Y0 = C.offY; doc.setTextColor(0, 0, 0); doc.setFillColor(0, 0, 0);
+    ETQ_EL.forEach(([k, , , , al]) => {
+      if (!elVisible(C, k)) return; const b = K[k];
+      if (k === 'B') { const z = barrasEtq(p, C, b); const bx = X0 + b.x + (b.w - z.bw) / 2;
+        for (let i = 0; i < z.bc.mods.length;) { if (z.bc.mods[i] === '1') { let j = i; while (z.bc.mods[j] === '1') j++; doc.rect(bx + i * z.mw, Y0 + b.y, (j - i) * z.mw, b.h, 'F'); i = j; } else i++; }
+        return; }
+      const t = textoEl(k, p, C); if (!t) return;
+      doc.setFont('helvetica', k === 'C' ? 'normal' : 'bold'); doc.setFontSize(pt(fs[k]));
+      const iva = k === 'P' && C.ivaTxt ? ' inc. IVA' : '';
+      let anchoIva = 0; if (iva) { doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(fs.P * 0.4)); anchoIva = doc.getTextWidth(iva); doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(fs.P)); }
+      const max = Math.max(1, Math.floor((b.h + 0.2) / (fs[k] * 1.1)));
+      let lns = doc.splitTextToSize(t, Math.max(1, b.w - anchoIva)); if (lns.length > max) { lns = lns.slice(0, max); lns[max - 1] = lns[max - 1].replace(/\s*\S*$/, '') + '…'; }
+      const alto = lns.length * fs[k] * 1.1; let y = Y0 + b.y + (b.h - alto) / 2 + fs[k] * 0.82;
+      lns.forEach((l, i) => {
+        const xa = al === 'left' ? X0 + b.x : al === 'right' ? X0 + b.x + b.w - (i === lns.length - 1 ? anchoIva : 0) : X0 + b.x + (b.w - (i === lns.length - 1 ? anchoIva : 0)) / 2;
+        doc.text(l, xa, y, { align: al });
+        if (iva && i === lns.length - 1) { const wl = doc.getTextWidth(l); const xi = al === 'left' ? xa + wl : al === 'right' ? xa : xa + wl / 2;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(fs.P * 0.4)); doc.text(iva, xi, y); doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(fs.P)); }
+        y += fs[k] * 1.1; });
+    });
   });
   return doc;
 }
@@ -3799,10 +3832,10 @@ function imprimirEtiquetas(items, titulo){
       '<div class="grid3" id="eCus"><label class="f">Ancho (mm)<input class="in" id="eW" inputmode="decimal"></label><label class="f">Alto (mm)<input class="in" id="eH" inputmode="decimal"></label><label class="f">Por fila<select class="in" id="eCols"><option>1</option><option>2</option><option>3</option><option>4</option></select></label></div>' +
       '<div class="grid3"><label class="f">Impresora<select class="in" id="eDpi"><option value="203">203 dpi (la mayoría)</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>' +
       '<label class="f">Código<select class="in" id="eTipo"><option value="auto">De barras (o interno)</option><option value="interno">Siempre el interno</option></select></label>' +
-      '<label class="f">Líneas de descripción<select class="in" id="eLin"><option value="0">Automático</option><option value="1">1 línea</option><option value="2">2 líneas</option><option value="3">3 líneas</option><option value="4">4 líneas</option></select></label></div>' +
+      '</div>' +
       '<div class="row" style="gap:6px 14px"><label class="chk"><input type="checkbox" id="eTi"> Nombre de la tienda</label><label class="chk"><input type="checkbox" id="eNo"> Descripción</label>' +
       '<label class="chk"><input type="checkbox" id="ePr"> Precio</label><label class="chk"><input type="checkbox" id="eCt"> Número del código</label><label class="chk"><input type="checkbox" id="eIv"> "inc. IVA"</label></div>' +
-      '<div class="card etqtam"><div class="row" style="margin-bottom:4px"><b>Tamaño y posición de cada parte</b><span class="spacer"></span><button class="btn sm" id="ePosR" type="button">' + ic('rotate') + 'Posiciones</button><button class="btn sm" id="eTamR" type="button">' + ic('rotate') + 'Restablecer</button></div><div id="eTam"></div></div>' +
+      '<div class="card etqtam"><div class="row" style="margin-bottom:4px"><b>Casillas de la etiqueta</b><span class="spacer"></span><button class="btn sm" id="ePosR" type="button">' + ic('rotate') + 'Posiciones</button><button class="btn sm" id="eTamR" type="button">' + ic('rotate') + 'Restablecer</button></div><div id="eTam"></div></div>' +
       '<details><summary class="small" style="cursor:pointer">Ajuste fino (si sale corrida)</summary><div class="grid3" style="margin-top:6px"><label class="f">Mover → (mm)<input class="in" id="eOx" inputmode="decimal"></label><label class="f">Mover ↓ (mm)<input class="in" id="eOy" inputmode="decimal"></label><label class="f">Separación entre columnas (mm)<input class="in" id="eGap" inputmode="decimal"></label></div></details>' +
     '</div><div><div class="small muted" style="margin-bottom:4px">Vista previa</div><div class="etqprev" id="ePrev"></div><div class="small muted" id="eInfo" style="margin-top:6px"></div></div></div>' +
     '<div id="eBus" style="margin:12px 0 8px"></div><div class="row small" style="margin-bottom:6px"><b id="eTot"></b><span class="spacer"></span><button class="btn sm" id="eStock" type="button">Cantidad = stock</button><button class="btn sm" id="eUno" type="button">1 de cada uno</button><button class="btn sm danger" id="eVac" type="button">' + ic('trash') + 'Vaciar</button></div>' +
@@ -3816,31 +3849,40 @@ function imprimirEtiquetas(items, titulo){
     if (med !== 'custom' && M) { C.w = M[2]; C.h = M[3]; C.cols = M[4]; C.gap = M[5]; }
     else { C.w = Math.max(10, parseFloat(String(q('#eW').value).replace(',', '.')) || 50); C.h = Math.max(8, parseFloat(String(q('#eH').value).replace(',', '.')) || 25); C.cols = +q('#eCols').value || 1; }
     const g = parseFloat(String(q('#eGap').value).replace(',', '.')); if (!isNaN(g) && (med === 'custom' || C.cols > 1)) C.gap = g;
-    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.lin = +q('#eLin').value;
+    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value;
     C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
     C.offX = parseFloat(String(q('#eOx').value).replace(',', '.')) || 0; C.offY = parseFloat(String(q('#eOy').value).replace(',', '.')) || 0;
     ls.set('etqCfg', C);
   };
   const ponerCampos = () => {
     q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
-    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eLin').value = String(C.lin || 0);
+    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo;
     q('#eTi').checked = C.tienda; q('#eNo').checked = C.nombre; q('#ePr').checked = C.precio; q('#eCt').checked = C.codTxt; q('#eIv').checked = C.ivaTxt; q('#eOx').value = C.offX || ''; q('#eOy').value = C.offY || '';
   };
-  const prevW = () => Math.min(330, m.b.clientWidth - 30);
-  let selTam = 'sN', escPrev = 1;
+  const prevW = () => Math.max(120, Math.min(360, (q('#ePrev').clientWidth || 330) - 36));
+  let sel = 'N', escPrev = 1;
+  const pEj = () => (L[0] && L[0].p) || { id: '11103', b: '', n: 'KALIPEGA 500 CC PLASTIGAMA (ejemplo)', pv: 11.95 };
   const pintarPrev = () => {
-    const p = (L[0] && L[0].p) || { id: '11103', b: '', n: 'KALIPEGA 500 CC PLASTIGAMA (ejemplo)', pv: 11.95 };
+    const p = pEj();
     const PW = C.cols * C.w + (C.cols - 1) * C.gap; const px = PW * 3.78;   // 1 mm ≈ 3,78 px
-    const esc = Math.min(3, prevW() / px); escPrev = esc;
-    q('#ePrev').innerHTML = '<div style="width:' + (px * esc) + 'px;height:' + (C.h * 3.78 * esc) + 'px"><div style="transform:scale(' + esc + ');transform-origin:0 0;display:flex;gap:' + C.gap + 'mm;width:' + PW + 'mm">' +
-      Array.from({ length: C.cols }, (_, i) => etiquetaHTML((L[i] && L[i].p) || p, C)).join('') + '</div></div>';
-    const sel = (ETQ_TAM.find((x) => x[0] === selTam) || [])[2];
-    if (sel) q('#ePrev').insertAdjacentHTML('beforeend', '<style>.etqprev [data-el="' + sel + '"]{outline:.45mm dashed #E0322B;outline-offset:.3mm}</style>');
+    const esc = Math.min(4, prevW() / px); escPrev = esc;
+    q('#ePrev').innerHTML = '<div style="width:' + (px * esc) + 'px;height:' + (C.h * 3.78 * esc) + 'px"><div style="transform:scale(' + esc + ');transform-origin:0 0;display:flex;gap:' + C.gap + 'mm;width:' + PW + 'mm;--hd:' + (9 / (3.78 * esc)).toFixed(3) + 'mm">' +
+      Array.from({ length: C.cols }, (_, i) => etiquetaHTML((L[i] && L[i].p) || p, C, i === 0, sel)).join('') + '</div></div>';
     q('#eCus').style.display = C.med === 'custom' ? '' : 'none';
-    const bc = codigoEtiqueta(p, C.tipo);
-    const M0 = medidasEtq(p, C);
-    q('#eInfo').innerHTML = (M0.noCabe ? '<b style="color:#C62828">⚠ Algunas partes no caben: reduce otra parte o el alto de las barras.</b><br>' : '') + h('Rollo de ' + (C.cols * C.w + (C.cols - 1) * C.gap) + ' mm de ancho · código ' + (bc.ean ? 'EAN-13' : 'Code 128') + ' · ' + C.dpi + ' dpi');
+    const K = cajasEtq(C), z = barrasEtq(p, C, K.B);
+    q('#eInfo').innerHTML = (z.angosto ? '<b style="color:#C62828">⚠ La casilla del código de barras es muy angosta: agrándala a lo ancho.</b><br>' : '') +
+      h('Rollo de ' + PW + ' mm de ancho · código ' + (z.bc.ean ? 'EAN-13' : 'Code 128') + ' · ' + C.dpi + ' dpi');
+    infoSel();
   };
+  const guardarCaja = (k, b) => {
+    const K = cajasEtq(C); const n = Object.assign({}, K[k], b);
+    n.w = Math.max(2, Math.min(C.w, n.w)); n.h = Math.max(1.5, Math.min(C.h, n.h));
+    n.x = Math.max(0, Math.min(C.w - n.w, n.x)); n.y = Math.max(0, Math.min(C.h - n.h, n.y));
+    ['x', 'y', 'w', 'h'].forEach((z) => { n[z] = Math.round(n[z] * 4) / 4; });
+    K[k] = n; C.lays = Object.assign({}, C.lays || {}); C.lays[claveLay(C)] = K; ls.set('etqCfg', C);
+  };
+  const infoSel = () => { const b = cajasEtq(C)[sel]; if (q('#eSelN')) q('#eSelN').textContent = (ETQ_EL.find((x) => x[0] === sel) || [])[1] || '';
+    if (q('#ePosTxt') && b) q('#ePosTxt').textContent = 'x ' + b.x + ' · y ' + b.y + ' · ' + b.w + ' × ' + b.h + ' mm'; };
   const pintarLista = () => {
     q('#eList').innerHTML = L.length ? L.map((x, i) => '<div class="li" data-i="' + i + '">' + thumb(x.p, 'sm') + '<div class="grow"><div class="t">' + h(x.p.n) + '</div><div class="s">' + h(x.p.id) + (x.p.b ? ' · ' + h(x.p.b) : '') + ' · stock ' + numf(stockDe(x.p.id)) + ' · ' + money(x.p.pv) + '</div></div>' +
       '<label class="minilbl">Copias<input class="mini pct" data-q inputmode="numeric" value="' + x.q + '"></label><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('x') + '</button></div>').join('')
@@ -3863,43 +3905,54 @@ function imprimirEtiquetas(items, titulo){
   q('#ePrueba').onclick = () => { if (!listo()) return; imprimirHTML(documentoEtiquetas([{ p: lista()[0].p, q: C.cols }], C)); };
   q('#ePdf').onclick = async () => { if (!listo()) return; try { const d = await pdfEtiquetas(lista(), C); descargar(d.output('blob'), 'Etiquetas ' + C.w + 'x' + C.h + ' ' + hoyISO() + '.pdf'); } catch (e) { toast(e.message, true); } };
   const pintarTam = () => {
-    q('#eTam').innerHTML = '<div class="small muted" style="margin:0 0 6px">Arrastra cada parte en la vista previa con el mouse o el dedo, o usa las flechas para moverla poco a poco.</div>' +
-      '<div class="movpad"><span class="small">Mover <b id="eSelN"></b>:</span><button class="btn sm icon" data-mv="-0.5,0" type="button" aria-label="Izquierda">←</button><button class="btn sm icon" data-mv="0,-0.5" type="button" aria-label="Arriba">↑</button>' +
-      '<button class="btn sm icon" data-mv="0,0.5" type="button" aria-label="Abajo">↓</button><button class="btn sm icon" data-mv="0.5,0" type="button" aria-label="Derecha">→</button><span class="small muted" id="ePosTxt"></span></div>' + ETQ_TAM.map(([k, t]) => '<div class="tamrow' + (k === selTam ? ' on' : '') + '" data-k="' + k + '"><span class="grow">' + t + '</span>' +
-      '<button class="btn sm icon" data-d="-10" type="button" aria-label="Reducir">−</button><input class="mini pct" data-v inputmode="numeric" value="' + (C[k] || 100) + '"><span class="small">%</span>' +
-      '<button class="btn sm icon" data-d="10" type="button" aria-label="Agrandar">+</button></div>').join('');
+    q('#eTam').innerHTML = '<div class="small muted" style="margin:0 0 6px">Toca una casilla en la vista previa: <b>arrástrala</b> para moverla y usa los <b>cuadritos de las esquinas y los lados</b> para alargarla o acortarla en cualquier dirección. Si el texto no entra, agranda la casilla hacia abajo y pasa a 2 filas.</div>' +
+      '<div class="movpad"><span class="small"><b id="eSelN"></b></span><span class="spacer"></span>' +
+      '<button class="btn sm icon" data-mv="-0.5,0,0,0" type="button" aria-label="Izquierda">←</button><button class="btn sm icon" data-mv="0,-0.5,0,0" type="button" aria-label="Arriba">↑</button><button class="btn sm icon" data-mv="0,0.5,0,0" type="button" aria-label="Abajo">↓</button><button class="btn sm icon" data-mv="0.5,0,0,0" type="button" aria-label="Derecha">→</button>' +
+      '<span class="small">Ancho</span><button class="btn sm icon" data-mv="0,0,-0.5,0" type="button">−</button><button class="btn sm icon" data-mv="0,0,0.5,0" type="button">+</button>' +
+      '<span class="small">Alto</span><button class="btn sm icon" data-mv="0,0,0,-0.5" type="button">−</button><button class="btn sm icon" data-mv="0,0,0,0.5" type="button">+</button>' +
+      '<span class="small muted" id="ePosTxt" style="width:100%"></span></div>' +
+      ETQ_EL.map(([k, t, , sk]) => '<div class="tamrow' + (k === sel ? ' on' : '') + '" data-k="' + k + '"><span class="grow">' + t + (elVisible(C, k) ? '' : ' <span class="small muted">(oculto)</span>') + '</span>' +
+        (sk ? '<span class="small muted">Letra</span><button class="btn sm icon" data-d="-10" type="button" aria-label="Letra más pequeña">−</button><input class="mini pct" data-v inputmode="numeric" value="' + (C[sk] || 100) + '"><span class="small">%</span>' +
+        '<button class="btn sm icon" data-d="10" type="button" aria-label="Letra más grande">+</button>' : '<span class="small muted">ajusta la casilla</span>') + '</div>').join('');
+    infoSel();
   };
-  const elSel = () => (ETQ_TAM.find((x) => x[0] === selTam) || ETQ_TAM[1])[2];
-  const nomEl = { T: 'tienda', N: 'descripción', B: 'código de barras', C: 'número del código', P: 'precio' };
-  const infoPos = () => { const k = elSel(), o = posEtq(C, k); if (q('#eSelN')) q('#eSelN').textContent = nomEl[k]; if (q('#ePosTxt')) q('#ePosTxt').textContent = (o.x || o.y) ? '(' + o.x + ' / ' + o.y + ' mm)' : ''; };
-  const moverEl = (k, x, y) => { C.pos = Object.assign({}, C.pos || {}); C.pos[k] = { x: Math.round(x * 4) / 4, y: Math.round(y * 4) / 4 }; ls.set('etqCfg', C); };
-  const cambiaTam = (k, v) => { C[k] = Math.max(30, Math.min(300, Math.round(v))); selTam = k; ls.set('etqCfg', C); pintarTam(); pintarPrev(); infoPos(); };
-  q('#eTam').onclick = (e) => { const r = e.target.closest('[data-k]'); if (!r) return; const k = r.dataset.k; const b2 = e.target.closest('[data-d]');
-    if (b2) cambiaTam(k, (C[k] || 100) + Number(b2.dataset.d)); else if (e.target.closest('.movpad')) return; else if (!e.target.matches('input')) { selTam = k; pintarTam(); pintarPrev(); infoPos(); } };
-  q('#eTam').addEventListener('click', (e) => { const b3 = e.target.closest('[data-mv]'); if (!b3) return; const [dx, dy] = b3.dataset.mv.split(',').map(Number); const k = elSel(), o = posEtq(C, k);
-    moverEl(k, o.x + dx, o.y + dy); pintarPrev(); infoPos(); });
-  q('#eTam').onchange = (e) => { const r = e.target.closest('[data-k]'); if (r && e.target.matches('[data-v]')) cambiaTam(r.dataset.k, parseFloat(e.target.value) || 100); };
-  q('#ePosR').onclick = () => { C.pos = {}; ls.set('etqCfg', C); pintarPrev(); infoPos(); toast('Posiciones originales restablecidas'); };
-  q('#eTamR').onclick = () => { ETQ_TAM.forEach(([k]) => { C[k] = 100; }); C.lin = 0; q('#eLin').value = '0'; ls.set('etqCfg', C); pintarTam(); pintarPrev(); };
-  // arrastrar partes en la vista previa (mouse o dedo)
+  const skDe = (k) => (ETQ_EL.find((x) => x[0] === k) || [])[3];
+  const cambiaLetra = (k, v) => { const sk = skDe(k); if (!sk) return; C[sk] = Math.max(30, Math.min(300, Math.round(v))); sel = k; ls.set('etqCfg', C); pintarTam(); pintarPrev(); };
+  q('#eTam').onclick = (e) => {
+    const mv = e.target.closest('[data-mv]');
+    if (mv) { const [dx, dy, dw, dh] = mv.dataset.mv.split(',').map(Number); const b = cajasEtq(C)[sel]; guardarCaja(sel, { x: b.x + dx, y: b.y + dy, w: b.w + dw, h: b.h + dh }); pintarPrev(); return; }
+    const r = e.target.closest('[data-k]'); if (!r) return; const k = r.dataset.k; const b2 = e.target.closest('[data-d]');
+    if (b2) cambiaLetra(k, (C[skDe(k)] || 100) + Number(b2.dataset.d)); else if (!e.target.matches('input')) { sel = k; pintarTam(); pintarPrev(); } };
+  q('#eTam').onchange = (e) => { const r = e.target.closest('[data-k]'); if (r && e.target.matches('[data-v]')) cambiaLetra(r.dataset.k, parseFloat(e.target.value) || 100); };
+  q('#ePosR').onclick = () => { C.lays = Object.assign({}, C.lays || {}); delete C.lays[claveLay(C)]; ls.set('etqCfg', C); pintarPrev(); toast('Casillas originales restablecidas'); };
+  q('#eTamR').onclick = () => { ETQ_EL.forEach((x) => { if (x[3]) C[x[3]] = 100; }); ls.set('etqCfg', C); pintarTam(); pintarPrev(); };
+  // mover y redimensionar casillas con el mouse o el dedo
   let drag = null;
   q('#ePrev').addEventListener('pointerdown', (e) => {
     const el = e.target.closest('[data-el]'); if (!el) return;
-    const k = el.dataset.el; const t = ETQ_TAM.find((x) => x[2] === k && x[0] !== 'sW'); if (t) selTam = t[0];
-    const o = posEtq(C, k); drag = { k, x0: e.clientX, y0: e.clientY, ox: o.x, oy: o.y, mov: false };
+    const k = el.dataset.el; const hd = e.target.closest('[data-hd]');
+    if (k !== sel) { sel = k; pintarTam(); pintarPrev(); }
+    drag = { k, hd: hd ? hd.dataset.hd : '', x0: e.clientX, y0: e.clientY, b0: Object.assign({}, cajasEtq(C)[k]), mov: false };
     q('#ePrev').setPointerCapture(e.pointerId); e.preventDefault();
-    qsa('#ePrev [data-el]').forEach((n) => { n.style.outline = n.dataset.el === k ? '.45mm dashed #E0322B' : ''; n.style.outlineOffset = '.3mm'; });
   });
   q('#ePrev').addEventListener('pointermove', (e) => {
     if (!drag) return; const f = 3.78 * escPrev;   // píxeles por mm en la vista previa
-    const x = drag.ox + (e.clientX - drag.x0) / f, y = drag.oy + (e.clientY - drag.y0) / f; drag.mov = true;
-    qsa('#ePrev [data-el="' + drag.k + '"]').forEach((n) => { n.style.position = 'relative'; n.style.left = x + 'mm'; n.style.top = y + 'mm'; });
-    drag.x = x; drag.y = y;
+    const dx = (e.clientX - drag.x0) / f, dy = (e.clientY - drag.y0) / f; if (Math.abs(dx) + Math.abs(dy) < 0.15) return; drag.mov = true;
+    const b = Object.assign({}, drag.b0), d = drag.hd;
+    if (!d) { b.x += dx; b.y += dy; }
+    else {
+      if (d.includes('e')) b.w = drag.b0.w + dx;
+      if (d.includes('s')) b.h = drag.b0.h + dy;
+      if (d.includes('w')) { b.x = drag.b0.x + dx; b.w = drag.b0.w - dx; if (b.w < 2) { b.x -= 2 - b.w; b.w = 2; } }
+      if (d.includes('n')) { b.y = drag.b0.y + dy; b.h = drag.b0.h - dy; if (b.h < 1.5) { b.y -= 1.5 - b.h; b.h = 1.5; } }
+    }
+    if (drag.raf) cancelAnimationFrame(drag.raf);
+    const kk = drag.k; drag.raf = requestAnimationFrame(() => { guardarCaja(kk, b); pintarPrev(); });
   });
-  const soltar = () => { if (!drag) return; if (drag.mov) moverEl(drag.k, drag.x, drag.y); drag = null; pintarTam(); pintarPrev(); infoPos(); };
+  const soltar = () => { if (!drag) return; drag = null; pintarTam(); pintarPrev(); };
   q('#ePrev').addEventListener('pointerup', soltar); q('#ePrev').addEventListener('pointercancel', soltar);
   pintarTam();
-  ponerCampos(); pintarLista(); infoPos();
+  ponerCampos(); pintarLista();
   setTimeout(pintarPrev, 60);
 }
 
