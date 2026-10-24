@@ -427,6 +427,8 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .tbl .chkped{width:22px;height:22px;accent-color:#E07A1F;cursor:pointer}
 .ordbar{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.ordbar>span{display:inline-flex;white-space:nowrap;align-items:center;gap:6px;font-weight:700;font-size:14px}.ordbar>span .ico{width:18px;height:18px}.ordbar select{width:auto;min-width:220px;flex:1 1 220px;max-width:380px;min-height:40px}
 .tbl th.sortable{cursor:pointer;user-select:none;white-space:nowrap}.tbl th.sortable:hover{filter:brightness(1.25)}.tbl th .sarr{font-style:normal;font-size:11px;opacity:.55;margin-left:4px}
+.etqgrid{display:grid;grid-template-columns:1fr minmax(240px,340px);gap:14px;align-items:start}@media (max-width:760px){.etqgrid{grid-template-columns:1fr}}
+.etqprev{background:repeating-conic-gradient(#e9e4d8 0 25%,#f6f3ec 0 50%) 0 0/14px 14px;border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:center;overflow:hidden}.etqprev .etq{box-shadow:0 1px 4px rgba(0,0,0,.25);border-radius:1.5mm}
 </style>
 </head>
 <body>
@@ -453,7 +455,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-18k';
+const APP_VER = '2026-10-24a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -555,6 +557,7 @@ const IC = {
   compare: '<path d="M8 3 4 7l4 4M4 7h12M16 21l4-4-4-4M20 17H8"/>',
   trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM5 5H3v2a3 3 0 0 0 3 3M19 5h2v2a3 3 0 0 1-3 3M12 13v4M8 21h8M9 17h6"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  barcode: '<path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14" stroke-width="1.6"/><path d="M8 5v14M19 5v14" stroke-width="0.8"/>',
   tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17v.5"/>',
   rotate: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/>',
@@ -1731,9 +1734,10 @@ function pgInventario(){
   let tab = prm.get('t') || ls.get('invTab', 'prod');
   if (tab === 'conteo' && !puede('inv')) tab = 'prod';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + '<button class="btn sm c3d ca" id="iEtq">' + ic('barcode') + 'Etiquetas</button>' + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
     '<div class="tabs" id="iTabs"><button data-t="prod">Productos y stock</button>' + (puede('inv') ? '<button data-t="conteo">Conteo con escáner</button><button data-t="mov">Ajustes de stock</button>' : '') + '</div><div id="iBody"></div>';
   if ($('iNuevo')) $('iNuevo').onclick = () => editarProducto(null);
+  $('iEtq').onclick = () => imprimirEtiquetas([]);
   const go = (t) => { tab = t; ls.set('invTab', t); qsa('#iTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
     if (t === 'prod') invProductos(); else if (t === 'conteo') invConteo(); else invMovs(); };
   $('iTabs').onclick = (e) => { const b = e.target.closest('button'); if (b) go(b.dataset.t); };
@@ -1837,11 +1841,12 @@ function editarProducto(p, pre, onDone){
     foot: '<button class="btn" data-x>Cerrar</button>' + (!nuevo ? '<button class="btn" id="epKx">' + ic('doc') + 'Kárdex</button>' : '') +
       (!nuevo && puede('inv') ? '<button class="btn" id="epAj">' + ic('box') + 'Ajustar stock</button>' : '') +
       (!nuevo && esAdmin() ? '<button class="btn danger" id="epDel">' + ic('trash') + 'Eliminar</button>' : '') +
-      (!nuevo ? '<button class="btn" id="epVen">' + ic('cart') + 'Vender</button>' : '') +
+      (!nuevo ? '<button class="btn" id="epVen">' + ic('cart') + 'Vender</button><button class="btn c3d ca" id="epEtq">' + ic('barcode') + 'Etiqueta</button>' : '') +
       (ed || puede('inv') ? '<button class="btn pri" id="epOk">' + ic('check') + 'Guardar</button>' : '') });
   const margen = () => { const co = parseFloat(m.q('#epCo').value) || 0, pv = parseFloat(m.q('#epPv').value) || 0, iva = parseFloat(String(m.q('#epIva').value).replace(',', '.')) || 0;
     const base = iva ? pv / (1 + iva / 100) : pv; const e = m.q('#epMg'); if (e) e.textContent = co && base ? Math.round((base - co) / base * 100) + '%' : '—'; };
   ['#epCo', '#epPv', '#epIva'].forEach((s2) => m.q(s2).addEventListener('input', margen)); margen();
+  if (m.q('#epEtq')) m.q('#epEtq').onclick = () => { m.close(); imprimirEtiquetas([{ p: S.prod.get(p.id) || p, q: 1 }], 'Etiqueta de ' + p.id); };
   if (m.q('#epScan')) m.q('#epScan').onclick = () => escanear((code) => { const otro = porCodigo(code); if (otro && otro.id !== p.id) return { ok: false, msg: 'Ese código ya es de: ' + otro.n }; m.q('#epB').value = code; return { msg: 'Código ' + code }; });
   if (m.q('#epFile')) m.q('#epFile').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -1916,7 +1921,7 @@ function invConteo(){
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
     '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
-    '<div class="row"><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
+    '<div class="row"><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const guardar = () => ls.set('conteo', C);
   const sumar = (p, q) => { if (!(p.id in C.it)) { C.it[p.id] = 0; C.ord.unshift(p.id); } else { C.ord = [p.id].concat(C.ord.filter((x) => x !== p.id)); } C.it[p.id] = r2(C.it[p.id] + q); guardar(); pintar(); };
   const leer = async (p) => {
@@ -1938,6 +1943,7 @@ function invConteo(){
   $('ctBody').onchange = (e) => { const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
   $('ctBody').onclick = (e) => { const x = e.target.closest('[data-del]'); if (!x) return; delete C.it[x.dataset.del]; C.ord = C.ord.filter((i) => i !== x.dataset.del); guardar(); pintar(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?', 'Descartar', true)) { ls.del('conteo'); invConteo(); } };
+  $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
   $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Sistema', 'Contado', 'Diferencia'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s)]; }));
   $('ctApl').onclick = async () => {
     const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id)) })).filter((x) => x.d);
@@ -2093,8 +2099,9 @@ function verCompra(c){
     '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Producto</th><th class="n">Costo</th><th class="n">IVA</th><th class="n">Subtotal</th></tr></thead><tbody>' +
     (c.it || []).map((x) => '<tr><td class="n">' + numf(x.q) + '</td><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + '</div></td><td class="n">' + money(x.co) + '</td><td class="n">' + (x.iva || 0) + '%</td><td class="n">' + money(x.co * x.q) + '</td></tr>').join('') +
     '</tbody><tfoot><tr><td colspan="4">Subtotal ' + cfg().iva + '% ' + money(t.sub12) + ' · 0% ' + money(t.sub0) + ' · IVA ' + money(t.iva) + '</td><td class="n">' + money(t.tot) + '</td></tr></tfoot></table></div>' + '<div style="margin-top:10px">' + casillasCompra(c.it) + '</div>' + (ff ? '<div class="row" style="margin-top:10px"><img src="' + ff + '" alt="Factura" class="ffmini" id="vcFoto"><span class="small muted">Foto de la factura · toca para ver</span></div>' : '') + (nds.length ? '<div class="note warn" style="margin-top:10px">Notas de débito: ' + nds.map((n) => '<b>' + h(n.num || 's/n') + '</b> ' + h(n.conc || '') + ' (' + money(n.tot) + ')').join(', ') + '</div>' : '') + (c.nota ? '<p>Nota: ' + h(c.nota) + '</p>' : ''),
-    foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vcX">' + ic('sheet') + 'Excel</button>' + (!c.an && puede('compras') ? '<button class="btn c3d co" id="vcNd">' + ic('receipt') + 'Nota de débito</button>' : '') + (!c.an && esAdmin() ? '<button class="btn" id="vcEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="vcAn">' + ic('x') + 'Anular</button>' : '') });
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn" id="vcX">' + ic('sheet') + 'Excel</button><button class="btn c3d ca" id="vcEtq">' + ic('barcode') + 'Etiquetas</button>' + (!c.an && puede('compras') ? '<button class="btn c3d co" id="vcNd">' + ic('receipt') + 'Nota de débito</button>' : '') + (!c.an && esAdmin() ? '<button class="btn" id="vcEd">' + ic('edit') + 'Editar</button><button class="btn danger" id="vcAn">' + ic('x') + 'Anular</button>' : '') });
   m.q('#vcX').onclick = () => exportarFilas('Compra ' + (c.num || c.id), ['Código', 'Producto', 'Cantidad', 'Costo', 'IVA %', 'Subtotal'], (c.it || []).map((x) => [x.p, x.n, x.q, x.co, x.iva, r2(x.co * x.q)]));
+  m.q('#vcEtq').onclick = () => { m.close(); imprimirEtiquetas((c.it || []).map((x) => ({ p: S.prod.get(x.p), q: x.q })), 'Etiquetas de la compra ' + (c.num || '')); };
   if (m.q('#vcEd')) m.q('#vcEd').onclick = () => { m.close(); editarCompra(c); };
   if (m.q('#vcNd')) m.q('#vcNd').onclick = () => { m.close(); notaDebito(c); };
   if (m.q('#vcFoto')) m.q('#vcFoto').onclick = () => verFotoFactura(c.id, c.num);
@@ -3616,6 +3623,224 @@ async function pdfPedidoProv(P){
   doc.setFontSize(8.5); doc.setTextColor(...gris);
   doc.text(doc.splitTextToSize('Por favor confirmar disponibilidad, precios y fecha de entrega. Este pedido no es una factura.', W - 2 * Mg), Mg, Math.min(y + 4, 285));
   return doc;
+}
+
+/* =====================================================================
+   ETIQUETAS CON CÓDIGO DE BARRAS para impresoras térmicas
+   (Zebra, TSC, Xprinter, 3nStar, Honeywell, Brother…)
+   Code 128 para los códigos internos y EAN-13 para los códigos de fábrica.
+   ===================================================================== */
+const C128 = '11011001100 11001101100 11001100110 10010011000 10010001100 10001001100 10011001000 10011000100 10001100100 11001001000 11001000100 11000100100 10110011100 10011011100 10011001110 10111001100 10011101100 10011100110 11001110010 11001011100 11001001110 11011100100 11001110100 11101101110 11101001100 11100101100 11100100110 11101100100 11100110100 11100110010 11011011000 11011000110 11000110110 10100011000 10001011000 10001000110 10110001000 10001101000 10001100010 11010001000 11000101000 11000100010 10110111000 10110001110 10001101110 10111011000 10111000110 10001110110 11101110110 11010001110 11000101110 11011101000 11011100010 11011101110 11101011000 11101000110 11100010110 11101101000 11101100010 11100011010 11101111010 11001000010 11110001010 10100110000 10100001100 10010110000 10010000110 10000101100 10000100110 10110010000 10110000100 10011010000 10011000010 10000110100 10000110010 11000010010 11001010000 11110111010 11000010100 10001111010 10100111100 10010111100 10010011110 10111100100 10011110100 10011110010 11110100100 11110010100 11110010010 11011011110 11011110110 11110110110 10101111000 10100011110 10001011110 10111101000 10111100010 11110101000 11110100010 10111011110 10111101110 11101011110 11110101110 11010000100 11010010000 11010011100'.split(' ');
+const C128_STOP = '1100011101011';
+
+/** Code 128 (B para letras, C para números: barras más cortas) → cadena de módulos 1/0 */
+function code128(txt){
+  const s = String(txt).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '');
+  const vals = [];
+  if (/^\d{4,}$/.test(s)) {
+    let i = 0;
+    if (s.length % 2) { vals.push(104, s.charCodeAt(0) - 32, 99); i = 1; } else vals.push(105);
+    for (; i < s.length; i += 2) vals.push(parseInt(s.substr(i, 2), 10));
+  } else {
+    vals.push(104); for (const ch of s) vals.push(ch.charCodeAt(0) - 32);
+  }
+  let sum = vals[0]; for (let i = 1; i < vals.length; i++) sum += vals[i] * i;
+  vals.push(sum % 103);
+  return { mods: vals.map((v) => C128[v]).join('') + C128_STOP, txt: s };
+}
+const EAN_L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+const EAN_G = ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '0000101', '0010001', '0001001', '0010111'];
+const EAN_R = ['1110010', '1100110', '1101100', '1000010', '1011100', '1001110', '1010000', '1000100', '1001000', '1110100'];
+const EAN_P = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+function eanValido(c){
+  if (!/^\d{13}$/.test(c)) return false;
+  const d = c.split('').map(Number); const s = d.slice(0, 12).reduce((a, x, i) => a + x * (i % 2 ? 3 : 1), 0);
+  return (10 - (s % 10)) % 10 === d[12];
+}
+function ean13(c){
+  const d = c.split('').map(Number); const par = EAN_P[d[0]];
+  let m = '101'; for (let i = 1; i <= 6; i++) m += (par[i - 1] === 'L' ? EAN_L : EAN_G)[d[i]];
+  m += '01010'; for (let i = 7; i <= 12; i++) m += EAN_R[d[i]];
+  return { mods: m + '101', txt: c, ean: true };
+}
+/** Código que va en la etiqueta: el de barras de fábrica si existe, si no el código interno */
+function codigoEtiqueta(p, tipo){
+  let c = String(tipo === 'interno' ? p.id : (p.b || p.id)).trim();
+  if (/^\d{12}$/.test(c) && eanValido('0' + c)) c = '0' + c;          // UPC-A → EAN-13
+  return eanValido(c) ? ean13(c) : code128(c);
+}
+
+/* ---------- medidas de etiquetas que se venden en el mercado (mm) ---------- */
+const ETQ_MEDIDAS = [
+  ['25x15', 'Pequeña 25 × 15 mm (joyería, repuestos)', 25, 15, 1, 0],
+  ['30x20', '30 × 20 mm', 30, 20, 1, 0],
+  ['32x25x2', '32 × 25 mm · 2 por fila (rollo 70 mm)', 32, 25, 2, 3],
+  ['33x22x3', '33 × 22 mm · 3 por fila (rollo 105 mm)', 33, 22, 3, 2],
+  ['35x25', '35 × 25 mm', 35, 25, 1, 0],
+  ['38x25', '38 × 25 mm (1.5" × 1")', 38, 25, 1, 0],
+  ['40x20', '40 × 20 mm', 40, 20, 1, 0],
+  ['40x25', '40 × 25 mm', 40, 25, 1, 0],
+  ['40x30', '40 × 30 mm', 40, 30, 1, 0],
+  ['50x25', '50 × 25 mm (la más usada)', 50, 25, 1, 0],
+  ['50x30', '50 × 30 mm', 50, 30, 1, 0],
+  ['51x25', '51 × 25 mm (2" × 1")', 51, 25, 1, 0],
+  ['57x32', '57 × 32 mm (2.25" × 1.25" Zebra)', 57, 32, 1, 0],
+  ['58x40', '58 × 40 mm', 58, 40, 1, 0],
+  ['60x40', '60 × 40 mm', 60, 40, 1, 0],
+  ['70x30', '70 × 30 mm', 70, 30, 1, 0],
+  ['76x25', '76 × 25 mm (3" × 1")', 76, 25, 1, 0],
+  ['100x50', '100 × 50 mm', 100, 50, 1, 0],
+  ['100x100', '100 × 100 mm (4" × 4")', 100, 100, 1, 0],
+  ['100x150', '100 × 150 mm (4" × 6" envíos)', 100, 150, 1, 0],
+  ['r58', 'Rollo de ticket 58 mm (58 × 30 mm)', 58, 30, 1, 0],
+  ['r80', 'Rollo de ticket 80 mm (80 × 40 mm)', 80, 40, 1, 0],
+  ['custom', 'Personalizada…', 50, 25, 1, 0]
+];
+const ETQ_DEF = { med: '50x25', w: 50, h: 25, cols: 1, gap: 0, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', letra: 1, offX: 0, offY: 0, ivaTxt: false };
+const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
+
+/** Dibujo de una etiqueta en HTML (medidas en mm) */
+function etiquetaHTML(p, C){
+  const W = C.w, H = C.h, pad = Math.max(0.8, Math.min(2.5, H * 0.05));
+  const k = C.letra || 1;
+  const fsN = Math.max(1.9, Math.min(5, H * 0.105)) * k, fsP = Math.max(2.4, Math.min(9, H * 0.17)) * k, fsC = Math.max(1.6, Math.min(3.6, H * 0.085)) * k, fsT = Math.max(1.5, Math.min(3.2, H * 0.075)) * k;
+  const lineas = H >= 24 ? 2 : 1;
+  const bc = codigoEtiqueta(p, C.tipo);
+  const n = bc.mods.length + 20;                              // + zona en blanco a los lados
+  const punto = 25.4 / (C.dpi || 203);
+  let mw = (W - 2 * pad) / n; mw = Math.max(punto, Math.floor(mw / punto) * punto);   // módulos exactos a los puntos de la impresora
+  const bw = mw * bc.mods.length;
+  let rects = ''; let x = 0;
+  for (let i = 0; i < bc.mods.length;) { if (bc.mods[i] === '1') { let j = i; while (bc.mods[j] === '1') j++; rects += '<rect x="' + (i * mw).toFixed(4) + '" y="0" width="' + ((j - i) * mw).toFixed(4) + '" height="10"/>'; i = j; } else i++; x++; }
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + bw.toFixed(4) + ' 10" preserveAspectRatio="none" style="width:' + bw.toFixed(3) + 'mm;height:100%;display:block;margin:0 auto">' + rects + '</svg>';
+  const precio = C.precio && Number(p.pv) ? money(p.pv) : '';
+  const pie = (C.codTxt || precio) ? '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:1mm;line-height:1">' +
+      (C.codTxt ? '<span style="font-size:' + fsC + 'mm;letter-spacing:.04em;font-family:Arial,Helvetica,sans-serif">' + h(bc.txt) + '</span>' : '<span></span>') +
+      (precio ? '<b style="font-size:' + fsP + 'mm;font-family:Arial,Helvetica,sans-serif;white-space:nowrap">' + precio + (C.ivaTxt ? '<small style="font-size:' + fsT + 'mm;font-weight:400"> inc. IVA</small>' : '') + '</b>' : '') + '</div>' : '';
+  return '<div class="etq" style="width:' + W + 'mm;height:' + H + 'mm;padding:' + pad + 'mm;box-sizing:border-box;display:flex;flex-direction:column;gap:' + (pad * 0.45).toFixed(2) + 'mm;overflow:hidden;background:#fff;color:#000;font-family:Arial,Helvetica,sans-serif">' +
+    (C.tienda ? '<div style="font-size:' + fsT + 'mm;font-weight:700;text-align:center;line-height:1;white-space:nowrap;overflow:hidden">' + h(cfg().nombre || 'MASS FERRETERÍA') + '</div>' : '') +
+    (C.nombre ? '<div style="font-size:' + fsN + 'mm;font-weight:700;line-height:1.08;text-align:center;display:-webkit-box;-webkit-line-clamp:' + lineas + ';-webkit-box-orient:vertical;overflow:hidden;word-break:break-word">' + h(p.n) + '</div>' : '') +
+    '<div style="flex:1;min-height:' + Math.min(6, H * 0.25) + 'mm">' + svg + '</div>' + pie + '</div>';
+}
+
+/** Documento completo para imprimir: una "página" por fila de etiquetas */
+function documentoEtiquetas(lista, C){
+  const PW = C.cols * C.w + (C.cols - 1) * C.gap, PH = C.h;
+  const todas = []; lista.forEach((x) => { for (let i = 0; i < x.q; i++) todas.push(x.p); });
+  let filas = '';
+  for (let i = 0; i < todas.length; i += C.cols) {
+    filas += '<div class="pg">' + todas.slice(i, i + C.cols).map((p) => etiquetaHTML(p, C)).join('') + '</div>';
+  }
+  return '<!doctype html><html><head><meta charset="utf-8"><title>Etiquetas</title><style>@page{size:' + PW + 'mm ' + PH + 'mm;margin:0}' +
+    'html,body{margin:0;padding:0;background:#fff}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+    '.pg{width:' + PW + 'mm;height:' + PH + 'mm;display:flex;gap:' + C.gap + 'mm;overflow:hidden;page-break-after:always;break-after:page;box-sizing:border-box;padding:' + Math.max(0, C.offY) + 'mm 0 0 ' + Math.max(0, C.offX) + 'mm}' +
+    '.pg:last-child{page-break-after:auto;break-after:auto}</style></head><body>' + filas + '</body></html>';
+}
+function imprimirHTML(html){
+  const f = document.createElement('iframe'); f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+  document.body.appendChild(f);
+  const d = f.contentWindow.document; d.open(); d.write(html); d.close();
+  setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { toast('No se pudo abrir la impresión: ' + e.message, true); } setTimeout(() => f.remove(), 60000); }, 350);
+}
+/** PDF con el tamaño exacto de la etiqueta (sirve para cualquier impresora) */
+async function pdfEtiquetas(lista, C){
+  const J = await libPDF();
+  const PW = C.cols * C.w + (C.cols - 1) * C.gap, PH = C.h;
+  const doc = new J({ unit: 'mm', format: [PW, PH], orientation: PW > PH ? 'l' : 'p' });
+  const todas = []; lista.forEach((x) => { for (let i = 0; i < x.q; i++) todas.push(x.p); });
+  const k = C.letra || 1, pt = (mm) => mm / 0.3528;
+  todas.forEach((p, idx) => {
+    const col = idx % C.cols; if (idx && !col) doc.addPage([PW, PH], PW > PH ? 'l' : 'p');
+    const X = col * (C.w + C.gap) + C.offX, W = C.w, H = C.h, pad = Math.max(0.8, Math.min(2.5, H * 0.05));
+    let y = pad + C.offY; doc.setTextColor(0, 0, 0);
+    if (C.tienda) { const fs = Math.max(1.5, Math.min(3.2, H * 0.075)) * k; doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(fs)); doc.text(cfg().nombre || 'MASS FERRETERIA', X + W / 2, y + fs * 0.8, { align: 'center', maxWidth: W - 2 * pad }); y += fs * 1.15; }
+    if (C.nombre) { const fs = Math.max(1.9, Math.min(5, H * 0.105)) * k; doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(fs));
+      const ls2 = doc.splitTextToSize(String(p.n), W - 2 * pad).slice(0, H >= 24 ? 2 : 1); ls2.forEach((l) => { doc.text(l, X + W / 2, y + fs * 0.8, { align: 'center' }); y += fs * 1.08; }); y += pad * 0.3; }
+    const fsP = Math.max(2.4, Math.min(9, H * 0.17)) * k, fsC = Math.max(1.6, Math.min(3.6, H * 0.085)) * k;
+    const pieH = (C.codTxt || C.precio) ? Math.max(C.precio ? fsP : 0, C.codTxt ? fsC : 0) * 1.05 : 0;
+    const bc = codigoEtiqueta(p, C.tipo); const n = bc.mods.length + 20; const punto = 25.4 / (C.dpi || 203);
+    let mw = (W - 2 * pad) / n; mw = Math.max(punto, Math.floor(mw / punto) * punto); const bw = mw * bc.mods.length;
+    const bh = Math.max(3, H - pad - y - pieH - pad * 0.5); const bx = X + (W - bw) / 2;
+    doc.setFillColor(0, 0, 0);
+    for (let i = 0; i < bc.mods.length;) { if (bc.mods[i] === '1') { let j = i; while (bc.mods[j] === '1') j++; doc.rect(bx + i * mw, y, (j - i) * mw, bh, 'F'); i = j; } else i++; }
+    const yb = H - pad + C.offY;
+    if (C.codTxt) { doc.setFont('helvetica', 'normal'); doc.setFontSize(pt(fsC)); doc.text(bc.txt, X + pad, yb); }
+    if (C.precio && Number(p.pv)) { doc.setFont('helvetica', 'bold'); doc.setFontSize(pt(fsP)); doc.text(money(p.pv), X + W - pad, yb, { align: 'right' }); }
+  });
+  return doc;
+}
+
+/* ---------- ventana para preparar e imprimir etiquetas ---------- */
+function imprimirEtiquetas(items, titulo){
+  const C = etqCfg();
+  const L = (items || []).filter((x) => x && x.p).map((x) => ({ p: x.p, q: Math.max(1, Math.ceil(Number(x.q) || 1)) }));
+  const opMed = ETQ_MEDIDAS.map((m) => '<option value="' + m[0] + '">' + h(m[1]) + '</option>').join('');
+  const m = modal({ title: titulo || 'Imprimir etiquetas', wide: true, sticky: true, body:
+    '<div class="etqgrid"><div class="stack">' +
+      '<label class="f">Medida de la etiqueta<select class="in" id="eMed">' + opMed + '</select></label>' +
+      '<div class="grid3" id="eCus"><label class="f">Ancho (mm)<input class="in" id="eW" inputmode="decimal"></label><label class="f">Alto (mm)<input class="in" id="eH" inputmode="decimal"></label><label class="f">Por fila<select class="in" id="eCols"><option>1</option><option>2</option><option>3</option><option>4</option></select></label></div>' +
+      '<div class="grid3"><label class="f">Impresora<select class="in" id="eDpi"><option value="203">203 dpi (la mayoría)</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>' +
+      '<label class="f">Código<select class="in" id="eTipo"><option value="auto">De barras (o interno)</option><option value="interno">Siempre el interno</option></select></label>' +
+      '<label class="f">Letra<select class="in" id="eLetra"><option value="0.85">Pequeña</option><option value="1">Normal</option><option value="1.15">Grande</option></select></label></div>' +
+      '<div class="row" style="gap:6px 14px"><label class="chk"><input type="checkbox" id="eTi"> Nombre de la tienda</label><label class="chk"><input type="checkbox" id="eNo"> Descripción</label>' +
+      '<label class="chk"><input type="checkbox" id="ePr"> Precio</label><label class="chk"><input type="checkbox" id="eCt"> Número del código</label><label class="chk"><input type="checkbox" id="eIv"> "inc. IVA"</label></div>' +
+      '<details><summary class="small" style="cursor:pointer">Ajuste fino (si sale corrida)</summary><div class="grid3" style="margin-top:6px"><label class="f">Mover → (mm)<input class="in" id="eOx" inputmode="decimal"></label><label class="f">Mover ↓ (mm)<input class="in" id="eOy" inputmode="decimal"></label><label class="f">Separación entre columnas (mm)<input class="in" id="eGap" inputmode="decimal"></label></div></details>' +
+    '</div><div><div class="small muted" style="margin-bottom:4px">Vista previa</div><div class="etqprev" id="ePrev"></div><div class="small muted" id="eInfo" style="margin-top:6px"></div></div></div>' +
+    '<div id="eBus" style="margin:12px 0 8px"></div><div class="row small" style="margin-bottom:6px"><b id="eTot"></b><span class="spacer"></span><button class="btn sm" id="eStock" type="button">Cantidad = stock</button><button class="btn sm" id="eUno" type="button">1 de cada uno</button><button class="btn sm danger" id="eVac" type="button">' + ic('trash') + 'Vaciar</button></div>' +
+    '<div class="card" style="padding:4px 10px"><div class="list" id="eList"></div></div>' +
+    '<div class="note small" style="margin-top:10px"><b>Al imprimir:</b> en la ventana que se abre elige tu <b>impresora térmica</b> (Zebra, Xprinter, TSC, 3nStar…), <b>Márgenes: Ninguno</b>, <b>Escala: 100 %</b> y en <i>Más ajustes → Tamaño del papel</i> la misma medida de la etiqueta. La primera vez, configura esa medida en las <i>Preferencias de impresión</i> de la impresora en Windows.</div>',
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn c3d cs" id="ePrueba">' + ic('ticket') + 'Imprimir 1 de prueba</button><button class="btn c3d cb" id="ePdf">' + ic('pdf') + 'PDF</button><button class="btn c3d cv" id="eImp">' + ic('barcode') + 'Imprimir etiquetas</button>' });
+  const q = m.q;
+  const leer = () => {
+    const med = q('#eMed').value; const M = ETQ_MEDIDAS.find((x) => x[0] === med);
+    C.med = med;
+    if (med !== 'custom' && M) { C.w = M[2]; C.h = M[3]; C.cols = M[4]; C.gap = M[5]; }
+    else { C.w = Math.max(10, parseFloat(String(q('#eW').value).replace(',', '.')) || 50); C.h = Math.max(8, parseFloat(String(q('#eH').value).replace(',', '.')) || 25); C.cols = +q('#eCols').value || 1; }
+    const g = parseFloat(String(q('#eGap').value).replace(',', '.')); if (!isNaN(g) && (med === 'custom' || C.cols > 1)) C.gap = g;
+    C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.letra = +q('#eLetra').value;
+    C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
+    C.offX = parseFloat(String(q('#eOx').value).replace(',', '.')) || 0; C.offY = parseFloat(String(q('#eOy').value).replace(',', '.')) || 0;
+    ls.set('etqCfg', C);
+  };
+  const ponerCampos = () => {
+    q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
+    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eLetra').value = String(C.letra);
+    q('#eTi').checked = C.tienda; q('#eNo').checked = C.nombre; q('#ePr').checked = C.precio; q('#eCt').checked = C.codTxt; q('#eIv').checked = C.ivaTxt; q('#eOx').value = C.offX || ''; q('#eOy').value = C.offY || '';
+  };
+  const prevW = () => Math.min(330, m.b.clientWidth - 30);
+  const pintarPrev = () => {
+    const p = (L[0] && L[0].p) || { id: '11103', b: '', n: 'KALIPEGA 500 CC PLASTIGAMA (ejemplo)', pv: 11.95 };
+    const PW = C.cols * C.w + (C.cols - 1) * C.gap; const px = PW * 3.78;   // 1 mm ≈ 3,78 px
+    const esc = Math.min(3, prevW() / px);
+    q('#ePrev').innerHTML = '<div style="width:' + (px * esc) + 'px;height:' + (C.h * 3.78 * esc) + 'px"><div style="transform:scale(' + esc + ');transform-origin:0 0;display:flex;gap:' + C.gap + 'mm;width:' + PW + 'mm">' +
+      Array.from({ length: C.cols }, (_, i) => etiquetaHTML((L[i] && L[i].p) || p, C)).join('') + '</div></div>';
+    q('#eCus').style.display = C.med === 'custom' ? '' : 'none';
+    const bc = codigoEtiqueta(p, C.tipo);
+    q('#eInfo').textContent = 'Rollo de ' + (C.cols * C.w + (C.cols - 1) * C.gap) + ' mm de ancho · código ' + (bc.ean ? 'EAN-13' : 'Code 128') + ' · ' + C.dpi + ' dpi';
+  };
+  const pintarLista = () => {
+    q('#eList').innerHTML = L.length ? L.map((x, i) => '<div class="li" data-i="' + i + '">' + thumb(x.p, 'sm') + '<div class="grow"><div class="t">' + h(x.p.n) + '</div><div class="s">' + h(x.p.id) + (x.p.b ? ' · ' + h(x.p.b) : '') + ' · stock ' + numf(stockDe(x.p.id)) + ' · ' + money(x.p.pv) + '</div></div>' +
+      '<label class="minilbl">Copias<input class="mini pct" data-q inputmode="numeric" value="' + x.q + '"></label><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('x') + '</button></div>').join('')
+      : '<div class="empty">Busca o escanea los productos para imprimir sus etiquetas</div>';
+    const n = L.reduce((s, x) => s + x.q, 0); q('#eTot').textContent = L.length + ' productos · ' + n + ' etiquetas';
+    pintarPrev();
+  };
+  montarBuscador(q('#eBus'), (p) => { const ex = L.find((x) => x.p.id === p.id); if (ex) ex.q++; else L.unshift({ p, q: 1 }); pintarLista(); }, { ph: 'Agregar producto: busca o escanea…' });
+  q('#eList').onchange = (e) => { const li = e.target.closest('[data-i]'); if (li && e.target.matches('[data-q]')) { L[+li.dataset.i].q = Math.max(0, Math.round(+e.target.value || 0)); pintarLista(); } };
+  q('#eList').onclick = (e) => { const li = e.target.closest('[data-i]'); if (li && e.target.closest('[data-del]')) { L.splice(+li.dataset.i, 1); pintarLista(); } };
+  q('#eStock').onclick = () => { L.forEach((x) => { x.q = Math.max(0, Math.ceil(stockDe(x.p.id))); }); pintarLista(); };
+  q('#eUno').onclick = () => { L.forEach((x) => { x.q = 1; }); pintarLista(); };
+  q('#eVac').onclick = () => { L.length = 0; pintarLista(); };
+  m.b.addEventListener('change', (e) => { if (!e.target.closest('.etqgrid')) return;
+    if (e.target.id === 'eMed') { const M = ETQ_MEDIDAS.find((x) => x[0] === e.target.value); C.med = e.target.value; if (M && C.med !== 'custom') { C.w = M[2]; C.h = M[3]; C.cols = M[4]; C.gap = M[5]; } ponerCampos(); }
+    leer(); pintarPrev(); });
+  const lista = () => L.filter((x) => x.q > 0);
+  const listo = () => { leer(); if (!lista().length) { toast('Agrega productos para imprimir.', true); return false; } return true; };
+  q('#eImp').onclick = () => { if (!listo()) return; const n = lista().reduce((s, x) => s + x.q, 0); if (n > 500) toast('Son ' + n + ' etiquetas: la impresión puede tardar.'); imprimirHTML(documentoEtiquetas(lista(), C)); };
+  q('#ePrueba').onclick = () => { if (!listo()) return; imprimirHTML(documentoEtiquetas([{ p: lista()[0].p, q: C.cols }], C)); };
+  q('#ePdf').onclick = async () => { if (!listo()) return; try { const d = await pdfEtiquetas(lista(), C); descargar(d.output('blob'), 'Etiquetas ' + C.w + 'x' + C.h + ' ' + hoyISO() + '.pdf'); } catch (e) { toast(e.message, true); } };
+  ponerCampos(); pintarLista();
+  setTimeout(pintarPrev, 60);
 }
 
 /* =====================================================================
