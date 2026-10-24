@@ -462,7 +462,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24f';
+const APP_VER = '2026-10-24g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3922,7 +3922,7 @@ function imprimirEtiquetas(items, titulo){
     rawbt: 'Instala gratis <b>RawBT</b> desde Play Store, empareja ahí tu impresora (Bluetooth, USB o WiFi) una sola vez, y luego imprime desde aquí. Sirve para casi todas las impresoras térmicas chinas.',
     pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
   };
-  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = AYUDA[v] || ''; q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none';
+  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none';
     q('#eBTrow').style.display = v === 'bt' ? '' : 'none'; q('#eBTnom').textContent = BT && BT.car ? '✓ Conectada: ' + BT.nombre : (ls.get('etqBT', '') ? 'Última usada: ' + ls.get('etqBT', '') : ''); }
   q('#eBTbus').onclick = async () => { try { await conectarBT(true); ayudaMet(); toast('Impresora conectada: ' + BT.nombre); } catch (e) { if (e && e.name !== 'NotFoundError') toast(e.message, true); } };
   const imprimir = async (l) => {
@@ -4071,7 +4071,7 @@ function comandosEtq(lista, C, leng){
       let hex = ''; for (let i = 0; i < B.bits.length; i++) hex += (B.bits[i] < 16 ? '0' : '') + B.bits[i].toString(16).toUpperCase();
       partes.push(txtBytes('^XA^PW' + (B.bpr * 8) + '^LL' + B.h + '^FO0,0^GFA,' + B.bits.length + ',' + B.bits.length + ',' + B.bpr + ',' + hex + '^FS^XZ\n'));
     } else {
-      partes.push(new Uint8Array([0x1b, 0x40, 0x1d, 0x76, 0x30, 0x00, B.bpr & 255, B.bpr >> 8, B.h & 255, B.h >> 8]), B.bits,
+      partes.push(new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x01, 0x1d, 0x76, 0x30, 0x00, B.bpr & 255, B.bpr >> 8, B.h & 255, B.h >> 8]), B.bits,
         new Uint8Array([0x1b, 0x64, Math.max(1, Math.round((Number(C.gv) || 3) / 3.75))]));
     }
   });
