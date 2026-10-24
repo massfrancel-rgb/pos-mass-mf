@@ -462,7 +462,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24h';
+const APP_VER = '2026-10-24i';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3703,7 +3703,7 @@ const ETQ_MEDIDAS = [
   ['r80', 'Rollo de ticket 80 mm (80 × 40 mm)', 80, 40, 1, 0],
   ['custom', 'Personalizada…', 50, 25, 1, 0]
 ];
-const ETQ_DEF = { met: '', leng: 'tspl', med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
+const ETQ_DEF = { met: '', leng: 'escpos', med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
   sT: 100, sN: 100, sC: 100, sP: 100, lays: {} };
 const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
 /** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
@@ -3919,10 +3919,10 @@ function imprimirEtiquetas(items, titulo){
   const AYUDA = {
     sistema: 'Se abre la ventana de impresión: en la PC elige tu impresora térmica; en el celular aparecen las impresoras WiFi o de red (Mopria). <b>Márgenes: Ninguno</b> y <b>Escala 100 %</b>.',
     bt: 'Enciende la impresora y el Bluetooth del teléfono, pulsa <b>Buscar impresora Bluetooth</b> y elígela de la lista. Funciona en <b>Google Chrome</b> (Android o PC) con impresoras Bluetooth BLE. Si tu impresora no aparece, usa <b>App RawBT</b>.',
-    rawbt: 'Instala gratis <b>RawBT</b> desde Play Store. Dentro de RawBT, en <b>Ajustes</b>, elige tu impresora (Bluetooth, USB o WiFi), su <b>tipo/driver</b> y el <b>ancho del papel</b>, y prueba con su botón de prueba. Luego imprime desde aquí: RawBT convierte la etiqueta al lenguaje correcto de tu impresora.',
+    rawbt: 'Instala gratis <b>RawBT</b> desde Play Store. Dentro de RawBT, en <b>Ajustes</b>, elige tu impresora (Bluetooth, USB o WiFi), su <b>tipo/driver</b> y el <b>ancho del papel</b>, y prueba con su botón de prueba. Luego elige aquí el <b>lenguaje</b> de tu impresora: <b>ESC/POS</b> para impresoras de tickets como la POS-5802.',
     pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
   };
-  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + (v === 'bt' ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = v === 'bt' ? '' : 'none';
+  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none';
     q('#eBTrow').style.display = v === 'bt' ? '' : 'none'; q('#eBTnom').textContent = BT && BT.car ? '✓ Conectada: ' + BT.nombre : (ls.get('etqBT', '') ? 'Última usada: ' + ls.get('etqBT', '') : ''); }
   q('#eBTbus').onclick = async () => { try { await conectarBT(true); ayudaMet(); toast('Impresora conectada: ' + BT.nombre); } catch (e) { if (e && e.name !== 'NotFoundError') toast(e.message, true); } };
   const imprimir = async (l) => {
@@ -3930,9 +3930,11 @@ function imprimirEtiquetas(items, titulo){
     try {
       if (met === 'sistema') return imprimirSistema(documentoEtiquetas(l, C));
       if (met === 'pdf') return await compartirPDFEtq(l, C);
-      if (met === 'rawbt') return await enviarRawBT(l, C);
+      const leng = C.leng === 'pdf' && met !== 'rawbt' ? 'escpos' : (C.leng || 'escpos');
+      if (met === 'rawbt' && leng === 'pdf') return await enviarRawBT(l, C);
       toast('Preparando etiquetas…');
-      const bytes = comandosEtq(l, C, C.leng || 'tspl');
+      const bytes = comandosEtq(l, C, leng);
+      if (met === 'rawbt') return enviarRawBTbytes(bytes);
       await enviarBT(bytes, (f) => { q('#eBTnom').textContent = 'Enviando… ' + Math.round(f * 100) + ' %'; });
       ayudaMet(); toast('Etiquetas enviadas a ' + BT.nombre);
     } catch (e) { ayudaMet(); if (e && e.name === 'NotFoundError') return; toast('No se pudo imprimir: ' + (e.message || e), true); }
@@ -4007,7 +4009,7 @@ function imprimirEtiquetas(items, titulo){
    ===================================================================== */
 const esCelular = () => /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
 const ETQ_METODOS = [['sistema', 'Ventana de impresión (PC, WiFi, Mopria)'], ['bt', 'Bluetooth directo (Chrome en Android o PC)'], ['rawbt', 'App RawBT (Android: Bluetooth, USB o WiFi)'], ['pdf', 'Compartir PDF a la app de la impresora']];
-const ETQ_LENG = [['tspl', 'TSPL — Xprinter, TSC, HPRT, iDPRT, Gprinter (etiquetadoras)'], ['zpl', 'ZPL — Zebra'], ['escpos', 'ESC/POS — impresoras de tickets 58/80 mm'], ['escpos2', 'ESC/POS modo compatible (impresoras antiguas o genéricas)']];
+const ETQ_LENG = [['escpos', 'ESC/POS — impresoras de tickets 58/80 mm (POS-5802, MPT-II…)'], ['tspl', 'TSPL — Xprinter, TSC, HPRT, iDPRT, Gprinter (etiquetadoras)'], ['zpl', 'ZPL — Zebra'], ['escpos2', 'ESC/POS modo compatible (impresoras antiguas o genéricas)'], ['pdf', 'Solo RawBT: que RawBT lo convierta (PDF)']];
 
 /** Ajusta un texto a varias filas dentro de un ancho (canvas) */
 function filasTexto(ctx, t, ancho, max){
@@ -4116,6 +4118,11 @@ async function enviarBT(bytes, avance){
   }
 }
 /* ---------- App RawBT (Android) ---------- */
+/** RawBT con comandos directos (base64): la etiqueta ya va dibujada como imagen en el lenguaje elegido */
+function enviarRawBTbytes(bytes){
+  let bin = ''; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  location.href = 'intent:base64,' + btoa(bin) + '#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;';
+}
 async function enviarRawBT(lista, C){
   // RawBT recibe el PDF y lo convierte con el driver de la impresora que configuraste en RawBT (ESC/POS, TSPL, ZPL…)
   const d = await pdfEtiquetas(lista, C); const b64 = d.output('datauristring').split(',')[1];
