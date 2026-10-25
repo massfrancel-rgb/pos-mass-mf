@@ -465,7 +465,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-25a';
+const APP_VER = '2026-10-25b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1148,17 +1148,28 @@ const guardarCart = () => ls.set('carrito', CART);
 /** Cantidad total de un producto en el carrito (puede estar en varias líneas) */
 const totalEnCarrito = (pid) => CART.it.filter((y) => y.p === pid).reduce((t, y) => t + (Number(y.q) || 0), 0);
 /** Aviso cuando se pide más de lo que hay (solo si no se permite vender sin stock) */
-function avisoStock(pid){
-  if (cfg().sinStock) return;
-  const s = stockDe(pid), q = totalEnCarrito(pid);
-  if (q > s) toast('Solo hay ' + numf(Math.max(0, s)) + ' en stock de este producto. No se podrá facturar ' + numf(q) + '.', true);
+/** No deja poner más de lo que hay en stock: ajusta la cantidad y avisa con un recuadro.
+    (Al editar un pedido guardado no se limita, porque el pedido puede esperar mercadería.) */
+function avisoStock(pid, linea){
+  if (cfg().sinStock || CART.editId) return false;
+  const s = Math.max(0, stockDe(pid)), q = totalEnCarrito(pid);
+  if (q <= s) return false;
+  let exceso = r2(q - s);
+  const lineas = linea ? [linea].concat(CART.it.filter((y) => y.p === pid && y !== linea)) : CART.it.filter((y) => y.p === pid);
+  lineas.forEach((y) => { if (exceso <= 0) return; const quita = Math.min(Number(y.q) || 0, exceso); y.q = r2((Number(y.q) || 0) - quita); exceso = r2(exceso - quita); });
+  CART.it = CART.it.filter((y) => !(y.p === pid && !(Number(y.q) > 0)));
+  guardarCart();
+  const p = S.prod.get(pid) || { n: pid };
+  alerta(s > 0 ? 'Solo hay ' + numf(s) + ' en stock' : 'Sin stock', s > 0 ? 'Del producto <b>' + h(p.n) + '</b> solo hay <b>' + numf(s) + '</b> en stock.<br>La cantidad quedó en <b>' + numf(s) + '</b>.'
+    : 'Del producto <b>' + h(p.n) + '</b> no hay stock (0). No se puede agregar a la venta.');
+  return true;
 }
 function agregarAlCarrito(p, q){
   q = q || 1;
   const ex = CART.it.find((x) => x.p === p.id && !Number(x.d));
   if (ex) ex.q = r2(Number(ex.q) + q);
   else CART.it.unshift({ p: p.id, n: p.n, pu: Number(p.pv) || 0, q, d: 0, iva: p.iva == null ? cfg().iva : Number(p.iva), co: Number(p.co) || 0 });
-  guardarCart(); avisoStock(p.id);
+  guardarCart(); avisoStock(p.id, ex || CART.it[0]);
 }
 /** Ventana de aviso con un solo botón */
 function alerta(titulo, html){
@@ -1226,11 +1237,11 @@ function pintarCarrito(){
     const t2 = totales(CART.it); pintarPaybar(t2);
     const k = calcItem(x); qs('[data-i="' + i + '"] .tot', c).innerHTML = money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '');
   };
-  c.onchange = (e) => { const li = e.target.closest('[data-i]'); if (li && e.target.dataset.a === 'q') { const x = CART.it[+li.dataset.i]; if (x) avisoStock(x.p); } clearTimeout(c._t); c._t = setTimeout(pintarCarrito, 0); };
+  c.onchange = (e) => { const li = e.target.closest('[data-i]'); if (li && e.target.dataset.a === 'q') { const x = CART.it[+li.dataset.i]; if (x) avisoStock(x.p, x); } clearTimeout(c._t); c._t = setTimeout(pintarCarrito, 0); };
   c.onclick = (e) => {
     const b = e.target.closest('button[data-a]'); if (!b) return;
     const i = +b.closest('[data-i]').dataset.i; const x = CART.it[i];
-    if (b.dataset.a === 'mas') { x.q = r2(Number(x.q) + 1); avisoStock(x.p); }
+    if (b.dataset.a === 'mas') { x.q = r2(Number(x.q) + 1); avisoStock(x.p, x); }
     if (b.dataset.a === 'menos') x.q = Math.max(0, r2(Number(x.q) - 1));
     if (b.dataset.a === 'del' || x.q === 0 && b.dataset.a === 'menos') CART.it.splice(i, 1);
     guardarCart(); pintarCarrito();
