@@ -434,6 +434,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .estbar{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px}.estbar .seg{flex:1 1 auto}.estbar .seg button{min-height:34px;font-size:13px;padding:5px 8px}.estbar select{flex:1 1 160px;width:auto}
 .etqimp{padding:10px 12px;border:2px solid #8DB3E2;background:#F2F7FD}:root[data-theme="dark"] .etqimp{background:#1E2D3D;border-color:#3B5B80}
 .etqres{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#EAF6EE;border:1px solid #9BD3AE}.etqres svg{width:26px;height:26px;flex:none}.etqsum svg{width:18px;height:18px;flex:none}.etqsum{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:2px dashed var(--line);border-radius:12px;font-size:15px}#eCfgBox[open] .etqsum{border-style:solid;border-color:#C99A2E;background:#FFF8E6}:root[data-theme="dark"] .etqres{background:#16301F;border-color:#2F6B43}
+.estbadge{position:fixed;right:12px;bottom:12px;z-index:50;display:flex;align-items:center;gap:6px;background:#1E7A3C;color:#fff;font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.25)}.estbadge svg{width:18px;height:18px}@media (max-width:620px){.estbadge{bottom:76px}}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
 .etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
@@ -463,7 +464,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24m';
+const APP_VER = '2026-10-24n';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -634,7 +635,7 @@ function thumb(p, cls){
     : '<span class="th ph ' + (cls || '') + '"></span>';
 }
 
-const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj', 'ped'];
+const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj', 'ped', 'imp'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
@@ -2439,6 +2440,7 @@ function pgAjustes(){
   $('view').innerHTML = '<div class="pagehead"><h2>Ajustes</h2></div><div class="stack">' +
     '<div class="card stack"><h3>Etiquetas de código de barras</h3><p class="small muted" style="margin:0">Medida, impresora, márgenes y diseño de las etiquetas. Es una sola configuración para todos los productos y se guarda en la nube para todos los equipos.</p>' +
       '<button class="btn c3d ca" style="align-self:flex-start" onclick="imprimirEtiquetas([], \'Configuración de etiquetas\', { config: true })">' + ic('barcode') + 'Configurar etiquetas</button></div>' +
+    tarjetaEstacion() +
     '<div class="card stack"><h3>Nube (Google)</h3>' +
     '<p class="small muted" style="margin:0">Con la nube conectada, todos los teléfonos y la PC comparten productos, stock, ventas y compras. Sin internet la app sigue funcionando y envía los datos al reconectarse.</p>' +
     '<div class="row"><span class="badge ' + (M.nube ? (syncError ? 'warn' : 'ok') : '') + '">' + (M.nube ? (syncError ? 'Error: ' + h(syncError) : 'Conectada') : 'No conectada') + '</span><span class="small muted">' + M.pend.size + ' cambios por enviar' + (ult ? ' · última sincronización ' + fechaTxt(fechaISO(new Date(ult))) + ' ' + horaTxt(ult) : '') + '</span></div>' +
@@ -2484,6 +2486,7 @@ function pgAjustes(){
     if (!(await confirmar(M.pend.size ? 'Hay ' + M.pend.size + ' cambios que aún no llegan a la nube y se perderán. ¿Borrar igual?' : 'Se borrarán los datos guardados en este equipo (la nube no se toca). ¿Continuar?', 'Borrar', true))) return;
     idb.close(); indexedDB.deleteDatabase('posmassmf'); Object.keys(localStorage).filter((k) => k.startsWith('posmass.')).forEach((k) => localStorage.removeItem(k)); location.hash = ''; location.reload();
   };
+  activarTarjetaEstacion();
 }
 
 /* =====================================================================
@@ -3936,6 +3939,7 @@ function imprimirEtiquetas(items, titulo, opts){
     sistema: 'Se abre la ventana de impresión: en la PC elige tu impresora térmica; en el celular aparecen las impresoras WiFi o de red (Mopria). <b>Márgenes: Ninguno</b> y <b>Escala 100 %</b>.',
     bt: 'Enciende la impresora y el Bluetooth del teléfono, pulsa <b>Buscar impresora Bluetooth</b> y elígela de la lista. Funciona en <b>Google Chrome</b> (Android o PC) con impresoras Bluetooth BLE. Si tu impresora no aparece, usa <b>App RawBT</b>.',
     rawbt: 'Instala gratis <b>RawBT</b> desde Play Store. Dentro de RawBT, en <b>Ajustes</b>, elige tu impresora (Bluetooth, USB o WiFi), su <b>tipo/driver</b> y el <b>ancho del papel</b>, y prueba con su botón de prueba. Luego elige aquí el <b>lenguaje</b> de tu impresora: <b>ESC/POS</b> para impresoras de tickets como la POS-5802.',
+    estacion: 'Las etiquetas se envían por internet a la <b>computadora de la ferretería</b> que tiene la impresora (por ejemplo la Zebra por USB) y salen ahí solas. Esa PC debe tener POS MASS MF abierto con la <b>Estación de impresión</b> activada (Ajustes). El diseño es el mismo de esta configuración general.',
     pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
   };
   function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none'; const esc = (v === 'bt' || v === 'rawbt') && /^escpos/.test(q('#eLeng').value); q('#ePapL').style.display = esc ? '' : 'none'; q('#eEscOp').style.display = esc ? '' : 'none'; q('#eMs').disabled = q('#eMi').disabled = !q('#eRec').checked; const gvL = q('#eGv').closest('label'); if (gvL) gvL.style.display = esc && q('#eRec').checked ? 'none' : '';
@@ -3944,6 +3948,7 @@ function imprimirEtiquetas(items, titulo, opts){
   const imprimir = async (l) => {
     leer(); const met = C.met || 'sistema';
     try {
+      if (met === 'estacion') return await enviarAEstacion(l);
       if (met === 'sistema') return imprimirSistema(documentoEtiquetas(l, C));
       if (met === 'pdf') return await compartirPDFEtq(l, C);
       const leng = C.leng === 'pdf' && met !== 'rawbt' ? 'escpos' : (C.leng || 'escpos');
@@ -4030,7 +4035,7 @@ function imprimirEtiquetas(items, titulo, opts){
    Lenguajes: TSPL (Xprinter, TSC, HPRT, iDPRT…), ZPL (Zebra), ESC/POS (tickets 58/80 mm)
    ===================================================================== */
 const esCelular = () => /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
-const ETQ_METODOS = [['sistema', 'Ventana de impresión (PC, WiFi, Mopria)'], ['bt', 'Bluetooth directo (Chrome en Android o PC)'], ['rawbt', 'App RawBT (Android: Bluetooth, USB o WiFi)'], ['pdf', 'Compartir PDF a la app de la impresora']];
+const ETQ_METODOS = [['estacion', 'Enviar a la impresora de la PC (estación de impresión)'], ['sistema', 'Ventana de impresión (PC, WiFi, Mopria)'], ['bt', 'Bluetooth directo (Chrome en Android o PC)'], ['rawbt', 'App RawBT (Android: Bluetooth, USB o WiFi)'], ['pdf', 'Compartir PDF a la app de la impresora']];
 const ETQ_LENG = [['escpos', 'ESC/POS — impresoras de tickets 58/80 mm (POS-5802, MPT-II…)'], ['tspl', 'TSPL — Xprinter, TSC, HPRT, iDPRT, Gprinter (etiquetadoras)'], ['zpl', 'ZPL — Zebra'], ['escpos2', 'ESC/POS modo compatible (impresoras antiguas o genéricas)'], ['pdf', 'Solo RawBT: que RawBT lo convierta (PDF)']];
 
 /** Ajusta un texto a varias filas dentro de un ancho (canvas) */
@@ -4193,6 +4198,81 @@ function imprimirSistema(html){
 }
 
 /* =====================================================================
+   ESTACIÓN DE IMPRESIÓN: el teléfono envía las etiquetas a la nube y la PC
+   que tiene la impresora (Zebra por USB) las imprime sola.
+   Tabla 'imp': { id, ts, f, v, it:[{p,q}], est:'pend'|'proc'|'ok', por, fin }
+   ===================================================================== */
+const esEstacion = () => !!ls.get('estacion', false);
+const estCfg = () => Object.assign({ w: 0, h: 0, cols: 1, gap: 0, gv: 0 }, ls.get('estCfg', {}));
+async function enviarAEstacion(lista){
+  const job = { id: uid('im'), ts: Date.now(), f: hoyISO(), v: USR ? USR.id : '', it: lista.map((x) => ({ p: x.p.id, q: x.q })), est: 'pend' };
+  await put('imp', job, true);
+  const ok = await sincronizar(); if (!ok) programarSync(3000);
+  toast(ok ? 'Enviado a la estación de impresión (' + lista.reduce((s, x) => s + x.q, 0) + ' etiquetas). Saldrá en la impresora de la PC en unos segundos.' : 'Guardado: se enviará a la estación cuando haya internet.', !ok);
+}
+/** Configuración que usa la estación: el diseño general + la medida de la etiqueta de su impresora */
+function cfgEstacion(){
+  const C = etqCfg(), E = estCfg();
+  if (E.w && E.h) Object.assign(C, { w: E.w, h: E.h, cols: E.cols || 1, gap: E.gap || 0, gv: E.gv || 0 });
+  C.met = 'sistema'; return C;
+}
+let estTimer = null, estOcupada = false;
+async function procesarCola(){
+  if (estOcupada || !USR) return; estOcupada = true;
+  try {
+    await sincronizar();
+    const pend = vivos('imp').filter((j) => j.est === 'pend').sort((a, b) => a.ts - b.ts);
+    if (!pend.length) return;
+    const j = pend[0];
+    const lista = (j.it || []).map((x) => ({ p: S.prod.get(x.p), q: Math.max(1, Math.round(x.q) || 1) })).filter((x) => x.p);
+    await put('imp', Object.assign({}, j, { est: 'proc', por: M.dev || 'PC' }), true);
+    if (lista.length) imprimirHTML(documentoEtiquetas(lista, cfgEstacion()));
+    await put('imp', Object.assign({}, S.imp.get(j.id), { est: 'ok', fin: Date.now() }), true);
+    sincronizar();
+    if (RUTA === 'ajustes') pintarColaEst();
+  } catch (e) { /* se reintenta en la próxima vuelta */ } finally { estOcupada = false; }
+}
+function iniciarEstacion(){
+  clearInterval(estTimer); estTimer = null;
+  if (esEstacion()) { estTimer = setInterval(procesarCola, 20000); setTimeout(procesarCola, 1500); }
+  pintarEstBadge();
+}
+function pintarEstBadge(){
+  let b = document.getElementById('estBadge');
+  if (!esEstacion()) { if (b) b.remove(); return; }
+  if (!b) { b = document.createElement('div'); b.id = 'estBadge'; b.className = 'estbadge'; b.title = 'Esta PC imprime las etiquetas que se envían desde los teléfonos'; document.body.appendChild(b); }
+  b.innerHTML = ic('barcode') + 'Estación de impresión activa';
+}
+function pintarColaEst(){
+  const el = document.getElementById('estCola'); if (!el) return;
+  const l = vivos('imp').sort((a, b) => b.ts - a.ts).slice(0, 12);
+  el.innerHTML = l.length ? l.map((j) => '<div class="row small" style="margin:3px 0"><span>' + fechaTxt(j.f) + ' ' + horaTxt(j.ts) + ' · ' + h(nomVend(j.v)) + ' · ' + (j.it || []).reduce((s, x) => s + x.q, 0) + ' etiquetas</span><span class="spacer"></span>' +
+    '<span class="badge ' + (j.est === 'ok' ? 'ok' : j.est === 'proc' ? 'info' : 'gold') + '">' + (j.est === 'ok' ? 'Impreso' : j.est === 'proc' ? 'Imprimiendo' : 'En cola') + '</span></div>').join('') : '<div class="small muted">Todavía no hay envíos.</div>';
+}
+/** Tarjeta en Ajustes para convertir esta PC en estación */
+function tarjetaEstacion(){
+  const E = estCfg();
+  return '<div class="card stack" id="estCard"><h3>Estación de impresión (impresora de la PC)</h3>' +
+    '<p class="small muted" style="margin:0">Actívala <b>solo en la computadora que tiene la impresora de etiquetas</b> (por ejemplo la Zebra por USB). Los teléfonos envían las etiquetas y esta PC las imprime sola mientras POS MASS MF esté abierto aquí.</p>' +
+    '<label class="chk"><input type="checkbox" id="estOn"' + (esEstacion() ? ' checked' : '') + '> Esta computadora es la estación de impresión</label>' +
+    '<div class="grid3"><label class="f">Ancho de la etiqueta de esta impresora (mm)<input class="in" id="estW" inputmode="decimal" value="' + (E.w || '') + '" placeholder="igual que la general"></label>' +
+    '<label class="f">Alto (mm)<input class="in" id="estH" inputmode="decimal" value="' + (E.h || '') + '" placeholder="igual que la general"></label>' +
+    '<label class="f">Etiquetas por fila<select class="in" id="estCols"><option>1</option><option>2</option><option>3</option></select></label></div>' +
+    '<div class="row"><button class="btn c3d cs" id="estPrueba" type="button">' + ic('ticket') + 'Imprimir etiqueta de prueba aquí</button></div>' +
+    '<div class="note small"><b>Para que imprima sin preguntar:</b> pon tu impresora de etiquetas (matriz.zebra) como <b>predeterminada</b> en Windows y abre POS MASS MF con un acceso directo de Chrome que tenga al final <code>--kiosk-printing</code>. Si no, cada envío abrirá la ventana de impresión y habrá que pulsar Imprimir. Deja POS MASS MF abierto (no minimizado).</div>' +
+    '<div><b class="small">Últimos envíos</b><div id="estCola" style="margin-top:4px"></div></div></div>';
+}
+function activarTarjetaEstacion(){
+  if (!document.getElementById('estCard')) return;
+  const E = estCfg(); $('estCols').value = String(E.cols || 1);
+  const guardar = () => { ls.set('estCfg', { w: parseFloat(String($('estW').value).replace(',', '.')) || 0, h: parseFloat(String($('estH').value).replace(',', '.')) || 0, cols: +$('estCols').value || 1, gap: 0, gv: 0 }); };
+  ['estW', 'estH', 'estCols'].forEach((i) => { $(i).onchange = guardar; });
+  $('estOn').onchange = (e) => { ls.set('estacion', e.target.checked); iniciarEstacion(); toast(e.target.checked ? 'Esta PC ahora imprime las etiquetas enviadas desde los teléfonos' : 'Estación de impresión desactivada'); };
+  $('estPrueba').onclick = () => { guardar(); const p = vivos('prod')[0] || { id: '12345', n: 'PRODUCTO DE PRUEBA', pv: 1 }; imprimirHTML(documentoEtiquetas([{ p, q: 1 }], cfgEstacion())); };
+  pintarColaEst();
+}
+
+/* =====================================================================
    ARRANQUE
    ===================================================================== */
 document.addEventListener('datos-nube', () => {
@@ -4220,6 +4300,9 @@ document.addEventListener('datos-nube', () => {
   else { pantallaLogin(); if (M.nube) sincronizar().then((ok) => { if (ok && !USR) pantallaLogin(); }); }
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
+
+// estación de impresión de etiquetas (si esta PC está marcada como estación)
+setTimeout(() => { try { iniciarEstacion(); } catch (e) {} }, 3000);
 
 </script>
 </body>
