@@ -198,6 +198,16 @@ main#view{padding-bottom:calc(var(--nav-h) + 150px)}
 .kpi span{font-size:13px;color:var(--muted);font-weight:600}
 .kpi b{display:block;font-family:var(--font-display);font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:2px}
 .kpi small{color:var(--muted)}
+.hoyk{grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.hoyk .kpi{text-decoration:none;color:inherit;padding:9px 11px;border-left:4px solid var(--line);min-width:0}
+.hoyk .kpi span{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hoyk .kpi span svg{width:15px;height:15px;flex:none}
+.hoyk .kpi b{font-size:19px;white-space:nowrap}
+.hoyk .kpi small{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.hoyk .kpi i{font-style:normal}.hoyk .kpi i.sh{display:none}
+.hoyk .k-ven{border-left-color:#16a34a}.hoyk .k-nc{border-left-color:#dc2626}.hoyk .k-com{border-left-color:#2563eb}
+@media (max-width:520px){.hoyk .kpi i.lg{display:none}.hoyk .kpi i.sh{display:inline}.hoyk .kpi span svg{width:13px;height:13px}}
+@media (max-width:420px){.hoyk .kpi{padding:7px 8px}.hoyk .kpi b{font-size:15px}.hoyk .kpi span{font-size:11px}}
 .kpi.gold{background:var(--dark);border-color:var(--dark);color:var(--on-dark)}
 .kpi.gold span,.kpi.gold small{color:#CFC6B4} .kpi.gold b{color:var(--gold)}
 .bars{display:flex;align-items:flex-end;gap:3px;height:170px;padding:8px 2px 0;border-bottom:1px solid var(--line);overflow-x:auto}
@@ -467,7 +477,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-25e';
+const APP_VER = '2026-10-26a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -550,6 +560,7 @@ const IC = {
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m14 6 4 4"/>',
   pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14l3 3 3-3"/>',
@@ -966,7 +977,7 @@ function pantallaLogin(){
       if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('Pega la URL del script (empieza con https://script.google.com/).', true);
       M.nube = { url, clave }; await metaSet('nube', M.nube);
       $('lgCon').disabled = true; $('lgCon').textContent = 'Conectando…';
-      const ok = await sincronizar(true); $('lgCon').disabled = false;
+      const ok = await sincronizar(true); if ($('lgCon')) $('lgCon').disabled = false;
       if (ok) pantallaLogin(); else $('lgCon').innerHTML = ic('sync') + 'Reintentar';
     };
     $('lgCrear').onclick = async () => {
@@ -1185,7 +1196,8 @@ function pgVender(){
   v.innerHTML = '<div class="pagehead"><h2>' + titulo + '</h2>' +
     '<button class="btn sm c3d cb" id="vPed">' + ic('clip') + 'Pedidos pendientes</button>' +
     '<button class="btn sm c3d cr" id="vVaciar">' + ic('trash') + 'Vaciar</button></div>' +
-    '<div id="vBus"></div><div class="cart" id="vCart"></div>';
+    '<div class="kpis hoyk" id="vHoy"></div><div id="vBus"></div><div class="cart" id="vCart"></div>';
+  pintarHoy();
   montarBuscador($('vBus'), (p) => { agregarAlCarrito(p); pintarCarrito(); },
     { onUnknown: (code) => toast('El código ' + code + ' no está registrado. Asígnalo en Inventario.', true) });
   $('vVaciar').onclick = async () => { if (!CART.it.length && !CART.pedId && !CART.editId) return; if (await confirmar('¿Vaciar la venta actual?', 'Vaciar', true)) { CART = cartNuevo(); guardarCart(); render(); } };
@@ -1195,6 +1207,26 @@ function pgVender(){
   document.body.appendChild(bar);
   $('pbBtn').onclick = abrirCobro;
   pintarCarrito();
+}
+
+/* Tarjetas del día en la pantalla de venta: ventas, notas de crédito y compras */
+function pintarHoy(){
+  const e = $('vHoy'); if (!e) return;
+  const hoy = hoyISO(), todos = esAdmin() || puede('rep');
+  const docs = vivos('vta').filter((d) => d.f === hoy && !d.an && (todos || d.v === USR.id));
+  const ven = docs.filter((d) => d.tp === 'F' || d.tp === 'N'), nc = docs.filter((d) => d.tp === 'C');
+  const sum = (l) => l.reduce((t, d) => t + (Number(d.tot) || 0), 0);
+  const nF = ven.filter((d) => d.tp === 'F').length, nN = ven.length - nF;
+  const com = puede('compras') ? vivos('com').filter((c) => !c.an && (c.f === hoy || (c.ts && fechaISO(new Date(c.ts)) === hoy))) : null;
+  e.innerHTML = '<a href="#" class="kpi k-ven" data-k="ven"><span>' + ic('cash') + '<i class="lg">Ventas de hoy</i><i class="sh">Ventas hoy</i></span><b>' + money(sum(ven)) + '</b><small>' + nF + ' fact. · ' + nN + ' N/V' + (todos ? '' : ' · tuyas') + '</small></a>' +
+    '<a href="#" class="kpi k-nc" data-k="nc"><span>' + ic('rotate') + '<i class="lg">Notas de crédito</i><i class="sh">N. crédito</i></span><b>' + money(Math.abs(sum(nc))) + '</b><small>' + nc.length + ' hoy</small></a>' +
+    (com ? '<a href="#" class="kpi k-com" data-k="com"><span>' + ic('truck') + '<i class="lg">Compras de hoy</i><i class="sh">Compras hoy</i></span><b>' + money(sum(com)) + '</b><small>' + com.length + ' compras</small></a>' : '');
+  e.onclick = (ev) => { const a = ev.target.closest('[data-k]'); if (!a) return; ev.preventDefault();
+    const k = a.dataset.k;
+    if (k === 'com') { ls.set('f.compras', Object.assign({ d1: hoy, d2: hoy, v: '' }, ls.get('f.compras', {}), { p: 'hoy' })); irA('compras'); return; }
+    ls.set('f.docs', Object.assign({ d1: hoy, d2: hoy, v: '' }, ls.get('f.docs', {}), { p: 'hoy' }));
+    location.hash = k === 'nc' ? 'docs?tp=C' : 'docs';
+  };
 }
 
 function pintarPaybar(t){
@@ -1326,7 +1358,17 @@ async function guardarClienteVenta(c){
   return { id: rec.id, ruc: rec.ruc, nombre: rec.nombre, tel: rec.tel, correo: rec.correo, dir: rec.dir };
 }
 
+/* Al facturar desde el teléfono: enviar el documento al WhatsApp del cliente */
+const waAuto = () => ls.get('waAuto', esCelular() ? 'pdf' : 'no');
+async function envioAutoWA(v){
+  const modo = waAuto(); if (modo === 'no') return;
+  const tel = telWA(v.cli && v.cli.tel); if (!tel) return;   // consumidor final o cliente sin teléfono: no se envía
+  const ok = await compartirWA(v, ls.get('waFmt', 'a4'), modo === 'txt' ? 'txt' : 'auto');
+  if (!ok) toast('Toca el botón verde “WhatsApp” para enviarlo al cliente.');
+}
+
 function abrirCobro(){
+  if (waAuto() === 'pdf') libPDF().catch(() => {});   // deja listo el PDF para que WhatsApp abra al instante
   if (!CART.it.length) return toast('Agrega productos primero.', true);
   if (CART.it.some((x) => !(Number(x.q) > 0))) return toast('Hay productos con cantidad 0.', true);
   const m = modal({ title: 'Cobrar', cls: 'narrow', body:
@@ -1392,6 +1434,7 @@ function abrirCobro(){
         rec: m.q('#cRec') ? parseFloat(m.q('#cRec').value.replace(',', '.')) || 0 : 0, pl: m.q('#cPl') ? +m.q('#cPl').value : 0, ref: m.q('#cRef') ? m.q('#cRef').value.trim() : '' });
       m.close(); CART = cartNuevo(); guardarCart(); render(); verDocumento(v, true);
       if (imprimir) opcionesImpresion(v);
+      else if (tp !== 'P') envioAutoWA(v);
     } catch (e) { m.q('#cOk').disabled = false; m.q('#cOkP').disabled = false; toast(e.message, true); }
   };
   m.q('#cOk').onclick = () => guardar(false);
@@ -1524,15 +1567,18 @@ function verDocumento(v0, recien){
     '<div class="grid2" style="margin-top:12px"><div>' + (v.nota ? '<p class="small"><b>Nota:</b> ' + h(v.nota) + '</p>' : '') +
       (v.fp === 'cr' && v.tp !== 'P' ? '<div class="card" style="padding:10px"><b>Abonos</b>' + (ab || '<div class="small muted">Sin abonos</div>') + '<div class="row" style="margin-top:6px"><span>Saldo</span><span class="spacer"></span><b>' + money(s) + '</b></div></div>' : '') + '</div>' +
     '<div class="card">' + desgloseHTML(t) + '</div></div>',
-    foot: '<button class="btn c3d cb" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn c3d cv" id="dvWa">' + ic('wa') + 'WhatsApp</button>' +
+    foot: '<button class="btn c3d cb" id="dvPdf">' + ic('ticket') + 'Imprimir / Guardar</button><button class="btn c3d cv" id="dvWa">' + ic('wa') + 'WhatsApp</button><button class="btn" id="dvMail">' + ic('mail') + 'Correo</button>' +
       ((v.tp === 'F' || v.tp === 'N') && !v.an && !v.anf && puede('anular') ? '<button class="btn c3d cr" id="dvNc">' + ic('rotate') + 'Nota de crédito</button>' : '') +
       (v.tp === 'P' && !v.cv && !v.an ? '<button class="btn" id="dvEd">' + ic('edit') + 'Editar</button><button class="btn pri" id="dvCv">' + ic('check') + 'Facturar</button>' : '') +
       (s > 0 ? '<button class="btn pri" id="dvAb">' + ic('cash') + 'Abono</button>' : '') +
       (v.tp !== 'C' && !v.anf ? '<button class="btn" id="dvDup">' + ic('copy') + 'Duplicar</button>' : '') +
       (puedeAnular ? '<button class="btn danger" id="dvAn">' + ic('x') + 'Anular</button>' : '') +
+      (esAdmin() ? '<button class="btn danger" id="dvDel">' + ic('trash') + 'Eliminar</button>' : '') +
       (recien ? '<button class="btn dark" data-x>' + ic('plus') + 'Nueva venta</button>' : '') });
   m.q('#dvPdf').onclick = () => opcionesImpresion(v0);
-  m.q('#dvWa').onclick = () => compartirWA(v0);
+  m.q('#dvWa').onclick = () => compartirWA(v0, ls.get('fmtImp', 'a4'));
+  m.q('#dvMail').onclick = () => enviarCorreo(v0);
+  if (m.q('#dvDel')) m.q('#dvDel').onclick = async () => { if (await eliminarDocumento(v0)) { m.close(); render(); } };
   if (m.q('#dvNc')) m.q('#dvNc').onclick = () => { m.close(); notaCredito(v0); };
   if (m.q('#dvCv')) m.q('#dvCv').onclick = () => { m.close(); cargarEnVenta(v0, 'convertir'); };
   if (m.q('#dvEd')) m.q('#dvEd').onclick = () => { m.close(); cargarEnVenta(v0, 'editar'); };
@@ -1546,6 +1592,23 @@ function verDocumento(v0, recien){
     if (v0.tp === 'C' && v0.fp === 'ab' && v0.vref) { const o = S.vta.get(v0.vref); if (o) { o.ab = (o.ab || []).filter((a) => a.nc !== v0.id); await put('vta', o); } }
     toast(DOC[v.tp] + ' anulada. El stock se devolvió.'); m.close(); render();
   };
+}
+
+/* Eliminar un documento por completo (solo administrador). El stock se recalcula solo. */
+async function eliminarDocumento(v){
+  const ncs = vivos('vta').filter((n) => n.tp === 'C' && n.vref === v.id);
+  if (ncs.length) { alerta('No se puede eliminar', 'Este documento tiene notas de crédito: <b>' + ncs.map((n) => h(n.num)).join(', ') + '</b>.<br>Elimina primero esas notas de crédito.'); return false; }
+  const conv = v.tp === 'P' && v.cv && S.vta.get(v.cv) && !S.vta.get(v.cv)._d;
+  if (conv) { alerta('No se puede eliminar', 'Este pedido ya se convirtió en ' + h(DOC[S.vta.get(v.cv).tp].toLowerCase()) + ' <b>' + h(S.vta.get(v.cv).num) + '</b>. Elimina primero ese documento.'); return false; }
+  const txt = await pedirTexto('Eliminar ' + DOC[v.tp] + ' ' + v.num,
+    'Se borra para siempre de todos los equipos' + (v.tp !== 'P' && !v.an && !v.anf ? ' y los productos vuelven al stock' : '') + '. Si solo quieres dejar constancia, usa “Anular”. Para confirmar escribe ELIMINAR', '');
+  if (txt == null) return false;
+  if (txt.trim().toUpperCase() !== 'ELIMINAR') { toast('No se eliminó: debes escribir ELIMINAR.', true); return false; }
+  if (v.ped) { const p = S.vta.get(v.ped); if (p && p.cv === v.id) { delete p.cv; delete p.cvNum; await put('vta', p); } }
+  if (v.tp === 'C' && v.fp === 'ab' && v.vref) { const o = S.vta.get(v.vref); if (o) { o.ab = (o.ab || []).filter((a) => a.nc !== v.id); await put('vta', o); } }
+  await borrar('vta', v.id);
+  toast(DOC[v.tp] + ' ' + v.num + ' eliminada.');
+  return true;
 }
 
 function registrarAbono(v, onDone){
@@ -1642,50 +1705,73 @@ async function pdfA4(v){
 }
 
 /* ---------- Ticket 80 mm ---------- */
-async function pdfTicket(v){
+async function pdfTicket(v, ancho){
   v = vistaDoc(v);
+  const W = ancho === 58 ? 58 : 80, k58 = W === 58, z = k58 ? 0.86 : 1;   // en 58 mm todo un poco más pequeño
   const J = await libPDF(); const C = cfg();
-  const n = (v.it || []).length; const H = 115 + n * 9 + (v.nota ? 8 : 0);
-  const doc = new J({ unit: 'mm', format: [80, H] }); const W = 80, Mg = 5; let y = 7;
-  const c = (t, sz, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(sz); doc.text(t, W / 2, y, { align: 'center' }); };
-  c(C.nombre, 12, true); y += 4.5; c([C.ruc ? 'RUC ' + C.ruc : '', 'Tel. ' + C.tel].filter(Boolean).join(' · '), 7.5); y += 3.5;
-  doc.text(doc.splitTextToSize(C.dir, W - 10), W / 2, y, { align: 'center' }); y += 6;
-  c(({ F: 'FACTURA', N: 'NOTA DE VENTA', P: 'PEDIDO', C: 'NOTA DE CRÉDITO' }[v.tp]) + ' ' + v.num, 9.5, true); y += 4.2;
-  if (v.tp === 'C') { c('Modifica ' + (v.vrefNum || '') + ' · ' + (v.mot || ''), 7.5); y += 4; }
-  c(fechaTxt(v.f) + ' ' + horaTxt(v.ts) + ' · ' + nomVend(v.v), 7.5); y += 4;
-  if (v.an) { c('*** ANULADO ***', 9, true); y += 4; }
-  const cli = v.cli || CONSUMIDOR; doc.setFontSize(7.5); doc.text('Cliente: ' + cli.nombre.slice(0, 40), Mg, y); y += 3.4; doc.text('CI/RUC: ' + (cli.ruc || ''), Mg, y); y += 2.5;
+  const lineas = (v.it || []).reduce((t, x) => t + Math.min(2, Math.ceil(String(x.n || '').length / (k58 ? 30 : 42))), 0);
+  const H = 120 + lineas * 3.6 + (v.it || []).length * 5 + (v.nota ? 10 : 0);
+  const doc = new J({ unit: 'mm', format: [W, H] }); const Mg = k58 ? 2.5 : 5; let y = 6;
+  const fs = (n) => doc.setFontSize(n * z);
+  const c = (t, sz, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); fs(sz); doc.splitTextToSize(String(t), W - 2 * Mg).forEach((ln) => { doc.text(ln, W / 2, y, { align: 'center' }); y += sz * z * 0.42; }); y += 0.6; };
+  c(C.nombre, 12, true); y += 0.4; c([C.ruc ? 'RUC ' + C.ruc : '', 'Tel. ' + C.tel].filter(Boolean).join(' · '), 7.5);
+  c(C.dir, 7.5); y += 1.5;
+  c(({ F: 'FACTURA', N: 'NOTA DE VENTA', P: 'PEDIDO', C: 'NOTA DE CRÉDITO' }[v.tp]) + ' ' + v.num, 9.5, true);
+  if (v.sri) c('SRI ' + v.sri, 7.5);
+  if (v.tp === 'C') c('Modifica ' + (v.vrefNum || '') + ' · ' + (v.mot || ''), 7.5);
+  c(fechaTxt(v.f) + ' ' + (v.anf ? '' : horaTxt(v.ts)) + ' · ' + nomVend(v.v), 7.5);
+  if (v.an) c('*** ANULADO ***', 9, true);
+  y += 1;
+  const cli = v.cli || CONSUMIDOR; doc.setFont('helvetica', 'normal'); fs(7.5);
+  doc.splitTextToSize('Cliente: ' + cli.nombre, W - 2 * Mg).slice(0, 2).forEach((ln) => { doc.text(ln, Mg, y); y += 3.3 * z; });
+  doc.text('CI/RUC: ' + (cli.ruc || ''), Mg, y); y += 2.5;
   doc.setLineDashPattern([1, 1], 0); doc.line(Mg, y, W - Mg, y); y += 3.5;
   (v.it || []).forEach((x) => {
-    const k = calcItem(x); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.8);
-    doc.text(doc.splitTextToSize(x.n, W - 2 * Mg)[0], Mg, y); y += 3.5;
-    doc.text(numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), Mg + 2, y); doc.text(money(k.neto), W - Mg, y, { align: 'right' }); y += 4.6;
+    const k = calcItem(x); doc.setFont('helvetica', 'normal'); fs(7.8);
+    doc.splitTextToSize(x.n, W - 2 * Mg).slice(0, 2).forEach((ln) => { doc.text(ln, Mg, y); y += 3.4 * z; });
+    doc.text(numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), Mg + 2, y); doc.text(money(k.neto), W - Mg, y, { align: 'right' }); y += 4.4 * z;
   });
   doc.line(Mg, y - 1.5, W - Mg, y - 1.5); y += 2.5;
-  const l = (k, val, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(b ? 11 : 8); doc.text(k, Mg, y); doc.text(val, W - Mg, y, { align: 'right' }); y += b ? 5.5 : 3.8; };
-  const TS = tasasDe(v); const ks = Object.keys(TS).map(Number).sort((a, b) => b - a);
-  ks.forEach((k) => l('Subtotal ' + k + '%', money(TS[k].b))); if (v.desc) l('Descuentos', '-' + money(v.desc)); ks.filter((k) => k).forEach((k) => l('IVA ' + k + '%', money(TS[k].i))); l('TOTAL', money(v.tot), true);
+  const l = (kk, val, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); fs(b ? 11 : 8); doc.text(kk, Mg, y); doc.text(val, W - Mg, y, { align: 'right' }); y += (b ? 5.5 : 3.8) * z; };
+  if (v.anf) { l('Subtotal', money(r2((v.sub12 || 0) + (v.sub0 || 0)))); l('IVA', money(v.iva || 0)); l('TOTAL', money(v.tot), true); }
+  else {
+    const TS = tasasDe(v); const ks = Object.keys(TS).map(Number).sort((a, b) => b - a);
+    ks.forEach((kk) => l('Subtotal ' + kk + '%', money(TS[kk].b))); if (v.desc) l('Descuentos', '-' + money(v.desc)); ks.filter((kk) => kk).forEach((kk) => l('IVA ' + kk + '%', money(TS[kk].i))); l('TOTAL', money(v.tot), true);
+  }
   l((v.tp === 'C' ? '' : 'Pago: ') + (nomFp(v) || ''), v.fp === 'ef' && v.rec ? 'Recibido ' + money(v.rec) : '');
   if (v.fp === 'ef' && v.rec > v.tot) l('Cambio', money(v.rec - v.tot));
-  if (v.nota) { doc.setFontSize(7.5); doc.text(doc.splitTextToSize('Nota: ' + v.nota, W - 2 * Mg), Mg, y); y += 7; }
-  y += 2; doc.setFontSize(7); doc.text(doc.splitTextToSize((v.tp === 'P' ? 'Pedido sin valor tributario.' : 'Documento interno.') + ' ' + (C.pie || ''), W - 2 * Mg), W / 2, y, { align: 'center' });
+  if (v.nota) { fs(7.5); const ls2 = doc.splitTextToSize('Nota: ' + v.nota, W - 2 * Mg); doc.text(ls2, Mg, y); y += ls2.length * 3.3 + 1; }
+  y += 2; fs(7); doc.text(doc.splitTextToSize((v.tp === 'P' ? 'Pedido sin valor tributario.' : 'Documento interno.') + ' ' + (C.pie || ''), W - 2 * Mg), W / 2, y, { align: 'center' });
   return doc;
 }
+const FMT_IMP = { t58: 'Ticket 58 mm', tk: 'Ticket 80 mm', a4: 'Hoja A4 (PDF)' };
+const pdfFormato = (v, f) => f === 'a4' ? pdfA4(v) : pdfTicket(v, f === 't58' ? 58 : 80);
+const sufijoFmt = (f) => f === 'a4' ? '' : f === 't58' ? '-ticket58' : '-ticket80';
 
-async function compartirWA(v){
+/* Texto del documento para enviarlo directo al chat del cliente (sin archivo) */
+function textoWA(v){
+  v = vistaDoc(v); const C = cfg();
+  const it = (v.it || []).map((x) => '• ' + numf(x.q) + ' x ' + x.n + ' = ' + money(calcItem(x).neto)).join('\n');
+  return '*' + C.nombre + '*\n' + DOC[v.tp] + ' *' + v.num + '* · ' + fechaTxt(v.f) + '\nCliente: ' + nomCli(v) + '\n\n' + (it ? it + '\n\n' : '') +
+    '*TOTAL: ' + money(v.tot) + '*\nPago: ' + (nomFp(v) || '') + '\n\n' + (C.pie || '¡Gracias por su compra!');
+}
+async function compartirWA(v, f, modo){
   try {
-    const d = await pdfA4(v); const blob = d.output('blob'); const nom = nombreArchivo(v) + '.pdf';
-    const file = new File([blob], nom, { type: 'application/pdf' });
-    const txt = DOC[v.tp] + ' ' + v.num + ' de MASS FERRETERÍA por ' + money(v.tot) + '. ¡Gracias por su compra!';
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: nom, text: txt }); return; }
-      catch (e) { if (e && e.name === 'AbortError') return; }
-    }
-    descargar(blob, nom);
     const tel = telWA(v.cli && v.cli.tel);
+    if (modo === 'txt' && tel) { window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(textoWA(v)), '_blank'); return true; }
+    f = FMT_IMP[f] ? f : 'a4';
+    const d = await pdfFormato(v, f); const blob = d.output('blob'); const nom = nombreArchivo(v) + sufijoFmt(f) + '.pdf';
+    const file = new File([blob], nom, { type: 'application/pdf' });
+    const txt = DOC[v.tp] + ' ' + v.num + ' de ' + cfg().nombre + ' por ' + money(v.tot) + '. ¡Gracias por su compra!';
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: nom, text: txt }); return true; }
+      catch (e) { if (e && e.name === 'AbortError') return true; if (modo === 'auto') return false; }
+    } else if (modo === 'auto') return false;
+    descargar(blob, nom);
     window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(txt + ' (adjunto el PDF descargado)'), '_blank');
     toast('PDF descargado. Adjúntalo en el chat de WhatsApp.');
-  } catch (e) { if (e && e.name !== 'AbortError') toast('No se pudo compartir: ' + e.message, true); }
+    return true;
+  } catch (e) { if (e && e.name !== 'AbortError') toast('No se pudo compartir: ' + e.message, true); return false; }
 }
 
 /* ---------- Imprimir o guardar ---------- */
@@ -1697,27 +1783,81 @@ async function imprimirPDF(doc){
   fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { window.open(url, '_blank'); } }, 300); setTimeout(() => { fr.remove(); URL.revokeObjectURL(url); }, 120000); };
 }
 function opcionesImpresion(v){
-  const fmt = ls.get('fmtImp', 'tk');
+  let f = ls.get('fmtImp', 'tk'); if (!FMT_IMP[f]) f = 'tk';
   const m = modal({ title: '¿Qué deseas hacer con ' + DOC[v.tp].toLowerCase() + ' ' + v.num + '?', body:
-    '<div class="small muted" style="font-weight:700;margin-bottom:6px">Formato</div><div class="seg" id="oiF"><button data-v="tk">Ticket 80 mm</button><button data-v="a4">Hoja A4</button></div>' +
+    '<div class="small muted" style="font-weight:700;margin-bottom:6px">Formato</div><div class="seg" id="oiF">' + Object.keys(FMT_IMP).map((k) => '<button data-v="' + k + '">' + FMT_IMP[k] + '</button>').join('') + '</div>' +
     '<div class="menu" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">' +
     '<a href="#" data-a="imp">' + ic('ticket') + 'Imprimir<small>Envía a la impresora</small></a>' +
     '<a href="#" data-a="pdf">' + ic('download') + 'Guardar PDF<small>Descarga el archivo en el equipo</small></a>' +
-    '<a href="#" data-a="wa">' + ic('wa') + 'WhatsApp<small>Envía el PDF al cliente</small></a></div>',
+    '<a href="#" data-a="wa">' + ic('wa') + 'WhatsApp<small>Envía el PDF al cliente</small></a>' +
+    '<a href="#" data-a="mail">' + ic('mail') + 'Correo<small>Envía el PDF al correo del cliente</small></a></div>',
     foot: '<button class="btn" data-x>No, gracias</button>' });
-  let f = fmt;
   const seg = () => qsa('#oiF button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.v === f)); seg();
   m.q('#oiF').onclick = (e) => { const b = e.target.closest('button'); if (b) { f = b.dataset.v; ls.set('fmtImp', f); seg(); } };
   m.el.querySelector('.menu').onclick = async (e) => {
     const a = e.target.closest('[data-a]'); if (!a) return; e.preventDefault();
     try {
-      if (a.dataset.a === 'wa') { m.close(); return compartirWA(v); }
-      const d = f === 'a4' ? await pdfA4(v) : await pdfTicket(v);
+      if (a.dataset.a === 'wa') { m.close(); return compartirWA(v, f); }
+      if (a.dataset.a === 'mail') { m.close(); return enviarCorreo(v, f); }
+      const d = await pdfFormato(v, f);
       if (a.dataset.a === 'imp') { imprimirPDF(d); toast('Abriendo la impresión…'); }
-      else { descargar(d.output('blob'), nombreArchivo(v) + (f === 'a4' ? '' : '-ticket') + '.pdf'); toast('PDF guardado en Descargas'); }
+      else { descargar(d.output('blob'), nombreArchivo(v) + sufijoFmt(f) + '.pdf'); toast('PDF guardado en Descargas'); }
       m.close();
     } catch (err) { toast(err.message, true); }
   };
+}
+
+/* ---------- Enviar por correo (Google Apps Script → Gmail) ---------- */
+const correoOk = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(c || '').trim());
+async function enviarCorreo(v, f){
+  f = f || ls.get('fmtImp', 'a4'); if (!FMT_IMP[f]) f = 'a4';
+  const ini = (v.cli && v.cli.correo) || '';
+  const cli = v.cli && v.cli.id && S.cli.get(v.cli.id);
+  const m = modal({ title: 'Enviar ' + DOC[v.tp].toLowerCase() + ' ' + v.num + ' por correo', body:
+    '<label class="f">Correo del cliente<input class="in" id="ecTo" type="email" inputmode="email" autocomplete="email" value="' + h(ini || (cli && cli.correo) || '') + '" placeholder="cliente@correo.com"></label>' +
+    '<label class="f" style="margin-top:10px">Formato del PDF<select class="in" id="ecF">' + Object.keys(FMT_IMP).map((k) => '<option value="' + k + '"' + (k === f ? ' selected' : '') + '>' + FMT_IMP[k] + '</option>').join('') + '</select></label>' +
+    '<label class="f" style="margin-top:10px">Mensaje<textarea class="in" id="ecMsg" rows="3">Estimado(a) ' + h(nomCli(v)) + ', adjuntamos su ' + h(DOC[v.tp].toLowerCase()) + ' ' + h(v.num) + ' por ' + money(v.tot) + '. ¡Gracias por su compra!</textarea></label>' +
+    (v.cli && v.cli.id ? '<label class="chk" style="margin-top:8px"><input type="checkbox" id="ecSave" checked> Guardar este correo en los datos del cliente</label>' : '') +
+    '<p class="small muted" style="margin:8px 0 0">El correo sale desde la cuenta de Google donde está la nube de POS MASS MF.</p>',
+    foot: '<button class="btn" data-x>Cancelar</button><button class="btn pri" id="ecOk">' + ic('mail') + 'Enviar</button>' });
+  m.q('#ecOk').onclick = async () => {
+    const to = m.q('#ecTo').value.trim(); const ff = m.q('#ecF').value;
+    if (!correoOk(to)) return toast('Escribe un correo válido.', true);
+    const btn = m.q('#ecOk'); btn.disabled = true; btn.textContent = 'Enviando…';
+    try {
+      if (m.q('#ecSave') && m.q('#ecSave').checked) {
+        const c = S.cli.get(v.cli.id); if (c && c.correo !== to) { c.correo = to; await put('cli', c); }
+        if (v.cli.correo !== to) { const o = S.vta.get(v.id); if (o && o.cli) { o.cli.correo = to; await put('vta', o, true); } }
+      }
+      const d = await pdfFormato(v, ff); const nom = nombreArchivo(v) + sufijoFmt(ff) + '.pdf';
+      const b64 = d.output('datauristring').split(',')[1];
+      const C = cfg(); const msg = m.q('#ecMsg').value.trim();
+      const asunto = DOC[v.tp] + ' ' + v.num + ' · ' + C.nombre;
+      if (!M.nube || !M.nube.url || !navigator.onLine) throw new Error('sin-nube');
+      const r = await llamarNube({ k: M.nube.clave, mail: { to, asunto, msg, nom, b64, de: C.nombre, resp: C.correo || '' } });
+      if (!r.mail) throw new Error('script-viejo');
+      m.close(); toast('Correo enviado a ' + to + ' ✓');
+    } catch (e) {
+      btn.disabled = false; btn.innerHTML = ic('mail') + 'Enviar';
+      const viejo = e.message === 'script-viejo' || /permis|authoriz|autoriz|MailApp|gmail/i.test(e.message);
+      if (e.message === 'sin-nube' || viejo) {
+        m.close(); correoAlterno(v, ff, to, m.q('#ecMsg').value.trim(), viejo);
+      } else toast('No se pudo enviar: ' + e.message, true);
+    }
+  };
+}
+/* Si la nube aún no tiene la función de correo: compartir el PDF a Gmail o abrir el correo del equipo */
+async function correoAlterno(v, f, to, msg, viejo){
+  const d = await pdfFormato(v, f); const blob = d.output('blob'); const nom = nombreArchivo(v) + sufijoFmt(f) + '.pdf';
+  const file = new File([blob], nom, { type: 'application/pdf' });
+  const asunto = DOC[v.tp] + ' ' + v.num + ' · ' + cfg().nombre;
+  const m = modal({ title: 'Enviar por correo', body:
+    '<div class="note warn">' + (viejo ? 'La nube todavía no tiene activado el envío de correos (hay que actualizar el script de Google).' : 'No hay conexión con la nube.') +
+    ' Puedes enviarlo desde tu propia app de correo:</div>',
+    foot: '<button class="btn" data-x>Cerrar</button>' + (navigator.canShare && navigator.canShare({ files: [file] }) ? '<button class="btn pri" id="caSh">' + ic('mail') + 'Compartir PDF a Gmail</button>' : '') +
+      '<button class="btn" id="caMt">' + ic('download') + 'Descargar y abrir correo</button>' });
+  if (m.q('#caSh')) m.q('#caSh').onclick = async () => { try { await navigator.share({ files: [file], title: asunto, text: msg }); m.close(); } catch (e) {} };
+  m.q('#caMt').onclick = () => { descargar(blob, nom); location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(asunto) + '&body=' + encodeURIComponent(msg + '\n\n(Adjunte el PDF descargado: ' + nom + ')'); m.close(); };
 }
 
 /* =====================================================================
@@ -2484,9 +2624,15 @@ function pgAjustes(){
       '<label class="f">IVA %<input class="in" id="ajIva" inputmode="decimal" value="' + h(C.iva) + '"></label><label class="f">Mensaje al pie<input class="in" id="ajPie" value="' + h(C.pie) + '"></label></div>' +
       '<label class="chk"><input type="checkbox" id="ajSin"' + (C.sinStock ? ' checked' : '') + '> Permitir vender productos sin stock (si está desmarcado, no deja facturar ni hacer notas de venta con más cantidad de la que hay; los pedidos sí se permiten)</label>' +
       '<button class="btn pri" id="ajGuardar" style="align-self:flex-start">' + ic('check') + 'Guardar datos</button></div>' : '') +
-    '<div class="card stack"><h3>Este equipo</h3><div class="row"><button class="btn" id="ajResp">' + ic('download') + 'Descargar respaldo</button>' + (adm ? '<label class="btn">' + ic('upload') + 'Restaurar respaldo<input type="file" id="ajRest" accept=".json" hidden></label>' : '') + '</div>' +
+    '<div class="card stack"><h3>Este equipo</h3>' +
+    '<div class="grid2"><label class="f">Al facturar, enviar al WhatsApp del cliente<select class="in" id="ajWa"><option value="pdf">Sí, el PDF (eliges el chat del cliente)</option><option value="txt">Sí, el detalle en texto directo al chat del cliente</option><option value="no">No enviar automáticamente</option></select></label>' +
+    '<label class="f">Formato del PDF para WhatsApp<select class="in" id="ajWaF">' + Object.keys(FMT_IMP).map((k) => '<option value="' + k + '">' + FMT_IMP[k] + '</option>').join('') + '</select></label></div>' +
+    '<p class="small muted" style="margin:-4px 0 0">Solo se envía cuando el cliente tiene teléfono. Con el PDF, Android abre WhatsApp y tú tocas el chat del cliente (Android no deja adjuntar un archivo directo a un número). Con texto se abre el chat del cliente directamente.</p><div class="row"><button class="btn" id="ajResp">' + ic('download') + 'Descargar respaldo</button>' + (adm ? '<label class="btn">' + ic('upload') + 'Restaurar respaldo<input type="file" id="ajRest" accept=".json" hidden></label>' : '') + '</div>' +
     '<p class="small muted" style="margin:0">Versión ' + APP_VER + ' · ' + vivos('prod').length + ' productos · ' + vivos('vta').length + ' documentos · ' + vivos('com').length + ' compras</p>' +
     (adm ? '<button class="btn danger" id="ajBorrar" style="align-self:flex-start">' + ic('trash') + 'Borrar los datos de este equipo</button>' : '') + '</div></div>';
+  $('ajWa').value = waAuto(); $('ajWaF').value = ls.get('waFmt', 'a4');
+  $('ajWa').onchange = () => { ls.set('waAuto', $('ajWa').value); toast('Guardado en este equipo'); };
+  $('ajWaF').onchange = () => { ls.set('waFmt', $('ajWaF').value); toast('Guardado en este equipo'); };
   $('ajSync').onclick = async () => { await sincronizar(true); render(); };
   if ($('ajCon')) $('ajCon').onclick = async () => {
     const url = $('ajUrl').value.trim(), clave = $('ajClave').value.trim();
