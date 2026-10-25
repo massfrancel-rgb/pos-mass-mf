@@ -149,6 +149,16 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 /* buscador */
 .searchbar{display:flex;gap:8px;position:relative}
 .searchbar .in{padding-left:40px}
+.vozpanel{position:fixed;left:50%;transform:translateX(-50%);top:70px;z-index:9999;width:min(460px,calc(100vw - 24px));display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:2px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.vozpanel.hide{display:none}
+.vozpanel .vz-ic{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#e5e7eb;flex:none}
+.vozpanel .vz-ic svg{width:22px;height:22px}
+.vozpanel[data-e=on]{border-color:#dc2626}.vozpanel[data-e=on] .vz-ic{background:#dc2626;color:#fff;animation:latido 1s infinite}
+.vozpanel[data-e=ok]{border-color:#16a34a}.vozpanel[data-e=ok] .vz-ic{background:#16a34a;color:#fff}
+.vozpanel[data-e=err]{border-color:#f59e0b}.vozpanel[data-e=err] .vz-ic{background:#f59e0b;color:#fff}
+.vozpanel .vz-t{display:block;font-size:16px}
+.vozpanel .vz-b{display:flex;gap:6px;flex-wrap:wrap;width:100%;justify-content:flex-end}
+.vozpanel .vz-b:empty{display:none}
 .micbtn{flex:none}
 .micbtn svg{width:20px;height:20px}
 .micbtn.oyendo{background:#dc2626;color:#fff;border-color:#dc2626;animation:latido 1s infinite}
@@ -483,7 +493,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-26c';
+const APP_VER = '2026-10-26d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1132,24 +1142,59 @@ function codigoHablado(t){
   const pal = norm(t).replace(/[.,;:]/g, ' ').split(/\s+/).filter(Boolean).map((w) => NUM_VOZ[w] != null ? NUM_VOZ[w] : w);
   return pal.length && pal.every((w) => /^\d+$/.test(w)) ? pal.join('') : String(t).trim().replace(/[.]$/, '');
 }
+function panelVoz(){
+  let p = document.getElementById('vozPanel');
+  if (!p) { p = document.createElement('div'); p.id = 'vozPanel'; p.className = 'vozpanel hide';
+    p.innerHTML = '<div class="vz-ic">' + ic('mic') + '</div><div class="grow"><b class="vz-t"></b><div class="vz-s small"></div></div><div class="vz-b"></div>'; document.body.appendChild(p); }
+  return p;
+}
 function escucharVoz(btn, onTexto){
-  if (!ReconVoz) return toast('Este navegador no permite dictar por voz. Usa Google Chrome o Microsoft Edge.', true);
-  if (VOZ) { try { VOZ.stop(); } catch (e) {} return; }
+  const inp = (btn.closest('.searchbar, .micwrap') || document).querySelector('input');
+  const P = panelVoz(); let cierre;
+  const mostrar = (titulo, sub, estado, botones) => {
+    clearTimeout(cierre); P.classList.remove('hide'); P.dataset.e = estado || '';
+    P.querySelector('.vz-t').textContent = titulo; P.querySelector('.vz-s').innerHTML = sub || '';
+    const bb = P.querySelector('.vz-b'); bb.innerHTML = '';
+    (botones || []).forEach(([txt, fn, cls]) => { const x = document.createElement('button'); x.type = 'button'; x.className = 'btn sm ' + (cls || ''); x.textContent = txt; x.onclick = fn; bb.appendChild(x); });
+  };
+  const ocultar = (ms) => { clearTimeout(cierre); cierre = setTimeout(() => P.classList.add('hide'), ms || 0); };
+  const teclado = () => { ocultar(); if (inp) { inp.focus(); inp.select && inp.select(); } };
+  const btnTeclado = ['⌨️ Dictar con el teclado', teclado, 'pri'];
+  if (!ReconVoz || /SamsungBrowser|FBAN|FBAV|Instagram/i.test(navigator.userAgent)) {
+    mostrar('Este navegador no permite dictar aquí', 'Abre POS MASS MF en <b>Google Chrome</b>, o toca el <b>micrófono del teclado</b> (Gboard) dentro de la casilla de búsqueda.', 'err', [btnTeclado, ['Cerrar', () => ocultar()]]);
+    return;
+  }
+  if (VOZ) { try { VOZ.abort(); } catch (e) {} VOZ = null; btn.classList.remove('oyendo'); ocultar(); return; }
   const r = new ReconVoz(); VOZ = r;
   r.lang = 'es-EC'; r.interimResults = true; r.maxAlternatives = 1; r.continuous = false;
-  btn.classList.add('oyendo'); toast('🎤 Habla ahora: di el nombre o el código del producto');
-  let ultimo = '';
+  btn.classList.add('oyendo');
+  let arranco = false, texto = '', fin = false, error = '';
+  const cancelar = ['Cancelar', () => { try { r.abort(); } catch (e) {} ocultar(); }];
+  mostrar('Iniciando micrófono…', 'Si el teléfono pregunta, toca <b>Permitir</b>.', 'ini', [cancelar]);
+  const vigia = setTimeout(() => { if (!arranco) { try { r.abort(); } catch (e) {}
+    mostrar('El micrófono no arrancó', 'Revisa que Chrome tenga permiso de <b>Micrófono</b> (candado junto a la dirección → Permisos). También puedes usar el micrófono del teclado.', 'err', [btnTeclado, ['Cerrar', () => ocultar()]]); } }, 5000);
+  r.onstart = () => { arranco = true; mostrar('🎤 Escuchando… habla ahora', 'Di el <b>nombre</b> o el <b>código</b> del producto', 'on', [cancelar]); };
+  r.onaudiostart = () => { arranco = true; };
   r.onresult = (e) => {
-    let txt = ''; let fin = false;
+    arranco = true; let txt = '';
     for (let i = 0; i < e.results.length; i++) { txt += e.results[i][0].transcript; if (e.results[i].isFinal) fin = true; }
-    ultimo = txt.trim(); onTexto(ultimo.replace(/[.]$/, ''), fin);
+    texto = txt.trim().replace(/[.]$/, '');
+    mostrar(fin ? '✓ ' + texto : texto + '…', fin ? '' : 'Escuchando…', fin ? 'ok' : 'on', [cancelar]);
+    onTexto(texto, fin);
   };
   r.onerror = (e) => {
-    const m = { 'not-allowed': 'Permite el uso del micrófono para esta página (toca el candado junto a la dirección).', 'no-speech': 'No se escuchó nada. Toca el micrófono y habla cerca del teléfono.', 'network': 'Para dictar por voz se necesita internet.', 'audio-capture': 'No se encontró un micrófono.' }[e.error];
-    if (e.error !== 'aborted') toast(m || 'Error de voz: ' + e.error, true);
+    error = e.error; arranco = true;
+    const m = { 'not-allowed': 'Chrome no tiene permiso para el micrófono. Toca el candado junto a la dirección → Permisos → Micrófono → Permitir.', 'service-not-allowed': 'Este navegador no permite el reconocimiento de voz. Usa Google Chrome o el micrófono del teclado.',
+      'no-speech': 'No se escuchó nada. Toca el micrófono y habla cerca del teléfono.', 'network': 'Para dictar por voz se necesita internet.', 'audio-capture': 'No se encontró un micrófono o lo está usando otra app.', 'language-not-supported': 'El idioma español no está disponible en el reconocimiento de voz de este equipo.' }[e.error];
+    if (e.error !== 'aborted') mostrar('No se pudo escuchar', m || ('Error: ' + e.error), 'err', [btnTeclado, ['Cerrar', () => ocultar()]]);
   };
-  r.onend = () => { btn.classList.remove('oyendo'); VOZ = null; };
-  try { r.start(); } catch (e) { btn.classList.remove('oyendo'); VOZ = null; toast('No se pudo iniciar el micrófono: ' + e.message, true); }
+  r.onend = () => {
+    clearTimeout(vigia); btn.classList.remove('oyendo'); if (VOZ === r) VOZ = null;
+    if (fin) ocultar(1200);
+    else if (texto) { onTexto(texto, true); ocultar(1200); }
+    else if (!error && arranco) mostrar('No te entendí', 'Toca el micrófono y vuelve a intentar.', 'err', [['Reintentar', () => escucharVoz(btn, onTexto), 'pri'], ['Cerrar', () => ocultar()]]);
+  };
+  try { r.start(); } catch (e) { clearTimeout(vigia); btn.classList.remove('oyendo'); VOZ = null; mostrar('No se pudo iniciar el micrófono', h(e.message), 'err', [btnTeclado, ['Cerrar', () => ocultar()]]); }
 }
 /** Agrega el botón de micrófono a todos los buscadores (documentos, inventario, clientes, etc.) */
 function micEnBuscadores(raiz){
