@@ -149,6 +149,12 @@ table.tbl{width:100%;border-collapse:collapse;font-size:14.5px}
 /* buscador */
 .searchbar{display:flex;gap:8px;position:relative}
 .searchbar .in{padding-left:40px}
+.micbtn{flex:none}
+.micbtn svg{width:20px;height:20px}
+.micbtn.oyendo{background:#dc2626;color:#fff;border-color:#dc2626;animation:latido 1s infinite}
+.micwrap{display:flex;gap:6px;align-items:center;min-width:0}
+.micwrap.grow{flex:1 1 auto}
+.micwrap > .in{flex:1 1 auto;min-width:0;width:auto}
 .searchbar .ico{position:absolute;left:12px;top:12px;width:20px;height:20px;color:var(--muted);pointer-events:none}
 .results{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:25;background:var(--surface);border:1px solid var(--line);border-radius:12px;
   box-shadow:0 10px 30px rgba(0,0,0,.18);max-height:min(62vh,520px);overflow:auto}
@@ -477,7 +483,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-26b';
+const APP_VER = '2026-10-26c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -556,6 +562,7 @@ const IC = {
   badge: '<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="10" r="3"/><path d="M8 17h8"/>',
   sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>',
   scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
@@ -1113,12 +1120,58 @@ function chipStock(p){
   return '<span class="stockchip ' + (s <= 0 ? 'no' : (mi && s <= mi ? 'lo' : '')) + '">Stock ' + numf(s) + '</span>';
 }
 /** Monta un buscador con resultados desplegables. onPick(producto) */
+/* =====================================================================
+   BÚSQUEDA POR VOZ (Chrome / Edge, Android y PC)
+   ===================================================================== */
+const ReconVoz = window.SpeechRecognition || window.webkitSpeechRecognition;
+const hayVoz = () => !!ReconVoz;
+let VOZ = null;
+const NUM_VOZ = { cero: '0', uno: '1', una: '1', dos: '2', tres: '3', cuatro: '4', cinco: '5', seis: '6', siete: '7', ocho: '8', nueve: '9', diez: '10' };
+/** "tres cinco cero siete" o "35 07" → "3507" (solo si todo lo dicho son números) */
+function codigoHablado(t){
+  const pal = norm(t).replace(/[.,;:]/g, ' ').split(/\s+/).filter(Boolean).map((w) => NUM_VOZ[w] != null ? NUM_VOZ[w] : w);
+  return pal.length && pal.every((w) => /^\d+$/.test(w)) ? pal.join('') : String(t).trim().replace(/[.]$/, '');
+}
+function escucharVoz(btn, onTexto){
+  if (!ReconVoz) return toast('Este navegador no permite dictar por voz. Usa Google Chrome o Microsoft Edge.', true);
+  if (VOZ) { try { VOZ.stop(); } catch (e) {} return; }
+  const r = new ReconVoz(); VOZ = r;
+  r.lang = 'es-EC'; r.interimResults = true; r.maxAlternatives = 1; r.continuous = false;
+  btn.classList.add('oyendo'); toast('🎤 Habla ahora: di el nombre o el código del producto');
+  let ultimo = '';
+  r.onresult = (e) => {
+    let txt = ''; let fin = false;
+    for (let i = 0; i < e.results.length; i++) { txt += e.results[i][0].transcript; if (e.results[i].isFinal) fin = true; }
+    ultimo = txt.trim(); onTexto(ultimo.replace(/[.]$/, ''), fin);
+  };
+  r.onerror = (e) => {
+    const m = { 'not-allowed': 'Permite el uso del micrófono para esta página (toca el candado junto a la dirección).', 'no-speech': 'No se escuchó nada. Toca el micrófono y habla cerca del teléfono.', 'network': 'Para dictar por voz se necesita internet.', 'audio-capture': 'No se encontró un micrófono.' }[e.error];
+    if (e.error !== 'aborted') toast(m || 'Error de voz: ' + e.error, true);
+  };
+  r.onend = () => { btn.classList.remove('oyendo'); VOZ = null; };
+  try { r.start(); } catch (e) { btn.classList.remove('oyendo'); VOZ = null; toast('No se pudo iniciar el micrófono: ' + e.message, true); }
+}
+/** Agrega el botón de micrófono a todos los buscadores (documentos, inventario, clientes, etc.) */
+function micEnBuscadores(raiz){
+  if (!hayVoz()) return;
+  qsa('input[type=search]:not([data-mic])', raiz || document).forEach((inp) => {
+    inp.dataset.mic = '1';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn icon micbtn'; b.title = 'Buscar por voz'; b.setAttribute('aria-label', 'Buscar por voz'); b.innerHTML = ic('mic');
+    const envol = document.createElement('span'); envol.className = 'micwrap ' + (inp.className.includes('grow') ? 'grow' : ''); envol.style.cssText = inp.style.cssText; inp.style.cssText = '';
+    inp.parentNode.insertBefore(envol, inp); envol.appendChild(inp); envol.appendChild(b);
+    b.onclick = () => escucharVoz(b, (txt, fin) => { inp.value = fin ? codigoHablado(txt) : txt; inp.dispatchEvent(new Event('input', { bubbles: true })); });
+  });
+}
+if (hayVoz()) new MutationObserver(() => micEnBuscadores()).observe(document.documentElement, { childList: true, subtree: true });
+
 function montarBuscador(cont, onPick, opts){
   opts = opts || {};
   cont.innerHTML = '<div class="searchbar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + IC.search + '</svg>' +
     '<input class="in grow" type="search" placeholder="' + h(opts.ph || 'Buscar o escanear…') + '" autocomplete="off" enterkeyhint="search">' +
-    '<button class="btn c3d ca icon" type="button" aria-label="Escanear con cámara">' + ic('scan') + '</button><div class="results hide"></div></div>';
-  const inp = qs('input', cont), res = qs('.results', cont), btn = qs('button', cont);
+    (hayVoz() ? '<button class="btn icon micbtn" type="button" data-mic aria-label="Buscar por voz" title="Buscar por voz">' + ic('mic') + '</button>' : '') +
+    '<button class="btn c3d ca icon" type="button" data-scan aria-label="Escanear con cámara">' + ic('scan') + '</button><div class="results hide"></div></div>';
+  const inp = qs('input', cont), res = qs('.results', cont), btn = qs('[data-scan]', cont);
+  inp.dataset.mic = '1';
   let lista = [], sel = 0;
   const pintar = () => {
     if (!lista.length) { res.innerHTML = inp.value.trim() ? '<div class="empty small">Sin resultados. Si es un código nuevo, regístralo en Inventario.</div>' : ''; res.classList.toggle('hide', !inp.value.trim()); return; }
@@ -1141,6 +1194,19 @@ function montarBuscador(cont, onPick, opts){
   });
   res.addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) elegir(lista[+d.dataset.i]); });
   document.addEventListener('click', (e) => { if (!cont.contains(e.target)) res.classList.add('hide'); });
+  const mic = qs('[data-mic]', cont);
+  if (mic) mic.onclick = () => escucharVoz(mic, (txt, final) => {
+    inp.value = txt;
+    if (!final) return;
+    const cod = codigoHablado(txt);
+    const exacto = porCodigo(cod) || porCodigo(txt);
+    if (exacto) { beep(true); elegir(exacto); return; }
+    lista = buscarProductos(txt, 40);
+    if (!lista.length && cod !== txt) { lista = buscarProductos(cod, 40); if (lista.length) inp.value = cod; }
+    sel = 0;
+    if (lista.length === 1) { beep(true); elegir(lista[0]); toast('✓ ' + lista[0].n); return; }
+    pintar(); if (!lista.length) beep(false);
+  });
   btn.onclick = () => escanear((code) => {
     const p = porCodigo(code);
     if (p) { onPick(p); return { msg: '✓ ' + p.n + ' · ' + money(p.pv) }; }
