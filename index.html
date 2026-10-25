@@ -433,6 +433,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .movpad{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;padding:6px 8px;background:var(--surface2);border-radius:9px}.movpad .btn.icon{width:36px;min-width:36px;font-size:18px;font-weight:800;padding:0}
 .estbar{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px}.estbar .seg{flex:1 1 auto}.estbar .seg button{min-height:34px;font-size:13px;padding:5px 8px}.estbar select{flex:1 1 160px;width:auto}
 .etqimp{padding:10px 12px;border:2px solid #8DB3E2;background:#F2F7FD}:root[data-theme="dark"] .etqimp{background:#1E2D3D;border-color:#3B5B80}
+.etqres{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#EAF6EE;border:1px solid #9BD3AE}.etqres svg{width:26px;height:26px;flex:none}.etqsum svg{width:18px;height:18px;flex:none}.etqsum{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:2px dashed var(--line);border-radius:12px;font-size:15px}#eCfgBox[open] .etqsum{border-style:solid;border-color:#C99A2E;background:#FFF8E6}:root[data-theme="dark"] .etqres{background:#16301F;border-color:#2F6B43}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
 .etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
@@ -462,7 +463,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24l';
+const APP_VER = '2026-10-24m';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2436,6 +2437,8 @@ function pgAjustes(){
   const C = cfg(); const adm = esAdmin();
   const ult = ls.get('ultimoSync', 0);
   $('view').innerHTML = '<div class="pagehead"><h2>Ajustes</h2></div><div class="stack">' +
+    '<div class="card stack"><h3>Etiquetas de código de barras</h3><p class="small muted" style="margin:0">Medida, impresora, márgenes y diseño de las etiquetas. Es una sola configuración para todos los productos y se guarda en la nube para todos los equipos.</p>' +
+      '<button class="btn c3d ca" style="align-self:flex-start" onclick="imprimirEtiquetas([], \'Configuración de etiquetas\', { config: true })">' + ic('barcode') + 'Configurar etiquetas</button></div>' +
     '<div class="card stack"><h3>Nube (Google)</h3>' +
     '<p class="small muted" style="margin:0">Con la nube conectada, todos los teléfonos y la PC comparten productos, stock, ventas y compras. Sin internet la app sigue funcionando y envía los datos al reconectarse.</p>' +
     '<div class="row"><span class="badge ' + (M.nube ? (syncError ? 'warn' : 'ok') : '') + '">' + (M.nube ? (syncError ? 'Error: ' + h(syncError) : 'Conectada') : 'No conectada') + '</span><span class="small muted">' + M.pend.size + ' cambios por enviar' + (ult ? ' · última sincronización ' + fechaTxt(fechaISO(new Date(ult))) + ' ' + horaTxt(ult) : '') + '</span></div>' +
@@ -3705,7 +3708,14 @@ const ETQ_MEDIDAS = [
 ];
 const ETQ_DEF = { met: '', leng: 'escpos', papel: 384, med: '35x25', w: 35, h: 25, cols: 1, gap: 0, gv: 0, est: {}, dpi: 203, tienda: true, nombre: true, precio: true, codTxt: true, tipo: 'auto', offX: 0, offY: 0, ivaTxt: false,
   sT: 100, sN: 100, sC: 100, sP: 100, lays: {} };
-const etqCfg = () => Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}));
+/** Configuración GENERAL de etiquetas: una sola para todos los productos, guardada en la nube (todos los equipos) */
+const etqCfg = () => { const n = S.cfg.get('etq'); const o = Object.assign({}, ETQ_DEF, ls.get('etqCfg', {}), n && !n._d ? n : {}); delete o.id; delete o._u; delete o._d; return o; };
+const hayCfgEtq = () => !!(S.cfg.get('etq') || ls.get('etqCfg', null));
+let tGuardaEtq = null;
+function guardarEtq(C){
+  ls.set('etqCfg', C);
+  clearTimeout(tGuardaEtq); tGuardaEtq = setTimeout(() => { const r = Object.assign({}, C, { id: 'etq' }); delete r._u; put('cfg', r); }, 700);
+}
 /** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
 const ETQ_EL = [['T', 'Nombre de la tienda', 'tienda', 'sT', 'center'], ['N', 'Descripción', 'nombre', 'sN', 'center'], ['B', 'Código de barras', '', '', 'center'],
   ['C', 'Número del código', 'codTxt', 'sC', 'left'], ['P', 'Precio', 'precio', 'sP', 'right']];
@@ -3831,12 +3841,13 @@ async function pdfEtiquetas(lista, C){
 }
 
 /* ---------- ventana para preparar e imprimir etiquetas ---------- */
-function imprimirEtiquetas(items, titulo){
+function imprimirEtiquetas(items, titulo, opts){
+  opts = opts || {};
   const C = etqCfg();
   const L = (items || []).filter((x) => x && x.p).map((x) => ({ p: x.p, q: Math.max(1, Math.ceil(Number(x.q) || 1)) }));
   const opMed = ETQ_MEDIDAS.map((m) => '<option value="' + m[0] + '">' + h(m[1]) + '</option>').join('');
   const m = modal({ title: titulo || 'Imprimir etiquetas', wide: true, sticky: true, body:
-    '<div class="etqgrid"><div class="stack">' +
+    '<div class="etqgrid"><div class="stack"><div class="etqres card" id="eRes"></div><details id="eCfgBox"' + (opts.config || !hayCfgEtq() ? ' open' : '') + '><summary class="etqsum">' + ic('gear') + '<b>Configuración general de etiquetas</b><span class="small muted">· una sola para todos los productos y equipos</span></summary><div class="stack" style="margin-top:10px">' +
       '<label class="f">Medida de la etiqueta<select class="in" id="eMed">' + opMed + '</select></label>' +
       '<div class="grid3" id="eCus"><label class="f">Ancho de la etiqueta (mm)<input class="in" id="eW" inputmode="decimal"></label><label class="f">Alto de la etiqueta (mm)<input class="in" id="eH" inputmode="decimal"></label><label class="f">Etiquetas por fila<select class="in" id="eCols"><option>1</option><option>2</option><option>3</option><option>4</option></select></label></div>' +
       '<div class="grid3"><label class="f">Espacio entre etiquetas ↕ (mm)<input class="in" id="eGv" inputmode="decimal" placeholder="0"></label><label class="f">Espacio entre columnas ↔ (mm)<input class="in" id="eGap" inputmode="decimal" placeholder="0"></label>' +
@@ -3857,7 +3868,7 @@ function imprimirEtiquetas(items, titulo){
       '<label class="chk"><input type="checkbox" id="ePr"> Precio</label><label class="chk"><input type="checkbox" id="eCt"> Número del código</label><label class="chk"><input type="checkbox" id="eIv"> "inc. IVA"</label></div>' +
       '<div class="card etqtam"><div class="row" style="margin-bottom:4px"><b>Casillas de la etiqueta</b><span class="spacer"></span><button class="btn sm" id="ePosR" type="button">' + ic('rotate') + 'Posiciones</button><button class="btn sm" id="eTamR" type="button">' + ic('rotate') + 'Restablecer</button></div><div id="eTam"></div></div>' +
       '<details><summary class="small" style="cursor:pointer">Ajuste fino (si sale corrida)</summary><div class="grid3" style="margin-top:6px"><label class="f">Mover → (mm)<input class="in" id="eOx" inputmode="decimal"></label><label class="f">Mover ↓ (mm)<input class="in" id="eOy" inputmode="decimal"></label></div></details>' +
-    '</div><div><div class="small muted" style="margin-bottom:4px">Vista previa</div><div class="etqprev" id="ePrev"></div><div class="small muted" id="eInfo" style="margin-top:6px"></div></div></div>' +
+    '<button class="btn c3d cv" id="eCfgOk" type="button">' + ic('check') + 'Guardar configuración general</button></div></details></div><div><div class="small muted" style="margin-bottom:4px">Vista previa</div><div class="etqprev" id="ePrev"></div><div class="small muted" id="eInfo" style="margin-top:6px"></div></div></div>' +
     '<div id="eBus" style="margin:12px 0 8px"></div><div class="row small" style="margin-bottom:6px"><b id="eTot"></b><span class="spacer"></span><button class="btn sm" id="eStock" type="button">Cantidad = stock</button><button class="btn sm" id="eUno" type="button">1 de cada uno</button><button class="btn sm danger" id="eVac" type="button">' + ic('trash') + 'Vaciar</button></div>' +
     '<div class="card" style="padding:4px 10px"><div class="list" id="eList"></div></div>' +
     '<div class="note small" style="margin-top:10px"><b>Primera vez:</b> pulsa <b>Imprimir 1 de prueba</b> para revisar que la medida y la posición estén bien antes de gastar el rollo.</div>',
@@ -3872,7 +3883,7 @@ function imprimirEtiquetas(items, titulo){
     C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.met = q('#eMet').value; C.leng = q('#eLeng').value; C.papel = +q('#ePap').value; C.recorte = q('#eRec').checked; C.fin = Math.max(0, num('#eFin', 10)); C.mSup = Math.max(0, num('#eMs', 1)); C.mInf = Math.max(0, num('#eMi', 1));
     C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
     C.offX = num('#eOx', 0); C.offY = num('#eOy', 0);
-    ls.set('etqCfg', C);
+    guardarEtq(C);
   };
   const ponerCampos = () => {
     q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
@@ -3898,7 +3909,7 @@ function imprimirEtiquetas(items, titulo){
     n.w = Math.max(2, Math.min(C.w, n.w)); n.h = Math.max(1.5, Math.min(C.h, n.h));
     n.x = Math.max(0, Math.min(C.w - n.w, n.x)); n.y = Math.max(0, Math.min(C.h - n.h, n.y));
     ['x', 'y', 'w', 'h'].forEach((z) => { n[z] = Math.round(n[z] * 4) / 4; });
-    K[k] = n; C.lays = Object.assign({}, C.lays || {}); C.lays[claveLay(C)] = K; ls.set('etqCfg', C);
+    K[k] = n; C.lays = Object.assign({}, C.lays || {}); C.lays[claveLay(C)] = K; guardarEtq(C);
   };
   const infoSel = () => { const b = cajasEtq(C)[sel]; if (q('#eSelN')) q('#eSelN').textContent = (ETQ_EL.find((x) => x[0] === sel) || [])[1] || '';
     if (q('#ePosTxt') && b) q('#ePosTxt').textContent = 'x ' + b.x + ' · y ' + b.y + ' · ' + b.w + ' × ' + b.h + ' mm'; };
@@ -3927,7 +3938,7 @@ function imprimirEtiquetas(items, titulo){
     rawbt: 'Instala gratis <b>RawBT</b> desde Play Store. Dentro de RawBT, en <b>Ajustes</b>, elige tu impresora (Bluetooth, USB o WiFi), su <b>tipo/driver</b> y el <b>ancho del papel</b>, y prueba con su botón de prueba. Luego elige aquí el <b>lenguaje</b> de tu impresora: <b>ESC/POS</b> para impresoras de tickets como la POS-5802.',
     pdf: 'Se comparte el PDF con la medida exacta: elige la app de tu impresora (Xprinter, Zebra, Brother, HP…) o Mopria para impresoras WiFi.'
   };
-  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none'; const esc = (v === 'bt' || v === 'rawbt') && /^escpos/.test(q('#eLeng').value); q('#ePapL').style.display = esc ? '' : 'none'; q('#eEscOp').style.display = esc ? '' : 'none'; q('#eMs').disabled = q('#eMi').disabled = !q('#eRec').checked;
+  function ayudaMet(){ const v = q('#eMet').value; q('#eMetAyuda').innerHTML = (AYUDA[v] || '') + ((v === 'bt' || v === 'rawbt') ? '<br><b>¿Salen letras y símbolos raros (SIZE, GAP, BITMAP…) en vez de la etiqueta?</b> Tu impresora usa otro lenguaje: cambia a <b>ESC/POS</b> (impresoras de tickets) o a <b>ZPL</b> (Zebra).' : ''); q('#eLengL').style.display = (v === 'bt' || v === 'rawbt') ? '' : 'none'; const esc = (v === 'bt' || v === 'rawbt') && /^escpos/.test(q('#eLeng').value); q('#ePapL').style.display = esc ? '' : 'none'; q('#eEscOp').style.display = esc ? '' : 'none'; q('#eMs').disabled = q('#eMi').disabled = !q('#eRec').checked; const gvL = q('#eGv').closest('label'); if (gvL) gvL.style.display = esc && q('#eRec').checked ? 'none' : '';
     q('#eBTrow').style.display = v === 'bt' ? '' : 'none'; q('#eBTnom').textContent = BT && BT.car ? '✓ Conectada: ' + BT.nombre : (ls.get('etqBT', '') ? 'Última usada: ' + ls.get('etqBT', '') : ''); }
   q('#eBTbus').onclick = async () => { try { await conectarBT(true); ayudaMet(); toast('Impresora conectada: ' + BT.nombre); } catch (e) { if (e && e.name !== 'NotFoundError') toast(e.message, true); } };
   const imprimir = async (l) => {
@@ -3963,17 +3974,17 @@ function imprimirEtiquetas(items, titulo){
     infoSel();
   };
   const skDe = (k) => (ETQ_EL.find((x) => x[0] === k) || [])[3];
-  const cambiaLetra = (k, v) => { const sk = skDe(k); if (!sk) return; C[sk] = Math.max(30, Math.min(300, Math.round(v))); sel = k; ls.set('etqCfg', C); pintarTam(); pintarPrev(); };
+  const cambiaLetra = (k, v) => { const sk = skDe(k); if (!sk) return; C[sk] = Math.max(30, Math.min(300, Math.round(v))); sel = k; guardarEtq(C); pintarTam(); pintarPrev(); };
   q('#eTam').onclick = (e) => {
     const mv = e.target.closest('[data-mv]');
     if (mv) { const [dx, dy, dw, dh] = mv.dataset.mv.split(',').map(Number); const b = cajasEtq(C)[sel]; guardarCaja(sel, { x: b.x + dx, y: b.y + dy, w: b.w + dw, h: b.h + dh }); pintarPrev(); return; }
     const r = e.target.closest('[data-k]'); if (!r) return; const k = r.dataset.k; const b2 = e.target.closest('[data-d]');
     if (b2) cambiaLetra(k, (C[skDe(k)] || 100) + Number(b2.dataset.d)); else if (!e.target.matches('input')) { sel = k; pintarTam(); pintarPrev(); } };
-  const ponEstilo = (o) => { C.est = Object.assign({}, C.est || {}); C.est[sel] = Object.assign({}, (C.est || {})[sel] || {}, o); ls.set('etqCfg', C); pintarTam(); pintarPrev(); };
+  const ponEstilo = (o) => { C.est = Object.assign({}, C.est || {}); C.est[sel] = Object.assign({}, (C.est || {})[sel] || {}, o); guardarEtq(C); pintarTam(); pintarPrev(); };
   q('#eTam').addEventListener('click', (e) => { const a1 = e.target.closest('[data-al]'); if (a1) return ponEstilo({ al: a1.dataset.al }); const b1 = e.target.closest('[data-b]'); if (b1) ponEstilo({ b: b1.dataset.b === '1' }); });
   q('#eTam').onchange = (e) => { if (e.target.id === 'eFu') return ponEstilo({ f: e.target.value }); const r = e.target.closest('[data-k]'); if (r && e.target.matches('[data-v]')) cambiaLetra(r.dataset.k, parseFloat(e.target.value) || 100); };
-  q('#ePosR').onclick = () => { C.lays = Object.assign({}, C.lays || {}); delete C.lays[claveLay(C)]; ls.set('etqCfg', C); pintarPrev(); toast('Casillas originales restablecidas'); };
-  q('#eTamR').onclick = () => { ETQ_EL.forEach((x) => { if (x[3]) C[x[3]] = 100; }); C.est = {}; ls.set('etqCfg', C); pintarTam(); pintarPrev(); toast('Letras y estilos originales restablecidos'); };
+  q('#ePosR').onclick = () => { C.lays = Object.assign({}, C.lays || {}); delete C.lays[claveLay(C)]; guardarEtq(C); pintarPrev(); toast('Casillas originales restablecidas'); };
+  q('#eTamR').onclick = () => { ETQ_EL.forEach((x) => { if (x[3]) C[x[3]] = 100; }); C.est = {}; guardarEtq(C); pintarTam(); pintarPrev(); toast('Letras y estilos originales restablecidos'); };
   // mover y redimensionar casillas con el mouse o el dedo
   let drag = null;
   q('#ePrev').addEventListener('pointerdown', (e) => {
@@ -3999,8 +4010,14 @@ function imprimirEtiquetas(items, titulo){
   });
   const soltar = () => { if (!drag) return; drag = null; pintarTam(); pintarPrev(); };
   q('#ePrev').addEventListener('pointerup', soltar); q('#ePrev').addEventListener('pointercancel', soltar);
+  const resumen = () => { const met = (ETQ_METODOS.find((x) => x[0] === (C.met || '')) || ['', esCelular() ? 'Bluetooth' : 'Ventana de impresión'])[1].split(' (')[0];
+    q('#eRes').innerHTML = ic('barcode') + '<div class="grow"><b>' + C.w + ' × ' + C.h + ' mm</b>' + (C.cols > 1 ? ' · ' + C.cols + ' por fila' : '') + ' · ' + h(met) + ((C.met === 'bt' || C.met === 'rawbt') ? ' · ' + h(((ETQ_LENG.find((x) => x[0] === C.leng) || ['', ''])[1]).split(' — ')[0]) : '') +
+      '<div class="small muted">Se usa la configuración general guardada. Para cambiarla abre “Configuración general de etiquetas”.</div></div>'; };
+  q('#eCfgOk').onclick = () => { leer(); clearTimeout(tGuardaEtq); const r = Object.assign({}, C, { id: 'etq' }); put('cfg', r); q('#eCfgBox').open = false; resumen(); toast('Configuración de etiquetas guardada para todos los productos'); };
+  m.b.addEventListener('change', () => setTimeout(resumen, 0));
   pintarTam();
-  ponerCampos(); pintarLista();
+  ponerCampos(); pintarLista(); resumen();
+  if (opts.config && q('#eCfgBox')) setTimeout(() => q('#eCfgBox').scrollIntoView({ block: 'start' }), 80);
   setTimeout(pintarPrev, 60);
 }
 
@@ -4097,7 +4114,7 @@ function comandosEtq(lista, C, leng){
     const esEsc = leng === 'escpos' || leng === 'escpos2', dpm = (C.dpi || 203) / 25.4;
     if (esEsc) { B = centrarBits(B, C.papel == null ? 384 : C.papel); if (C.recorte !== false) B = margenesBits(recortarBits(B, 0), (C.mSup == null ? 1 : Number(C.mSup)) * dpm, (C.mInf == null ? 1 : Number(C.mInf)) * dpm); }
     const ultima = f === filas[filas.length - 1];
-    const avance = esEsc ? avanceEsc(ultima ? (C.fin == null ? 10 : Number(C.fin)) * dpm : (Number(C.gv) || 0) * dpm) : null;
+    const avance = esEsc ? avanceEsc(ultima ? (C.fin == null ? 10 : Number(C.fin)) * dpm : (C.recorte !== false ? 0 : (Number(C.gv) || 0) * dpm)) : null;
     if (leng === 'tspl') {
       const inv = B.bits.map((v) => 255 - v);   // en TSPL 0 = punto negro
       partes.push(txtBytes('SIZE ' + PW + ' mm,' + C.h + ' mm\r\nGAP ' + (Number(C.gv) || 2) + ' mm,0 mm\r\nDIRECTION 1,0\r\nREFERENCE 0,0\r\nDENSITY 10\r\nCLS\r\nBITMAP 0,0,' + B.bpr + ',' + B.h + ',0,'), inv, txtBytes('\r\nPRINT 1,1\r\n'));
