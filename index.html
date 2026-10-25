@@ -493,7 +493,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-26d';
+const APP_VER = '2026-10-26e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1239,7 +1239,7 @@ function montarBuscador(cont, onPick, opts){
   });
   res.addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) elegir(lista[+d.dataset.i]); });
   document.addEventListener('click', (e) => { if (!cont.contains(e.target)) res.classList.add('hide'); });
-  const mic = qs('[data-mic]', cont);
+  const mic = qs('button[data-mic]', cont);
   if (mic) mic.onclick = () => escucharVoz(mic, (txt, final) => {
     inp.value = txt;
     if (!final) return;
