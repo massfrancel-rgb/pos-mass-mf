@@ -437,7 +437,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .estbadge{position:fixed;right:12px;bottom:12px;z-index:50;display:flex;align-items:center;gap:6px;background:#1E7A3C;color:#fff;font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.25)}.estbadge svg{width:18px;height:18px}@media (max-width:620px){.estbadge{bottom:76px}}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
-.etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
+.etqprev.edit{touch-action:none;user-select:none}.etqprev.edit [data-el]{cursor:grab}.etqprev.edit [data-el]:active{cursor:grabbing}
 .sinstk{display:block;margin-top:4px;padding:4px 8px;border-radius:8px;background:#FDECEA;color:#B3261E;font-weight:700;font-size:12.5px;line-height:1.3}:root[data-theme="dark"] .sinstk{background:#3A1614;color:#FFB4AB}
 </style>
 </head>
@@ -465,7 +465,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-25b';
+const APP_VER = '2026-10-25c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3744,6 +3744,7 @@ const hayCfgEtq = () => !!(S.cfg.get('etq') || ls.get('etqCfg', null));
 let tGuardaEtq = null;
 function guardarEtq(C){
   ls.set('etqCfg', C);
+  const n0 = S.cfg.get('etq'); if (n0) S.cfg.set('etq', Object.assign({}, n0, C, { id: 'etq' }));   // en memoria ya, la nube en 0,7 s
   clearTimeout(tGuardaEtq); tGuardaEtq = setTimeout(() => { const r = Object.assign({}, C, { id: 'etq' }); delete r._u; put('cfg', r); }, 700);
 }
 /** Partes de la etiqueta: [clave, nombre, opción que la muestra, tamaño de letra, alineación] */
@@ -3922,13 +3923,16 @@ function imprimirEtiquetas(items, titulo, opts){
   };
   const prevW = () => Math.max(120, Math.min(360, (q('#ePrev').clientWidth || 330) - 36));
   let sel = 'N', escPrev = 1;
+  /** Solo se puede mover o estirar casillas con la Configuración general abierta */
+  const editable = () => !!(q('#eCfgBox') && q('#eCfgBox').open);
   const pEj = () => (L[0] && L[0].p) || { id: '11103', b: '', n: 'KALIPEGA 500 CC PLASTIGAMA (ejemplo)', pv: 11.95 };
   const pintarPrev = () => {
     const p = pEj();
     const PW = C.cols * C.w + (C.cols - 1) * C.gap; const px = PW * 3.78;   // 1 mm ≈ 3,78 px
     const esc = Math.min(4, prevW() / px); escPrev = esc;
     q('#ePrev').innerHTML = '<div style="width:' + (px * esc) + 'px;height:' + (C.h * 3.78 * esc) + 'px"><div style="transform:scale(' + esc + ');transform-origin:0 0;display:flex;gap:' + C.gap + 'mm;width:' + PW + 'mm;--hd:' + (9 / (3.78 * esc)).toFixed(3) + 'mm">' +
-      Array.from({ length: C.cols }, (_, i) => etiquetaHTML((L[i] && L[i].p) || p, C, i === 0, sel)).join('') + '</div></div>';
+      Array.from({ length: C.cols }, (_, i) => etiquetaHTML((L[i] && L[i].p) || p, C, i === 0 && editable(), sel)).join('') + '</div></div>';
+    q('#ePrev').classList.toggle('edit', editable());
     const K = cajasEtq(C), z = barrasEtq(p, C, K.B);
     q('#eInfo').innerHTML = (z.angosto ? '<b style="color:#C62828">⚠ La casilla del código de barras es muy angosta: agrándala a lo ancho.</b><br>' : '') +
       h('Rollo de ' + PW + ' mm de ancho · código ' + (z.bc.ean ? 'EAN-13' : 'Code 128') + ' · ' + C.dpi + ' dpi');
@@ -4020,6 +4024,7 @@ function imprimirEtiquetas(items, titulo, opts){
   // mover y redimensionar casillas con el mouse o el dedo
   let drag = null;
   q('#ePrev').addEventListener('pointerdown', (e) => {
+    if (!editable()) return;
     const el = e.target.closest('[data-el]'); if (!el) return;
     const k = el.dataset.el; const hd = e.target.closest('[data-hd]');
     if (k !== sel) { sel = k; pintarTam(); pintarPrev(); }
@@ -4047,6 +4052,7 @@ function imprimirEtiquetas(items, titulo, opts){
       '<div class="small muted">Se usa la configuración general guardada. Para cambiarla abre “Configuración general de etiquetas”.</div></div>'; };
   q('#eCfgOk').onclick = () => { leer(); clearTimeout(tGuardaEtq); const r = Object.assign({}, C, { id: 'etq' }); put('cfg', r); q('#eCfgBox').open = false; resumen(); toast('Configuración de etiquetas guardada para todos los productos'); };
   m.b.addEventListener('change', () => setTimeout(resumen, 0));
+  q('#eCfgBox').addEventListener('toggle', () => pintarPrev());
   pintarTam();
   ponerCampos(); pintarLista(); resumen();
   if (opts.config && q('#eCfgBox')) setTimeout(() => q('#eCfgBox').scrollIntoView({ block: 'start' }), 80);
