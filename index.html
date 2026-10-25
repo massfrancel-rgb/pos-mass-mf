@@ -477,7 +477,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-26a';
+const APP_VER = '2026-10-26b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1744,6 +1744,64 @@ async function pdfTicket(v, ancho){
   y += 2; fs(7); doc.text(doc.splitTextToSize((v.tp === 'P' ? 'Pedido sin valor tributario.' : 'Documento interno.') + ' ' + (C.pie || ''), W - 2 * Mg), W / 2, y, { align: 'center' });
   return doc;
 }
+/* ---------- Ticket como imagen para impresoras térmicas Bluetooth (RawBT, ESC/POS) ---------- */
+function canvasTicket(v, puntos){
+  v = vistaDoc(v); const C = cfg(); const W = puntos || 384, Mg = 4, z = W / 384;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = 10;
+  const dibujar = (ctx) => {
+    let y = 4;
+    const fuente = (px, b) => { ctx.font = (b ? '700 ' : '500 ') + Math.round(px * z) + 'px Arial, Helvetica, sans-serif'; return Math.round(px * z); };
+    const partir = (t, ancho) => { const pal = String(t || '').split(/\s+/); const o = []; let l = '';
+      pal.forEach((w) => { const prueba = l ? l + ' ' + w : w; if (ctx.measureText(prueba).width <= ancho || !l) l = prueba; else { o.push(l); l = w; } }); if (l) o.push(l); return o; };
+    const centro = (t, px, b) => { const a = fuente(px, b); partir(t, W - 2 * Mg).forEach((ln) => { y += a; ctx.textAlign = 'center'; ctx.fillText(ln, W / 2, y); y += Math.round(a * 0.25); }); };
+    const izq = (t, px, b, max) => { const a = fuente(px, b); partir(t, W - 2 * Mg).slice(0, max || 9).forEach((ln) => { y += a; ctx.textAlign = 'left'; ctx.fillText(ln, Mg, y); y += Math.round(a * 0.25); }); };
+    const par = (a1, a2, px, b) => { const a = fuente(px, b); y += a; ctx.textAlign = 'left'; ctx.fillText(a1, Mg, y); ctx.textAlign = 'right'; ctx.fillText(a2, W - Mg, y); y += Math.round(a * 0.3); };
+    const linea = () => { y += 6; for (let x = Mg; x < W - Mg; x += 10) ctx.fillRect(x, y, 6, 2); y += 6; };
+    ctx.fillStyle = '#000';
+    centro(C.nombre, 34, true); y += 2;
+    centro([C.ruc ? 'RUC ' + C.ruc : '', 'Tel. ' + C.tel].filter(Boolean).join(' · '), 20);
+    centro(C.dir, 20); y += 6;
+    centro(({ F: 'FACTURA', N: 'NOTA DE VENTA', P: 'PEDIDO', C: 'NOTA DE CRÉDITO' }[v.tp]) + ' ' + v.num, 26, true);
+    if (v.sri) centro('SRI ' + v.sri, 20);
+    if (v.tp === 'C') centro('Modifica ' + (v.vrefNum || '') + ' · ' + (v.mot || ''), 20);
+    centro(fechaTxt(v.f) + ' ' + (v.anf ? '' : horaTxt(v.ts)) + ' · ' + nomVend(v.v), 20);
+    if (v.an) centro('*** ANULADO ***', 28, true);
+    y += 4; const cli = v.cli || CONSUMIDOR;
+    izq('Cliente: ' + cli.nombre, 21, false, 3); izq('CI/RUC: ' + (cli.ruc || ''), 21);
+    linea();
+    (v.it || []).forEach((x) => { const k = calcItem(x); izq(x.n, 22, true, 3); par('  ' + numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), money(k.neto), 22); y += 4; });
+    linea();
+    if (v.anf) { par('Subtotal', money(r2((v.sub12 || 0) + (v.sub0 || 0))), 22); par('IVA', money(v.iva || 0), 22); }
+    else {
+      const TS = tasasDe(v); const ks = Object.keys(TS).map(Number).sort((a, b) => b - a);
+      ks.forEach((kk) => par('Subtotal ' + kk + '%', money(TS[kk].b), 22)); if (v.desc) par('Descuentos', '-' + money(v.desc), 22); ks.filter((kk) => kk).forEach((kk) => par('IVA ' + kk + '%', money(TS[kk].i), 22));
+    }
+    y += 4; par('TOTAL', money(v.tot), 34, true); y += 4;
+    par((v.tp === 'C' ? '' : 'Pago: ') + (nomFp(v) || ''), v.fp === 'ef' && v.rec ? 'Recibido ' + money(v.rec) : '', 21);
+    if (v.fp === 'ef' && v.rec > v.tot) par('Cambio', money(v.rec - v.tot), 24, true);
+    if (v.nota) izq('Nota: ' + v.nota, 20);
+    y += 10; centro((v.tp === 'P' ? 'Pedido sin valor tributario.' : 'Documento interno.') + ' ' + (C.pie || ''), 20);
+    return y + 6;
+  };
+  const alto = dibujar(cv.getContext('2d'));   // primera pasada: mide el alto
+  cv.height = Math.ceil(alto); const ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, cv.height); dibujar(ctx);
+  return cv;
+}
+function bytesTicket(v, puntos){
+  const B = bitsCanvas(canvasTicket(v, puntos)); const partes = [new Uint8Array([0x1b, 0x40, 0x1b, 0x61, 0x00])];
+  for (let y0 = 0; y0 < B.h; y0 += 200) {   // en franjas: algunas impresoras no aceptan imágenes muy altas
+    const h0 = Math.min(200, B.h - y0);
+    partes.push(new Uint8Array([0x1d, 0x76, 0x30, 0x00, B.bpr & 255, B.bpr >> 8, h0 & 255, h0 >> 8]), B.bits.subarray(y0 * B.bpr, (y0 + h0) * B.bpr));
+  }
+  partes.push(avanceEsc(100), new Uint8Array([0x1d, 0x56, 0x42, 0x00]));   // avanza ~12 mm y corta (si tiene cortador)
+  return unirBytes(partes);
+}
+/** Celular: imprime el ticket en la impresora Bluetooth a través de la app RawBT */
+function imprimirTicketBT(v, f){
+  const puntos = f === 'tk' ? 576 : 384;
+  ls.set('fmtImp', f === 'a4' ? 't58' : f);
+  enviarRawBTbytes(bytesTicket(v, puntos));
+}
 const FMT_IMP = { t58: 'Ticket 58 mm', tk: 'Ticket 80 mm', a4: 'Hoja A4 (PDF)' };
 const pdfFormato = (v, f) => f === 'a4' ? pdfA4(v) : pdfTicket(v, f === 't58' ? 58 : 80);
 const sufijoFmt = (f) => f === 'a4' ? '' : f === 't58' ? '-ticket58' : '-ticket80';
@@ -1787,7 +1845,8 @@ function opcionesImpresion(v){
   const m = modal({ title: '¿Qué deseas hacer con ' + DOC[v.tp].toLowerCase() + ' ' + v.num + '?', body:
     '<div class="small muted" style="font-weight:700;margin-bottom:6px">Formato</div><div class="seg" id="oiF">' + Object.keys(FMT_IMP).map((k) => '<button data-v="' + k + '">' + FMT_IMP[k] + '</button>').join('') + '</div>' +
     '<div class="menu" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">' +
-    '<a href="#" data-a="imp">' + ic('ticket') + 'Imprimir<small>Envía a la impresora</small></a>' +
+    (esCelular() ? '<a href="#" data-a="bt">' + ic('ticket') + 'Impresora Bluetooth<small>Ticket por la app RawBT (58 u 80 mm)</small></a>' : '') +
+    '<a href="#" data-a="imp">' + ic(esCelular() ? 'pdf' : 'ticket') + (esCelular() ? 'Imprimir PDF' : 'Imprimir') + '<small>' + (esCelular() ? 'Abre el PDF para imprimir' : 'Envía a la impresora') + '</small></a>' +
     '<a href="#" data-a="pdf">' + ic('download') + 'Guardar PDF<small>Descarga el archivo en el equipo</small></a>' +
     '<a href="#" data-a="wa">' + ic('wa') + 'WhatsApp<small>Envía el PDF al cliente</small></a>' +
     '<a href="#" data-a="mail">' + ic('mail') + 'Correo<small>Envía el PDF al correo del cliente</small></a></div>',
@@ -1799,6 +1858,7 @@ function opcionesImpresion(v){
     try {
       if (a.dataset.a === 'wa') { m.close(); return compartirWA(v, f); }
       if (a.dataset.a === 'mail') { m.close(); return enviarCorreo(v, f); }
+      if (a.dataset.a === 'bt') { m.close(); imprimirTicketBT(v, f); toast('Enviando a RawBT…'); return; }
       const d = await pdfFormato(v, f);
       if (a.dataset.a === 'imp') { imprimirPDF(d); toast('Abriendo la impresión…'); }
       else { descargar(d.output('blob'), nombreArchivo(v) + sufijoFmt(f) + '.pdf'); toast('PDF guardado en Descargas'); }
