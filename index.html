@@ -438,6 +438,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
 .etqprev{touch-action:none;user-select:none}.etqprev [data-el]{cursor:grab}.etqprev [data-el]:active{cursor:grabbing}
+.sinstk{display:block;margin-top:4px;padding:4px 8px;border-radius:8px;background:#FDECEA;color:#B3261E;font-weight:700;font-size:12.5px;line-height:1.3}:root[data-theme="dark"] .sinstk{background:#3A1614;color:#FFB4AB}
 </style>
 </head>
 <body>
@@ -464,7 +465,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-24n';
+const APP_VER = '2026-10-25a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -712,7 +713,7 @@ async function putMuchos(t, recs){
 async function borrar(t, id){ const r = S[t].get(id); if (!r) return; r._d = 1; await put(t, r); }
 const vivos = (t) => Array.from(S[t].values()).filter((r) => !r._d);
 const cfg = () => Object.assign({ id: 'emp', nombre: 'MASS FERRETERÍA', ruc: '', dir: 'Av. León Rodrigo Pesantes y Kuwait, esquina', ciudad: 'Santo Domingo de los Tsáchilas · Ecuador',
-  tel: '0959920159', estab: '001', iva: 15, sinStock: true, pie: 'Gracias por su compra.' }, S.cfg.get('emp') || {});
+  tel: '0959920159', estab: '001', iva: 15, sinStock: false, pie: 'Gracias por su compra.' }, S.cfg.get('emp') || {});
 
 /* ---------- Stock: compras − ventas ± ajustes ---------- */
 let STOCK = new Map();
@@ -1144,12 +1145,25 @@ function cartNuevo(){ return { it: [], cli: null, tp: 'F', fp: 'ef', pedId: null
 if (!CART || !Array.isArray(CART.it)) CART = cartNuevo();
 const guardarCart = () => ls.set('carrito', CART);
 
+/** Cantidad total de un producto en el carrito (puede estar en varias líneas) */
+const totalEnCarrito = (pid) => CART.it.filter((y) => y.p === pid).reduce((t, y) => t + (Number(y.q) || 0), 0);
+/** Aviso cuando se pide más de lo que hay (solo si no se permite vender sin stock) */
+function avisoStock(pid){
+  if (cfg().sinStock) return;
+  const s = stockDe(pid), q = totalEnCarrito(pid);
+  if (q > s) toast('Solo hay ' + numf(Math.max(0, s)) + ' en stock de este producto. No se podrá facturar ' + numf(q) + '.', true);
+}
 function agregarAlCarrito(p, q){
   q = q || 1;
   const ex = CART.it.find((x) => x.p === p.id && !Number(x.d));
   if (ex) ex.q = r2(Number(ex.q) + q);
   else CART.it.unshift({ p: p.id, n: p.n, pu: Number(p.pv) || 0, q, d: 0, iva: p.iva == null ? cfg().iva : Number(p.iva), co: Number(p.co) || 0 });
-  guardarCart();
+  guardarCart(); avisoStock(p.id);
+}
+/** Ventana de aviso con un solo botón */
+function alerta(titulo, html){
+  const m = modal({ title: titulo, body: '<div class="note warn" style="font-size:15px;line-height:1.5">' + html + '</div>', foot: '<button class="btn c3d cb" data-x>Entendido</button>' });
+  return m;
 }
 
 function pgVender(){
@@ -1193,7 +1207,8 @@ function pintarCarrito(){
   c.innerHTML = CART.it.map((x, i) => {
     const k = calcItem(x); const s = stockDe(x.p);
     return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb(x) + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · ' + money(x.pu) + ' c/u ' +
-      '<span class="stockchip ' + (s - x.q < 0 ? 'no' : '') + '">Stock ' + numf(s) + '</span>' + (Number(x.iva) !== Number(cfg().iva) ? ' <span class="badge gold">IVA ' + (Number(x.iva) || 0) + '%</span>' : '') + '</div></div></div>' +
+      '<span class="stockchip ' + (s - totalEnCarrito(x.p) < 0 ? 'no' : '') + '">Stock ' + numf(s) + '</span>' + (Number(x.iva) !== Number(cfg().iva) ? ' <span class="badge gold">IVA ' + (Number(x.iva) || 0) + '%</span>' : '') +
+      (!cfg().sinStock && totalEnCarrito(x.p) > s ? '<span class="sinstk">⚠ Solo hay ' + numf(Math.max(0, s)) + ' en stock: no se podrá facturar esta cantidad.</span>' : '') + '</div></div></div>' +
       '<div class="totw"><div class="tot">' + money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '') + '</div>' +
       '<button class="btn sm icon danger" data-a="del" aria-label="Quitar">' + ic('trash') + '</button></div>' +
       '<div class="ctrl' + (precios ? '' : ' np') + '"><div class="qty"><button data-a="menos" aria-label="Menos">−</button><input data-a="q" inputmode="decimal" value="' + numf(x.q) + '"><button data-a="mas" aria-label="Más">+</button></div>' +
@@ -1211,11 +1226,11 @@ function pintarCarrito(){
     const t2 = totales(CART.it); pintarPaybar(t2);
     const k = calcItem(x); qs('[data-i="' + i + '"] .tot', c).innerHTML = money(k.neto) + (k.desc ? '<div class="small muted">−' + money(k.desc) + '</div>' : '');
   };
-  c.onchange = () => pintarCarrito();
+  c.onchange = (e) => { const li = e.target.closest('[data-i]'); if (li && e.target.dataset.a === 'q') { const x = CART.it[+li.dataset.i]; if (x) avisoStock(x.p); } clearTimeout(c._t); c._t = setTimeout(pintarCarrito, 0); };
   c.onclick = (e) => {
     const b = e.target.closest('button[data-a]'); if (!b) return;
     const i = +b.closest('[data-i]').dataset.i; const x = CART.it[i];
-    if (b.dataset.a === 'mas') x.q = r2(Number(x.q) + 1);
+    if (b.dataset.a === 'mas') { x.q = r2(Number(x.q) + 1); avisoStock(x.p); }
     if (b.dataset.a === 'menos') x.q = Math.max(0, r2(Number(x.q) - 1));
     if (b.dataset.a === 'del' || x.q === 0 && b.dataset.a === 'menos') CART.it.splice(i, 1);
     guardarCart(); pintarCarrito();
@@ -1354,8 +1369,9 @@ function abrirCobro(){
     if (fp === 'cr' && tp !== 'P' && !cli) return toast('Para vender a crédito escribe los datos del cliente.', true);
     try { cli = await guardarClienteVenta(cli); } catch (e) { return toast(e.message, true); }
     if (tp !== 'P' && !cfg().sinStock) {
-      const falta = CART.it.filter((x) => stockDe(x.p) < x.q);
-      if (falta.length) return toast('Sin stock suficiente: ' + falta.map((x) => x.n).slice(0, 2).join(', '), true);
+      const ids = Array.from(new Set(CART.it.map((x) => x.p)));
+      const falta = ids.filter((id) => totalEnCarrito(id) > stockDe(id)).map((id) => { const x = CART.it.find((y) => y.p === id); return x.n + ' (pides ' + numf(totalEnCarrito(id)) + ', hay ' + numf(Math.max(0, stockDe(id))) + ')'; });
+      if (falta.length) return alerta('No hay stock suficiente', 'No se puede ' + (tp === 'F' ? 'facturar' : 'hacer la nota de venta') + ' porque falta stock de:<br><b>' + falta.map(h).join('<br>') + '</b><br><br>Baja la cantidad, o guárdalo como <b>Pedido</b> si el cliente espera la mercadería.');
     }
     m.q('#cOk').disabled = true; m.q('#cOkP').disabled = true;
     try {
@@ -2453,7 +2469,7 @@ function pgAjustes(){
       '<label class="f">Dirección<input class="in" id="ajDir" value="' + h(C.dir) + '"></label><label class="f">Ciudad<input class="in" id="ajCiu" value="' + h(C.ciudad) + '"></label>' +
       '<label class="f">Teléfono / WhatsApp<input class="in" id="ajTel" value="' + h(C.tel) + '"></label><label class="f">Establecimiento (facturas)<input class="in" id="ajEst" inputmode="numeric" maxlength="3" value="' + h(C.estab) + '"></label>' +
       '<label class="f">IVA %<input class="in" id="ajIva" inputmode="decimal" value="' + h(C.iva) + '"></label><label class="f">Mensaje al pie<input class="in" id="ajPie" value="' + h(C.pie) + '"></label></div>' +
-      '<label class="chk"><input type="checkbox" id="ajSin"' + (C.sinStock ? ' checked' : '') + '> Permitir vender productos sin stock (recomendado hasta terminar el primer conteo)</label>' +
+      '<label class="chk"><input type="checkbox" id="ajSin"' + (C.sinStock ? ' checked' : '') + '> Permitir vender productos sin stock (si está desmarcado, no deja facturar ni hacer notas de venta con más cantidad de la que hay; los pedidos sí se permiten)</label>' +
       '<button class="btn pri" id="ajGuardar" style="align-self:flex-start">' + ic('check') + 'Guardar datos</button></div>' : '') +
     '<div class="card stack"><h3>Este equipo</h3><div class="row"><button class="btn" id="ajResp">' + ic('download') + 'Descargar respaldo</button>' + (adm ? '<label class="btn">' + ic('upload') + 'Restaurar respaldo<input type="file" id="ajRest" accept=".json" hidden></label>' : '') + '</div>' +
     '<p class="small muted" style="margin:0">Versión ' + APP_VER + ' · ' + vivos('prod').length + ' productos · ' + vivos('vta').length + ' documentos · ' + vivos('com').length + ' compras</p>' +
