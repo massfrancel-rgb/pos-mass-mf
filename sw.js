@@ -1,5 +1,5 @@
 // POS MASS MF — guarda la app para abrir rápido y vender sin internet.
-const VERSION = 'pos-mass-mf-2026-10-26e';
+const VERSION = 'pos-mass-mf-2026-10-31a';
 const BASE = ['./', 'index.html', 'manifest.json', 'logo_mass.png', 'pos-192.png', 'pos-512.png', 'pos-180.png', 'catalogo.json'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
