@@ -451,6 +451,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedbar .pedrow + .pedrow{border-top:1px dashed rgba(120,90,20,.35);padding-top:8px}
 .pedbar .pedrow > span svg,.pedpend > .row > b svg,#ecPedAv .note > svg{width:18px;height:18px;vertical-align:-4px;margin-right:4px;display:inline-block}
 .pedpend{padding:10px 12px;border-left:4px solid #8A3FD1}
+.ci .ctrl.pedctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ci .pedctrl .minilbl{flex:1 1 92px;min-width:84px}.ci .pedctrl .mini,.ci .pedctrl .mini.pct{width:100%}.mini.strong{font-weight:800}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -500,7 +501,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31b';
+const APP_VER = '2026-10-31c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2468,7 +2469,7 @@ function compraDesdePedido(P){
   const prov = S.prov.get(P.pr) || {};
   if (RUTA !== 'compras') irA('compras');
   setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
-    it: (P.it || []).filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(p.co) || x.co || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), RUTA === 'compras' ? 0 : 120);
+    it: (P.it || []).filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(x.co) || Number(p.co) || 0, iva: calcPed(x).iva, pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), RUTA === 'compras' ? 0 : 120);
 }
 
 function verCompra(c){
@@ -2527,7 +2528,7 @@ function editarCompra(c, borr){
   };
   m.q('#ecPedAv').onclick = async (e) => { const b = e.target.closest('[data-cped]'); if (!b) return; const P = S.ped.get(b.dataset.cped); if (!P) return;
     if (D.it.length && !(await confirmar('¿Agregar los productos del pedido ' + P.num + ' a esta compra?', 'Agregar'))) return;
-    (P.it || []).filter((x) => x.q > 0).forEach((x) => { const p = S.prod.get(x.p) || { id: x.p, n: x.n, co: x.co }; const ex = D.it.find((y) => y.p === x.p); if (ex) ex.q = r2(ex.q + x.q); else D.it.push(Object.assign(nuevaLinea(p), { q: x.q })); });
+    (P.it || []).filter((x) => x.q > 0).forEach((x) => { const p = S.prod.get(x.p) || { id: x.p, n: x.n, co: x.co }; const ex = D.it.find((y) => y.p === x.p); if (ex) ex.q = r2(ex.q + x.q); else D.it.push(Object.assign(nuevaLinea(p), { q: x.q, co: Number(x.co) || Number(p.co) || 0, iva: calcPed(x).iva })); });
     D.ped = P.id; if (!D.nota) { D.nota = 'Pedido ' + P.num; m.q('#ecNota').value = D.nota; }
     guardarD(); pintar(); avisoPed(); toast('Productos del pedido ' + P.num + ' cargados');
   };
@@ -3604,11 +3605,11 @@ const REP = {
   },
   pedprov(F){
     const l = vivos('ped').filter((p) => enRango(p.f, F)).sort((a, b) => (b.f || '').localeCompare(a.f || '') || (b.ts || 0) - (a.ts || 0));
-    const u = (p) => (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0), c = (p) => r2((p.it || []).reduce((t, x) => t + (Number(x.q) || 0) * (Number(x.co) || 0), 0));
+    const u = (p) => (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0), c = (p) => totPed(p.it).tot;
     const n = (e) => l.filter((p) => p.est === e).length;
     const comp = (p) => { const co = p.comp && S.com.get(p.comp); return co && !co._d ? (co.num || 's/n') + ' · ' + fechaTxt(co.f) : (p.est === 'rec' ? (p.recF ? fechaTxt(p.recF) : 'Sí') : ''); };
-    return { kpis: [['Pedidos', String(l.length)], ['Por enviar', String(n('pend'))], ['Enviados', String(n('env')), 'esperando que lleguen'], ['Recibidos', String(n('rec'))], ['Costo referencial', money(l.reduce((t, p) => t + c(p), 0))]],
-      cab: ['Pedido', 'Fecha', 'Proveedor', 'Estado', 'Productos', 'Unidades', 'Costo ref.', 'Compra / recibido', 'Pidió'], num: [4, 5, 6], fmt: { 6: M$ }, clic: true,
+    return { kpis: [['Pedidos', String(l.length)], ['Por enviar', String(n('pend'))], ['Enviados', String(n('env')), 'esperando que lleguen'], ['Recibidos', String(n('rec'))], ['Total c/IVA', money(l.reduce((t, p) => t + c(p), 0))]],
+      cab: ['Pedido', 'Fecha', 'Proveedor', 'Estado', 'Productos', 'Unidades', 'Total c/IVA', 'Compra / recibido', 'Pidió'], num: [4, 5, 6], fmt: { 6: M$ }, clic: true,
       filas: l.map((p) => [h(p.num), fechaTxt(p.f), h(nomProv(p.pr)), '<span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span>', (p.it || []).length, u(p), c(p), h(comp(p)), h(nomVend(p.v))]),
       raw: l.map((p) => [p.num, p.f, nomProv(p.pr), EST_PED[p.est][0], (p.it || []).length, u(p), c(p), comp(p), nomVend(p.v)]),
       pie: ['Total', '', '', '', l.reduce((t, p) => t + (p.it || []).length, 0), l.reduce((t, p) => t + u(p), 0), r2(l.reduce((t, p) => t + c(p), 0)), '', ''],
@@ -3618,10 +3619,10 @@ const REP = {
   pedxprov(F){
     const l = vivos('ped').filter((p) => enRango(p.f, F));
     const m = agrupar(l, (p) => p.pr, (o, p) => { o.n = (o.n || 0) + 1; o[p.est] = (o[p.est] || 0) + 1; o.u = (o.u || 0) + (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
-      o.c = (o.c || 0) + (p.it || []).reduce((t, x) => t + (Number(x.q) || 0) * (Number(x.co) || 0), 0); o.ult = !o.ult || p.f > o.ult ? p.f : o.ult; });
+      o.c = (o.c || 0) + totPed(p.it).tot; o.ult = !o.ult || p.f > o.ult ? p.f : o.ult; });
     const ids = Array.from(m.keys()).sort((a, b) => nomProv(a).localeCompare(nomProv(b)));
     const filas = ids.map((id) => { const o = m.get(id); return [h(nomProv(id)), o.n, o.pend || 0, o.env || 0, o.rec || 0, o.u, r2(o.c), fechaTxt(o.ult)]; });
-    return { cab: ['Proveedor', 'Pedidos', 'Por enviar', 'Enviados', 'Recibidos', 'Unidades', 'Costo ref.', 'Último pedido'], num: [1, 2, 3, 4, 5, 6], fmt: { 6: M$ }, filas,
+    return { cab: ['Proveedor', 'Pedidos', 'Por enviar', 'Enviados', 'Recibidos', 'Unidades', 'Total c/IVA', 'Último pedido'], num: [1, 2, 3, 4, 5, 6], fmt: { 6: M$ }, filas,
       pie: ['Total', l.length, filas.reduce((t, f) => t + f[2], 0), filas.reduce((t, f) => t + f[3], 0), filas.reduce((t, f) => t + f[4], 0), filas.reduce((t, f) => t + f[5], 0), r2(filas.reduce((t, f) => t + f[6], 0)), ''],
       html: l.length ? '' : '<div class="note">No hay pedidos a proveedores en este período.</div>' };
   },
@@ -3877,6 +3878,15 @@ function provHabitual(pid){
   return best || '';
 }
 const opcionesProv = (sel) => '<option value="">— Proveedor —</option>' + vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '"' + (p.id === sel ? ' selected' : '') + '>' + h(p.nombre) + '</option>').join('');
+const r4 = (n) => Math.round((Number(n) || 0) * 10000) / 10000;
+/** Valores de una línea del pedido: IVA propio de la línea (o el del producto) */
+function calcPed(x){
+  const p = S.prod.get(x.p) || {};
+  const iva = x.iva != null && x.iva !== '' ? Number(x.iva) : (p.iva == null ? cfg().iva : Number(p.iva));
+  const sub = r2((Number(x.q) || 0) * (Number(x.co) || 0)); const vi = r2(sub * iva / 100);
+  return { iva, sub, vi, tot: r2(sub + vi) };
+}
+const totPed = (it) => (it || []).reduce((t, x) => { const k = calcPed(x); t.sub = r2(t.sub + k.sub); t.iva = r2(t.iva + k.vi); t.tot = r2(t.tot + k.tot); return t; }, { sub: 0, iva: 0, tot: 0 });
 function sugerido(p, s, vend30){
   const mi = Number(p.mi) || 0;
   return Math.max(1, Math.ceil(Math.max(mi * 2 - s, vend30 - Math.max(0, s), mi - s)));
@@ -3972,7 +3982,7 @@ async function crearPedidosDesdeSeleccion(){
   const creados = [];
   for (const [pr, its] of grupos) {
     const existente = vivos('ped').find((x) => x.pr === pr && x.est === 'pend');
-    const it = its.map(([id, q]) => { const p = S.prod.get(id) || { n: id }; return { p: id, n: p.n, q, co: Number(p.co) || 0, un: p.un || 'UND' }; });
+    const it = its.map(([id, q]) => { const p = S.prod.get(id) || { n: id }; return { p: id, n: p.n, q, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' }; });
     if (existente) {
       const e = Object.assign({}, existente, { it: existente.it.slice() });
       it.forEach((x) => { const y = e.it.find((z) => z.p === x.p); if (y) y.q = x.q; else e.it.push(x); });
@@ -4003,7 +4013,7 @@ function verPedidos(){
     return '<h3 class="rgh" style="margin:10px 0 6px">' + ico3d('truck', ['#F2BC4A', '#C08510']) + h(k) + ' <span class="badge">' + ps.length + '</span></h3><div class="card" style="padding:4px 10px"><div class="list">' +
       ps.map((p) => '<div class="li" data-id="' + h(p.id) + '"><div class="grow"><div class="t">' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
         '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf((p.it || []).reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' u.' + (p.nota ? ' · ' + h(p.nota) : '') + '</div></div>' +
-        '<div class="v">' + money((p.it || []).reduce((s, x) => s + (Number(x.q) || 0) * (Number(x.co) || 0), 0)) + '<div class="small muted" style="font-weight:400">costo ref.</div></div></div>').join('') + '</div></div>';
+        '<div class="v">' + money(totPed(p.it).tot) + '<div class="small muted" style="font-weight:400">total c/IVA</div></div></div>').join('') + '</div></div>';
   }).join('') : '<div class="empty"><b>No hay pedidos a proveedores</b>Créalos desde Reportes → Stock bajo y agotados marcando lo que necesitas, o con “Nuevo pedido”.</div>',
     foot: '<button class="btn" data-x>Cerrar</button><a class="btn c3d co" href="#rep?r=stockbajo" id="vpSb">' + ic('alert') + 'Ver stock bajo</a><button class="btn c3d cv" id="vpN">' + ic('plus') + 'Nuevo pedido</button>' });
   m.q('#vpN').onclick = () => { m.close(); verPedido(null); };
@@ -4028,18 +4038,67 @@ function verPedido(p0){
       (!bloqueado ? '<button class="btn c3d cp" id="ppCo">' + ic('truck') + 'Convertir en compra</button>' : '') + '<button class="btn c3d co" id="ppOk">' + ic('check') + 'Guardar</button>' });
   m.q('#ppE').value = P.est;
   const leer = () => { P.pr = m.q('#ppPr').value; P.f = m.q('#ppF').value || hoyISO(); P.est = m.q('#ppE').value; P.nota = m.q('#ppN').value.trim(); };
-  const pintar = () => {
-    m.q('#ppBody').innerHTML = P.it.length ? P.it.map((x, i) => '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.co ? ' · último costo ' + money(x.co) : '') + '</div></div></div>' +
-      '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
-      '<div class="ctrl np"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + (bloqueado ? ' disabled' : '') + '></label></div></div>').join('') :
-      '<div class="empty card">Agrega los productos que vas a pedir</div>';
-    const u = P.it.reduce((s, x) => s + (Number(x.q) || 0), 0), c = P.it.reduce((s, x) => s + (Number(x.q) || 0) * (Number(x.co) || 0), 0);
-    m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div><div class="tcas tot"><span>Costo referencial</span><b>' + money(c) + '</b></div></div>';
+  const pintarPie = () => {
+    const u = P.it.reduce((t, x) => t + (Number(x.q) || 0), 0); const T = totPed(P.it);
+    m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div>' +
+      '<div class="tcas"><span>Subtotal</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total</span><b>' + money(T.tot) + '</b></div></div>';
   };
-  if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else P.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, un: p.un || 'UND' });
+  const pintar = () => {
+    const dis = bloqueado ? ' disabled' : '';
+    m.q('#ppBody').innerHTML = P.it.length ? P.it.map((x, i) => { const k = calcPed(x);
+      return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</div></div></div>' +
+      '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm" data-mov title="Mandar este producto al pedido de otro proveedor">' + ic('truck') + 'Otro proveedor</button><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
+      '<div class="ctrl np pedctrl"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></label>' +
+      '<label class="minilbl">Costo s/IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></label>' +
+      '<label class="minilbl">IVA %<input class="mini pct" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></label>' +
+      '<label class="minilbl">Subtotal<input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></label>' +
+      '<label class="minilbl">Total c/IVA<input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></label></div></div>'; }).join('') :
+      '<div class="empty card">Agrega los productos que vas a pedir</div>';
+    pintarPie();
+  };
+  if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else P.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' });
     if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; } pintar(); }, { ph: 'Agregar producto al pedido…' });
-  m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); if (!tr) return; P.it[+tr.dataset.i].q = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); pintar(); };
-  m.q('#ppBody').onclick = (e) => { if (e.target.closest('[data-del]')) { P.it.splice(+e.target.closest('[data-i]').dataset.i, 1); pintar(); } };
+  m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = P.it[+tr.dataset.i];
+    const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const iv = calcPed(x).iva;
+    if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v;
+    else if (k === 'sub') x.co = x.q ? r4(v / x.q) : 0; else if (k === 'tot') x.co = x.q ? r4(v / x.q / (1 + iv / 100)) : 0;
+    // actualiza solo esa fila (sin perder el cursor) y los totales
+    const c = calcPed(x); const put2 = (kk, val) => { const el = tr.querySelector('[data-k="' + kk + '"]'); if (el && el !== e.target) el.value = val; };
+    put2('q', numf(x.q)); put2('co', x.co ? r4(x.co) : ''); put2('iva', numf(c.iva)); put2('sub', c.sub.toFixed(2)); put2('tot', c.tot.toFixed(2));
+    if (k !== 'sub' && k !== 'tot') { /* nada */ } else e.target.value = (k === 'sub' ? c.sub : c.tot).toFixed(2);
+    pintarPie(); };
+  m.q('#ppBody').onclick = (e) => {
+    if (e.target.closest('[data-del]')) { P.it.splice(+e.target.closest('[data-i]').dataset.i, 1); pintar(); return; }
+    const mv = e.target.closest('[data-mov]'); if (mv) moverLinea(+mv.closest('[data-i]').dataset.i);
+  };
+  // Mandar un producto al pedido de otro proveedor (se suma a su pedido pendiente o se crea uno nuevo)
+  const moverLinea = (i) => {
+    leer(); const x = P.it[i]; if (!x) return;
+    const mm = modal({ title: 'Mandar a otro proveedor', body: '<p style="margin-top:0"><b>' + h(x.n) + '</b> · ' + numf(x.q) + ' u.</p>' +
+      '<label class="f">Proveedor<select class="in" id="mvPr">' + opcionesProv('').replace(new RegExp('<option value="' + (P.pr || '@@').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '">[^<]*</option>'), '') + '</select></label>' +
+      '<label class="chk" style="margin-top:8px"><input type="checkbox" id="mvHab" checked> Que este proveedor quede como el habitual del producto</label>' +
+      '<p class="small muted" style="margin-bottom:0">Se agrega a su pedido pendiente (si tiene uno) o se crea un pedido nuevo.</p>',
+      foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d cp" id="mvOk">' + ic('truck') + 'Mandar</button>' });
+    mm.q('#mvOk').onclick = async () => {
+      const pr = mm.q('#mvPr').value; if (!pr) return toast('Elige el proveedor.', true);
+      let dest = vivos('ped').find((y) => y.pr === pr && y.est === 'pend' && y.id !== P.id);
+      dest = dest ? JSON.parse(JSON.stringify(dest)) : { id: uid('pp'), num: siguientePedidoProv(), pr, f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' };
+      delete dest._u; delete dest._d;
+      const ex = dest.it.find((z) => z.p === x.p); if (ex) ex.q = r2((Number(ex.q) || 0) + (Number(x.q) || 0)); else dest.it.push(Object.assign({}, x));
+      await put('ped', dest);
+      if (mm.q('#mvHab').checked) { const pp = S.prod.get(x.p); if (pp && pp.prov !== pr) await put('prod', Object.assign({}, pp, { prov: pr })); }
+      P.it.splice(i, 1);
+      mm.close();
+      if (!P.it.length) {
+        if (!nuevo && S.ped.get(P.id)) await borrar('ped', P.id);
+        m.close(); toast(x.n + ' pasó al pedido ' + dest.num + ' de ' + nomProv(pr) + '. Este pedido quedó vacío y se eliminó.');
+      } else {
+        if (!nuevo || S.ped.get(P.id)) await put('ped', Object.assign({}, P));
+        pintar(); toast('✓ ' + x.n + ' pasó al pedido ' + dest.num + ' de ' + nomProv(pr));
+      }
+      if (RUTA === 'compras' || RUTA === 'rep') render();
+    };
+  };
   const guardar = async () => { leer(); if (!P.pr) { toast('Elige el proveedor.', true); return false; } if (!P.it.length) { toast('Agrega productos.', true); return false; }
     await put('ped', Object.assign({}, P)); return true; };
   m.q('#ppX').onclick = () => m.close();
