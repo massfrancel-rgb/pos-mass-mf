@@ -447,6 +447,13 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
   .card,.kpi{box-shadow:none}
   body{background:#fff;color:#000}
 }
+.pedbar .pedrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
+.pedbar .pedrow + .pedrow{border-top:1px dashed rgba(120,90,20,.35);padding-top:8px}
+.pedbar .pedrow > span svg,.pedpend > .row > b svg,#ecPedAv .note > svg{width:18px;height:18px;vertical-align:-4px;margin-right:4px;display:inline-block}
+.pedpend{padding:10px 12px;border-left:4px solid #8A3FD1}
+.provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
+.provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
+.provbtn.vacio{color:var(--muted)}
 .pedbar{position:sticky;top:0;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;margin:0 0 10px;border-radius:14px;background:linear-gradient(180deg,#FFF4DA,#F6E2B0);border:1px solid #E2C477;color:#3E2C06;box-shadow:0 3px 10px rgba(0,0,0,.08)}
 :root[data-theme="dark"] .pedbar{background:linear-gradient(180deg,#3A2C10,#2A2008);border-color:#6B5320;color:#F6D58E}
 .tbl select.selprov{width:150px;text-align:left;font-size:14px;font-weight:600}.tbl input.selq{width:64px}
@@ -493,7 +500,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31a';
+const APP_VER = '2026-10-31b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2417,12 +2424,13 @@ function pgCompras(){
   v.innerHTML = '<div class="pagehead"><h2>Compras</h2><a class="btn sm c3d ca" href="#proveedores">' + ic('truck') + 'Proveedores</a><button class="btn sm c3d co" id="coBor">' + ic('clip') + 'Borradores <span class="nbadge" id="coBorN"></span></button><button class="btn sm c3d cp" id="coPed">' + ic('list') + 'Pedidos a proveedores <span class="nbadge" id="coPedN"></span></button><button class="btn sm c3d cv" id="coNueva">' + ic('plus') + 'Nueva compra</button></div>' +
     '<div class="stack"><div id="coPer"></div><div class="row"><select class="in" id="coProv" style="flex:1 1 200px;width:auto"><option value="">Todos los proveedores</option>' +
     vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join('') + '</select><input class="in" id="coQ" type="search" placeholder="Buscar N° o producto" style="flex:1 1 200px"></div>' +
-    '<div class="small muted" id="coRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="coList"></div></div></div>';
+    '<div id="coPendPed"></div><div class="small muted" id="coRes"></div><div class="card" style="padding:4px 10px"><div class="list" id="coList"></div></div></div>';
   $('coNueva').onclick = () => editarCompra(null);
   migrarBorradorLocal();
   $('coBor').onclick = verBorradores;
   $('coPed').onclick = verPedidos;
   const np = vivos('ped').filter((p) => p.est !== 'rec').length; $('coPedN').textContent = np; $('coPedN').style.display = np ? '' : 'none';
+  pintarPedidosPendientes($('coPendPed'));
   const nb = borradores().length; $('coBorN').textContent = nb; $('coBorN').style.display = nb ? '' : 'none';
   let F;
   const pintar = () => {
@@ -2436,6 +2444,31 @@ function pgCompras(){
   $('coProv').onchange = pintar; $('coQ').oninput = pintar;
   $('coList').onclick = (e) => { const d = e.target.closest('[data-id]'); if (d) verCompra(S.com.get(d.dataset.id)); };
   filtroPeriodo($('coPer'), 'compras', (f) => { F = f; pintar(); }, false);
+}
+
+/* Pedidos a proveedores que aún no llegan: se ven arriba de las compras */
+function pintarPedidosPendientes(cont){
+  if (!cont) return;
+  const l = vivos('ped').filter((p) => p.est !== 'rec').sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (!l.length) { cont.innerHTML = ''; return; }
+  cont.innerHTML = '<div class="card pedpend"><div class="row" style="margin-bottom:6px"><b>' + ic('clip') + ' Pedidos a proveedores por recibir (' + l.length + ')</b><span class="spacer"></span><button class="btn sm" id="ppTodos">Ver todos</button></div><div class="list">' +
+    l.slice(0, 8).map((p) => { const u = (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
+      return '<div class="li" data-ped="' + h(p.id) + '"><div class="grow"><div class="t">' + h(nomProv(p.pr)) + ' · ' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
+        '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf(u) + ' u. · ' + h(nomVend(p.v)) + '</div></div>' +
+        '<button class="btn sm c3d cp" data-rec="' + h(p.id) + '">' + ic('truck') + 'Llegó: registrar compra</button></div>'; }).join('') + '</div></div>';
+  cont.onclick = (e) => {
+    const r = e.target.closest('[data-rec]'); if (r) { e.stopPropagation(); return compraDesdePedido(S.ped.get(r.dataset.rec)); }
+    const li = e.target.closest('[data-ped]'); if (li) return verPedido(S.ped.get(li.dataset.ped));
+    if (e.target.closest('#ppTodos')) verPedidos();
+  };
+}
+/** Abre una compra nueva con los productos del pedido (al guardar, el pedido queda "Recibido") */
+function compraDesdePedido(P){
+  if (!P) return;
+  const prov = S.prov.get(P.pr) || {};
+  if (RUTA !== 'compras') irA('compras');
+  setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
+    it: (P.it || []).filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(p.co) || x.co || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), RUTA === 'compras' ? 0 : 120);
 }
 
 function verCompra(c){
@@ -2472,7 +2505,7 @@ function editarCompra(c, borr){
     '<label class="f">N° factura del proveedor<input class="in" id="ecNum" value="' + h(D.num) + '" placeholder="001-001-000012345"></label>' +
     '<label class="f">Fecha<input class="in" id="ecF" type="date" value="' + h(D.f) + '"></label>' +
     '<label class="f">Pago<div class="row" style="flex-wrap:nowrap"><select class="in" id="ecFp"><option value="co">Contado</option><option value="cr">Crédito</option></select><select class="in" id="ecPl">' + [15, 30, 45, 60, 90, 120].map((d) => '<option value="' + d + '">' + d + ' días</option>').join('') + '</select></div></label></div>' +
-    '<div class="factfoto" id="ecFoto"></div>' +
+    '<div id="ecPedAv"></div><div class="factfoto" id="ecFoto"></div>' +
     '<div style="margin:10px 0" id="ecBus"></div><div class="cart" id="ecBody" style="margin-top:0"></div><div id="ecFoot" style="margin-top:10px"></div>' +
     '<label class="chk" style="margin-top:8px"><input type="checkbox" id="ecAct"> Actualizar costo y PVP de los productos con estos valores</label>' +
     '<label class="f" style="margin-top:6px">Nota<input class="in" id="ecNota" value="' + h(D.nota || '') + '"></label>',
@@ -2484,6 +2517,21 @@ function editarCompra(c, borr){
   m.q('#ecPrN').onclick = () => editarTercero('prov', null, (p) => { D.pr = p.id; pintaProv(); guardarD(); });
   ['#ecPr', '#ecNum', '#ecF', '#ecFp', '#ecPl', '#ecAct', '#ecNota'].forEach((s2) => m.q(s2).addEventListener('change', () => {
     D.pr = m.q('#ecPr').value; D.num = m.q('#ecNum').value.trim(); D.f = m.q('#ecF').value; D.fp = m.q('#ecFp').value; D.pl = +m.q('#ecPl').value; D.act = m.q('#ecAct').checked; D.nota = m.q('#ecNota').value.trim(); plVis(); guardarD(); }));
+  // si el proveedor tiene pedidos por recibir, ofrecer cargarlos
+  const avisoPed = () => {
+    const box = m.q('#ecPedAv'); if (!box) return;
+    if (!D.pr || D.ped) { box.innerHTML = D.ped && S.ped.get(D.ped) ? '<div class="note ok" style="margin:8px 0">' + ic('clip') + ' Compra del pedido <b>' + h(S.ped.get(D.ped).num) + '</b>: al guardar, el pedido queda como <b>Recibido</b>.</div>' : ''; return; }
+    const ps = vivos('ped').filter((p) => p.pr === D.pr && p.est !== 'rec');
+    box.innerHTML = ps.length ? '<div class="note" style="margin:8px 0">' + ic('clip') + ' Este proveedor tiene ' + (ps.length === 1 ? 'un pedido por recibir' : ps.length + ' pedidos por recibir') + ': ' +
+      ps.map((p) => '<button type="button" class="btn sm c3d cp" data-cped="' + h(p.id) + '" style="margin:4px 4px 0 0">Cargar ' + h(p.num) + ' (' + (p.it || []).length + ' prod.)</button>').join('') + '</div>' : '';
+  };
+  m.q('#ecPedAv').onclick = async (e) => { const b = e.target.closest('[data-cped]'); if (!b) return; const P = S.ped.get(b.dataset.cped); if (!P) return;
+    if (D.it.length && !(await confirmar('¿Agregar los productos del pedido ' + P.num + ' a esta compra?', 'Agregar'))) return;
+    (P.it || []).filter((x) => x.q > 0).forEach((x) => { const p = S.prod.get(x.p) || { id: x.p, n: x.n, co: x.co }; const ex = D.it.find((y) => y.p === x.p); if (ex) ex.q = r2(ex.q + x.q); else D.it.push(Object.assign(nuevaLinea(p), { q: x.q })); });
+    D.ped = P.id; if (!D.nota) { D.nota = 'Pedido ' + P.num; m.q('#ecNota').value = D.nota; }
+    guardarD(); pintar(); avisoPed(); toast('Productos del pedido ' + P.num + ' cargados');
+  };
+  m.q('#ecPr').addEventListener('change', avisoPed);
   // foto de la factura
   const pintaFoto = () => {
     const d = fotoFactura(D.id);
@@ -2515,6 +2563,7 @@ function editarCompra(c, borr){
       '<div class="empty card">Agrega los productos de la factura del proveedor</div>';
     m.q('#ecFoot').innerHTML = casillasCompra(D.it);
   };
+  avisoPed();
   m.q('#ecBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = D.it[+tr.dataset.i];
     const v = parseFloat(String(e.target.value).replace(',', '.')) || 0;
     if (k === 'coi') x.co = Math.round(v / (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000; else x[k] = v;
@@ -3251,9 +3300,12 @@ const REPORTES = [
   ['compras', 'Compras por proveedor', 'Compras y cuentas', 1, 'Base, IVA y total por proveedor'],
   ['cxc', 'Cuentas por cobrar', 'Compras y cuentas', 0, 'Ventas a crédito pendientes', 1],
   ['cxp', 'Compras a crédito', 'Compras y cuentas', 1, 'Vencimientos con proveedores', 1],
-  ['pedidos', 'Pedidos pendientes', 'Compras y cuentas', 0, 'Pedidos sin facturar', 1]
+  ['pedprov', 'Pedidos a proveedores', 'Pedidos', 0, 'Todos los pedidos: por enviar, enviados y recibidos'],
+  ['pedxprov', 'Pedidos por proveedor', 'Pedidos', 0, 'Cuántos pedidos y unidades a cada proveedor'],
+  ['pedprod', 'Productos pedidos', 'Pedidos', 0, 'Qué productos se pidieron y si ya llegaron', 0, ['cat']],
+  ['pedidos', 'Pedidos de clientes pendientes', 'Pedidos', 0, 'Pedidos de clientes sin facturar', 1]
 ];
-const GRUPOS_REP = { Ventas: 'chart', Productos: 'cart', Inventario: 'box', 'Compras y cuentas': 'truck' };
+const GRUPOS_REP = { Ventas: 'chart', Productos: 'cart', Inventario: 'box', 'Compras y cuentas': 'truck', Pedidos: 'clip' };
 let RO = Object.assign({ cat: '', marca: '', est: '', agr: 'dia', prods: [], prod: '', orden: 'valor', top: '50', ordv: 'ventas' }, ls.get('repOpt', {}));
 const guardarRO = () => ls.set('repOpt', RO);
 
@@ -3296,11 +3348,12 @@ function pgReportes(){
 }
 const RICON = { resumen: 'chart', caja: 'cash', dias: 'cal', horas: 'clock', periodos: 'compare', vendedores: 'badge', formas: 'wallet', clientes: 'users', anulados: 'ban', iva: 'percent',
   productos: 'trophy', abc: 'layers', comparar: 'compare', kardex: 'list', categorias: 'grid', marcas: 'tag', sinmov: 'pause',
-  existencias: 'box', inventario: 'grid', invmarca: 'tag', stockbajo: 'alert', rotacion: 'rotate', ajustes: 'edit', compras: 'truck', cxc: 'wallet', cxp: 'receipt', pedidos: 'clip' };
+  existencias: 'box', inventario: 'grid', invmarca: 'tag', stockbajo: 'alert', rotacion: 'rotate', ajustes: 'edit', compras: 'truck', cxc: 'wallet', cxp: 'receipt', pedidos: 'users', pedprov: 'clip', pedxprov: 'truck', pedprod: 'box' };
 const RCOLOR = { Ventas: [['#F6C453', '#C98A12'], ['#FFB27A', '#E0661B'], ['#F59E9E', '#D64545']],
   Productos: [['#7CC4FF', '#1F6FD1'], ['#A98BFF', '#6A3FD8'], ['#7FE0E6', '#138A9A']],
   Inventario: [['#86E3A1', '#1E9A55'], ['#C9E86F', '#6E9A12'], ['#6FE0C2', '#0E8A6E']],
-  'Compras y cuentas': [['#C79CFF', '#8A3FD1'], ['#FF9FD0', '#C7337F'], ['#9DB3FF', '#3B57D6']] };
+  'Compras y cuentas': [['#C79CFF', '#8A3FD1'], ['#FF9FD0', '#C7337F'], ['#9DB3FF', '#3B57D6']],
+  Pedidos: [['#FFD27A', '#D9860F'], ['#9DE3FF', '#1C8FC7'], ['#B7F07F', '#4E9A12'], ['#FFA8A8', '#D43F3F']] };
 const ico3d = (icon, c) => '<span class="ico3d" style="--c1:' + c[0] + ';--c2:' + c[1] + '">' + ic(icon) + '</span>';
 function menuReportes(lista){
   const grupos = Object.keys(GRUPOS_REP);
@@ -3549,6 +3602,41 @@ const REP = {
       filas: vs.map((v) => [v.num, fechaTxt(v.f), h(nomCli(v)), h(nomVend(v.v)), (v.it || []).length, v.tot]), pie: ['Total', '', '', '', '', r2(vs.reduce((s, v) => s + v.tot, 0))],
       after: (out) => { qs('tbody', out).onclick = (e) => { const r = e.target.closest('[data-j]'); if (r) verDocumento(vs[+r.dataset.j]); }; } };
   },
+  pedprov(F){
+    const l = vivos('ped').filter((p) => enRango(p.f, F)).sort((a, b) => (b.f || '').localeCompare(a.f || '') || (b.ts || 0) - (a.ts || 0));
+    const u = (p) => (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0), c = (p) => r2((p.it || []).reduce((t, x) => t + (Number(x.q) || 0) * (Number(x.co) || 0), 0));
+    const n = (e) => l.filter((p) => p.est === e).length;
+    const comp = (p) => { const co = p.comp && S.com.get(p.comp); return co && !co._d ? (co.num || 's/n') + ' · ' + fechaTxt(co.f) : (p.est === 'rec' ? (p.recF ? fechaTxt(p.recF) : 'Sí') : ''); };
+    return { kpis: [['Pedidos', String(l.length)], ['Por enviar', String(n('pend'))], ['Enviados', String(n('env')), 'esperando que lleguen'], ['Recibidos', String(n('rec'))], ['Costo referencial', money(l.reduce((t, p) => t + c(p), 0))]],
+      cab: ['Pedido', 'Fecha', 'Proveedor', 'Estado', 'Productos', 'Unidades', 'Costo ref.', 'Compra / recibido', 'Pidió'], num: [4, 5, 6], fmt: { 6: M$ }, clic: true,
+      filas: l.map((p) => [h(p.num), fechaTxt(p.f), h(nomProv(p.pr)), '<span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span>', (p.it || []).length, u(p), c(p), h(comp(p)), h(nomVend(p.v))]),
+      raw: l.map((p) => [p.num, p.f, nomProv(p.pr), EST_PED[p.est][0], (p.it || []).length, u(p), c(p), comp(p), nomVend(p.v)]),
+      pie: ['Total', '', '', '', l.reduce((t, p) => t + (p.it || []).length, 0), l.reduce((t, p) => t + u(p), 0), r2(l.reduce((t, p) => t + c(p), 0)), '', ''],
+      html: l.length ? '' : '<div class="note">No hay pedidos a proveedores en este período. Se crean en <b>Reportes → Stock bajo y agotados</b> o en <b>Compras → Pedidos a proveedores</b>.</div>',
+      after: (out) => { const tb = qs('tbody', out); if (tb) tb.onclick = (e) => { const r = e.target.closest('[data-j]'); if (r) verPedido(l[+r.dataset.j]); }; } };
+  },
+  pedxprov(F){
+    const l = vivos('ped').filter((p) => enRango(p.f, F));
+    const m = agrupar(l, (p) => p.pr, (o, p) => { o.n = (o.n || 0) + 1; o[p.est] = (o[p.est] || 0) + 1; o.u = (o.u || 0) + (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
+      o.c = (o.c || 0) + (p.it || []).reduce((t, x) => t + (Number(x.q) || 0) * (Number(x.co) || 0), 0); o.ult = !o.ult || p.f > o.ult ? p.f : o.ult; });
+    const ids = Array.from(m.keys()).sort((a, b) => nomProv(a).localeCompare(nomProv(b)));
+    const filas = ids.map((id) => { const o = m.get(id); return [h(nomProv(id)), o.n, o.pend || 0, o.env || 0, o.rec || 0, o.u, r2(o.c), fechaTxt(o.ult)]; });
+    return { cab: ['Proveedor', 'Pedidos', 'Por enviar', 'Enviados', 'Recibidos', 'Unidades', 'Costo ref.', 'Último pedido'], num: [1, 2, 3, 4, 5, 6], fmt: { 6: M$ }, filas,
+      pie: ['Total', l.length, filas.reduce((t, f) => t + f[2], 0), filas.reduce((t, f) => t + f[3], 0), filas.reduce((t, f) => t + f[4], 0), filas.reduce((t, f) => t + f[5], 0), r2(filas.reduce((t, f) => t + f[6], 0)), ''],
+      html: l.length ? '' : '<div class="note">No hay pedidos a proveedores en este período.</div>' };
+  },
+  pedprod(F){
+    const l = vivos('ped').filter((p) => enRango(p.f, F));
+    const m = new Map();
+    l.forEach((p) => (p.it || []).forEach((x) => { if (!enFiltro(x.p)) return; const o = m.get(x.p) || { n: x.n, q: 0, rec: 0, pend: 0, peds: new Set(), provs: new Set(), ult: '' };
+      const q = Number(x.q) || 0; o.q += q; if (p.est === 'rec') o.rec += q; else o.pend += q; o.peds.add(p.num); o.provs.add(nomProv(p.pr)); if (p.f > o.ult) o.ult = p.f; m.set(x.p, o); }));
+    const ids = Array.from(m.keys()).sort((a, b) => m.get(b).q - m.get(a).q);
+    return { cab: ['Código', 'Producto', 'Proveedor(es)', 'Pedidos', 'Cant. pedida', 'Por llegar', 'Recibida', 'Stock actual', 'Último pedido'], num: [3, 4, 5, 6, 7],
+      filas: ids.map((id) => { const o = m.get(id); const p = S.prod.get(id) || {}; return [h(id), h(p.n || o.n) + '<div class="small muted">' + h(p.c || '') + '</div>', h(Array.from(o.provs).join(', ')), o.peds.size, o.q, o.pend, o.rec, stockDe(id), fechaTxt(o.ult)]; }),
+      raw: ids.map((id) => { const o = m.get(id); const p = S.prod.get(id) || {}; return [id, p.n || o.n, p.c || '', Array.from(o.provs).join(', '), o.peds.size, o.q, o.pend, o.rec, stockDe(id), o.ult]; }),
+      rawCab: ['Código', 'Producto', 'Categoría', 'Proveedor(es)', 'Pedidos', 'Cant. pedida', 'Por llegar', 'Recibida', 'Stock actual', 'Último pedido'],
+      html: ids.length ? '' : '<div class="note">No hay productos pedidos en este período.</div>' };
+  },
   anulados(F){
     const vs = vivos('vta').filter((v) => v.an && enRango(v.an.f, F) && (!F.vend || v.v === F.vend));
     return { cab: ['Documento', 'Fecha doc.', 'Anulado', 'Por', 'Motivo', 'Total'], num: [5], fmt: { 5: M$ }, filas: vs.map((v) => [DOC[v.tp] + ' ' + v.num, fechaTxt(v.f), fechaTxt(v.an.f), h(nomVend(v.an.v)), h(v.an.m || ''), v.tot]) };
@@ -3775,6 +3863,12 @@ Object.assign(REP, {
    ===================================================================== */
 const SELPED = new Map();          // productos marcados en el reporte: id -> { pr, q }
 
+/** Mapa producto → último proveedor que lo vendió (se calcula una vez por reporte) */
+function mapaProvCompras(){
+  const m = new Map(), f = new Map();
+  S.com.forEach((c) => { if (c._d || c.an || c.td === 'ND' || !c.pr) return; (c.it || []).forEach((x) => { if (!f.has(x.p) || c.f >= f.get(x.p)) { f.set(x.p, c.f); m.set(x.p, c.pr); } }); });
+  return m;
+}
 /** Último proveedor que nos vendió el producto (según compras registradas) */
 function provHabitual(pid){
   const p = S.prod.get(pid); if (p && p.prov && S.prov.get(p.prov) && !S.prov.get(p.prov)._d) return p.prov;
@@ -3797,8 +3891,12 @@ Object.assign(REP, {
     ps.sort((a, b) => (vend.get(b.p.id) || 0) - (vend.get(a.p.id) || 0) || a.s - b.s);
     const pedir = puede('compras');
     const lista = ps.slice(0, 1500);
-    const celdaProv = (x) => { const sel = SELPED.get(x.p.id); const pr = sel ? sel.pr : provHabitual(x.p.id);
-      return sel ? '<select class="mini selprov" data-prov="' + h(x.p.id) + '">' + opcionesProv(pr) + '</select>' : '<span class="small">' + h(pr ? nomProv(pr) : '—') + '</span>'; };
+    const MP = mapaProvCompras();
+    const provDe = (id) => { const p = S.prod.get(id); if (p && p.prov && S.prov.get(p.prov) && !S.prov.get(p.prov)._d) return p.prov; return MP.get(id) || ''; };
+    lista.forEach((x) => { x.pr = provDe(x.p.id); });
+    const celdaProv = (x) => { const sel = SELPED.get(x.p.id); const pr = sel ? sel.pr : x.pr;
+      return sel ? '<select class="mini selprov" data-prov="' + h(x.p.id) + '">' + opcionesProv(pr) + '</select>'
+        : '<button type="button" class="provbtn' + (pr ? '' : ' vacio') + '" data-elp="' + h(x.p.id) + '">' + h(pr ? nomProv(pr) : 'Elegir proveedor') + ' ▾</button>'; };
     const celdaQ = (x) => { const sel = SELPED.get(x.p.id); return sel ? '<input class="mini pct selq" data-q="' + h(x.p.id) + '" inputmode="decimal" value="' + numf(sel.q) + '">' : ''; };
     const filas = lista.map((x) => (pedir ? ['<input type="checkbox" class="chkped" data-ck="' + h(x.p.id) + '"' + (SELPED.has(x.p.id) ? ' checked' : '') + '>'] : [])
       .concat([h(x.p.id), h(x.p.n) + '<div class="small muted">' + h(x.p.c || '') + '</div>'], pedir ? [celdaProv(x), celdaQ(x)] : [], [x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0, estadoStock(x.p, x.s)]));
@@ -3810,28 +3908,52 @@ Object.assign(REP, {
       num: [2, 3, 4, 5].map((n) => n + (pedir ? 3 : 0)),
       fmt: { [pedir ? 8 : 5]: M$ },
       filas,
-      raw: lista.map((x) => [x.p.id, x.p.n, x.p.c || '', nomProv(provHabitual(x.p.id)) === '—' ? '' : nomProv(provHabitual(x.p.id)), x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0]),
+      raw: lista.map((x) => [x.p.id, x.p.n, x.p.c || '', x.pr ? nomProv(x.pr) : '', x.s, Number(x.p.mi) || 0, vend.get(x.p.id) || 0, Number(x.p.co) || 0]),
       rawCab: ['Código', 'Producto', 'Categoría', 'Proveedor habitual', 'Stock', 'Mínimo', 'Vendido 30 días', 'Costo'],
       after: (out) => {
         if (!pedir) return;
         const bar = qs('#pedBar', out);
+        // proveedores presentes en la lista (para marcar en bloque)
+        const cuenta = new Map(); lista.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
+        const conProv = lista.filter((x) => x.pr).length;
+        const marcar = (pr) => {
+          let n = 0;
+          lista.forEach((x) => { if (!x.pr || (pr !== '*' && x.pr !== pr) || SELPED.has(x.p.id)) return; SELPED.set(x.p.id, { pr: x.pr, q: sugerido(x.p, x.s, vend.get(x.p.id) || 0) }); n++; });
+          toast(n ? '✓ ' + n + (n === 1 ? ' producto marcado' : ' productos marcados') : 'Ya estaban marcados.'); render();
+        };
         const pintaBar = () => {
           const n = SELPED.size; const sinProv = Array.from(SELPED.values()).filter((s) => !s.pr).length;
           const provs = new Set(Array.from(SELPED.values()).map((s) => s.pr).filter(Boolean));
-          bar.innerHTML = '<b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') +
-            '<span class="spacer"></span>' + (n ? '<select class="in" id="pbProv" style="width:auto;min-height:36px"><option value="">Poner a todos…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
-            '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar</button><button class="btn sm c3d co" id="pbCrear">' + ic('clip') + 'Crear pedido</button>' : '');
+          bar.innerHTML = '<div class="pedrow"><span class="pedcnt"><b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') + '</span>' +
+            '<span class="spacer"></span>' + (n ? '<select class="in" id="pbProv" style="width:auto;min-height:36px"><option value="">Cambiar proveedor a todos…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
+            '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button><button class="btn sm c3d co" id="pbCrear">' + ic('clip') + 'Crear pedido</button>' : '') + '</div>' +
+            (conProv ? '<div class="pedrow"><span class="small" style="font-weight:700">' + ic('check') + 'Visto bueno rápido:</span>' +
+              '<button class="btn sm c3d cv" id="pbTodos">Marcar todos los que tienen proveedor (' + conProv + ')</button>' +
+              '<select class="in" id="pbUno" style="width:auto;min-height:36px;flex:1 1 220px"><option value="">Marcar solo los de un proveedor…</option>' +
+              Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select></div>' : '');
+          if (qs('#pbTodos', bar)) qs('#pbTodos', bar).onclick = () => marcar('*');
+          if (qs('#pbUno', bar)) qs('#pbUno', bar).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
           if (!n) return;
           qs('#pbProv', bar).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
           qs('#pbLimp', bar).onclick = () => { SELPED.clear(); render(); };
           qs('#pbCrear', bar).onclick = crearPedidosDesdeSeleccion;
         };
+        // tocar el proveedor de una fila sin marcar: aparece la lista para elegirlo
+        out.onclick = (e) => { const b = e.target.closest('[data-elp]'); if (!b) return; e.stopPropagation(); const id = b.dataset.elp; const x = lista.find((y) => y.p.id === id);
+          b.outerHTML = '<select class="mini selprov" data-prov="' + h(id) + '">' + opcionesProv(x.pr) + '</select>'; const sl = qs('[data-prov="' + id.replace(/"/g, '\\"') + '"]', out); if (sl) { sl.focus(); try { sl.showPicker && sl.showPicker(); } catch (er) {} } };
         out.onchange = (e) => {
           const ck = e.target.closest('[data-ck]');
           if (ck) { const id = ck.dataset.ck; const x = lista.find((y) => y.p.id === id);
-            if (ck.checked) SELPED.set(id, { pr: provHabitual(id), q: sugerido(x.p, x.s, vend.get(id) || 0) }); else SELPED.delete(id);
+            if (ck.checked) SELPED.set(id, { pr: x.pr, q: sugerido(x.p, x.s, vend.get(id) || 0) }); else SELPED.delete(id);
             const tr = ck.closest('tr'); tr.children[3].innerHTML = celdaProv(x); tr.children[4].innerHTML = celdaQ(x); pintaBar(); return; }
-          const sp = e.target.closest('[data-prov]'); if (sp) { const s = SELPED.get(sp.dataset.prov); if (s) s.pr = sp.value; pintaBar(); return; }
+          const sp = e.target.closest('[data-prov]');
+          if (sp) { const id = sp.dataset.prov; const x = lista.find((y) => y.p.id === id); const s = SELPED.get(id);
+            if (s) s.pr = sp.value;
+            else if (sp.value && x) {   // eligió proveedor en una fila sin marcar: se marca sola (visto bueno)
+              SELPED.set(id, { pr: sp.value, q: sugerido(x.p, x.s, vend.get(id) || 0) });
+              const tr = sp.closest('tr'); const c0 = tr.querySelector('[data-ck]'); if (c0) c0.checked = true; tr.children[4].innerHTML = celdaQ(x);
+            }
+            pintaBar(); return; }
           const sq = e.target.closest('[data-q]'); if (sq) { const s = SELPED.get(sq.dataset.q); if (s) s.q = Math.max(0, parseFloat(String(sq.value).replace(',', '.')) || 0); }
         };
         pintaBar();
@@ -3937,13 +4059,7 @@ function verPedido(p0){
       if (P.est === 'pend') { P.est = 'env'; P.envF = hoyISO(); m.q('#ppE').value = 'env'; await put('ped', Object.assign({}, P)); }
     } catch (e) { toast('No se pudo compartir: ' + e.message, true); }
   };
-  if (m.q('#ppCo')) m.q('#ppCo').onclick = async () => {
-    if (!(await guardar())) return;
-    const prov = S.prov.get(P.pr) || {};
-    m.close(); irA('compras');
-    setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
-      it: P.it.filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(p.co) || x.co || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), 120);
-  };
+  if (m.q('#ppCo')) m.q('#ppCo').onclick = async () => { if (!(await guardar())) return; m.close(); compraDesdePedido(S.ped.get(P.id) || P); };
   pintar();
 }
 
