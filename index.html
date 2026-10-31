@@ -509,7 +509,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31d';
+const APP_VER = '2026-10-31e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4107,12 +4107,22 @@ function verPedido(p0){
   const moverLinea = (i) => {
     leer(); const x = P.it[i]; if (!x) return;
     const mm = modal({ title: 'Mandar a otro proveedor', body: '<p style="margin-top:0"><b>' + h(x.n) + '</b> · ' + numf(x.q) + ' u.</p>' +
-      '<label class="f">Proveedor<select class="in" id="mvPr">' + opcionesProv('').replace(new RegExp('<option value="' + (P.pr || '@@').replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '">[^<]*</option>'), '') + '</select></label>' +
+      '<label class="f">Proveedor<input class="in" id="mvPr" list="mvPrL" autocomplete="off" placeholder="Escribe o elige el proveedor"><datalist id="mvPrL">' +
+        vivos('prov').filter((y) => y.id !== P.pr).sort((a2, b2) => a2.nombre.localeCompare(b2.nombre)).map((y) => '<option value="' + h(y.nombre) + '">').join('') + '</datalist></label>' +
+      '<div class="small" id="mvInfo" style="margin-top:4px;min-height:18px"></div>' +
       '<label class="chk" style="margin-top:8px"><input type="checkbox" id="mvHab" checked> Que este proveedor quede como el habitual del producto</label>' +
       '<p class="small muted" style="margin-bottom:0">Se agrega a su pedido pendiente (si tiene uno) o se crea un pedido nuevo.</p>',
       foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d cp" id="mvOk">' + ic('truck') + 'Mandar</button>' });
+    const buscarProv = (txt) => { const n = norm(txt); return n ? vivos('prov').find((y) => norm(y.nombre) === n) : null; };
+    mm.q('#mvPr').oninput = () => { const t = mm.q('#mvPr').value.trim(); const y = buscarProv(t);
+      mm.q('#mvInfo').innerHTML = !t ? '' : y ? (y.id === P.pr ? '<span style="color:var(--warn-fg)">Es el mismo proveedor de este pedido.</span>' : '✓ Proveedor registrado') : '<span style="color:#0f6b55">➕ No consta: se creará el proveedor <b>' + h(t.toUpperCase()) + '</b></span>'; };
+    setTimeout(() => mm.q('#mvPr').focus(), 50);
     mm.q('#mvOk').onclick = async () => {
-      const pr = mm.q('#mvPr').value; if (!pr) return toast('Elige el proveedor.', true);
+      const txt = mm.q('#mvPr').value.trim(); if (!txt) return toast('Escribe o elige el proveedor.', true);
+      let py = buscarProv(txt);
+      if (py && py.id === P.pr) return toast('Ese es el mismo proveedor de este pedido.', true);
+      if (!py) { py = { id: uid('pr'), nombre: txt.toUpperCase(), ruc: '', tel: '' }; await put('prov', py); toast('Proveedor ' + py.nombre + ' creado'); }
+      const pr = py.id;
       let dest = vivos('ped').find((y) => y.pr === pr && y.est === 'pend' && y.id !== P.id);
       dest = dest ? JSON.parse(JSON.stringify(dest)) : { id: uid('pp'), num: siguientePedidoProv(), pr, f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' };
       delete dest._u; delete dest._d;
