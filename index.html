@@ -452,6 +452,14 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedbar .pedrow > span svg,.pedpend > .row > b svg,#ecPedAv .note > svg{width:18px;height:18px;vertical-align:-4px;margin-right:4px;display:inline-block}
 .pedpend{padding:10px 12px;border-left:4px solid #8A3FD1}
 .ci .ctrl.pedctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ci .pedctrl .minilbl{flex:1 1 92px;min-width:84px}.ci .pedctrl .mini,.ci .pedctrl .mini.pct{width:100%}.mini.strong{font-weight:800}
+.pedhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#0f6b55;color:#fff;border-radius:12px 12px 0 0;padding:8px 12px;margin-top:6px}
+.pedhead b{display:flex;align-items:center;gap:6px;text-transform:uppercase;font-size:13px;letter-spacing:.3px}.pedhead b svg{width:18px;height:18px}
+.pedhead .pedivd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}.pedhead .mini{width:64px;color:#1a1814;background:#fff}
+.pedhead + .cart{border:1px solid #0f6b55;border-top:0;border-radius:0 0 12px 12px;padding:8px}
+.peddesc{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(201,154,46,.10);border:1px solid rgba(201,154,46,.35)}
+.peddesc > b{color:#0f6b55;text-transform:uppercase;font-size:13px}
+.ci .pedctrl .ivain{background:#FDEBD0}
+.ci .pedctrl .lsub .mini{background:#E7EEFF;border-color:#9DB3FF}.ci .pedctrl .ltot .mini{background:#E3F6EA;border-color:#8BD3A6}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -501,7 +509,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31c';
+const APP_VER = '2026-10-31d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2469,7 +2477,7 @@ function compraDesdePedido(P){
   const prov = S.prov.get(P.pr) || {};
   if (RUTA !== 'compras') irA('compras');
   setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
-    it: (P.it || []).filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: Number(x.co) || Number(p.co) || 0, iva: calcPed(x).iva, pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), RUTA === 'compras' ? 0 : 120);
+    it: (P.it || []).filter((x) => x.q > 0).map((x) => { const p = S.prod.get(x.p) || {}; return { p: x.p, n: x.n, q: x.q, co: r4((Number(x.co) || Number(p.co) || 0) * (1 - (Number(P.dp) || 0) / 100)), iva: calcPed(x).iva, pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 }; }) }), RUTA === 'compras' ? 0 : 120);
 }
 
 function verCompra(c){
@@ -2528,7 +2536,7 @@ function editarCompra(c, borr){
   };
   m.q('#ecPedAv').onclick = async (e) => { const b = e.target.closest('[data-cped]'); if (!b) return; const P = S.ped.get(b.dataset.cped); if (!P) return;
     if (D.it.length && !(await confirmar('¿Agregar los productos del pedido ' + P.num + ' a esta compra?', 'Agregar'))) return;
-    (P.it || []).filter((x) => x.q > 0).forEach((x) => { const p = S.prod.get(x.p) || { id: x.p, n: x.n, co: x.co }; const ex = D.it.find((y) => y.p === x.p); if (ex) ex.q = r2(ex.q + x.q); else D.it.push(Object.assign(nuevaLinea(p), { q: x.q, co: Number(x.co) || Number(p.co) || 0, iva: calcPed(x).iva })); });
+    (P.it || []).filter((x) => x.q > 0).forEach((x) => { const p = S.prod.get(x.p) || { id: x.p, n: x.n, co: x.co }; const ex = D.it.find((y) => y.p === x.p); if (ex) ex.q = r2(ex.q + x.q); else D.it.push(Object.assign(nuevaLinea(p), { q: x.q, co: r4((Number(x.co) || Number(p.co) || 0) * (1 - (Number(P.dp) || 0) / 100)), iva: calcPed(x).iva })); });
     D.ped = P.id; if (!D.nota) { D.nota = 'Pedido ' + P.num; m.q('#ecNota').value = D.nota; }
     guardarD(); pintar(); avisoPed(); toast('Productos del pedido ' + P.num + ' cargados');
   };
@@ -3605,7 +3613,7 @@ const REP = {
   },
   pedprov(F){
     const l = vivos('ped').filter((p) => enRango(p.f, F)).sort((a, b) => (b.f || '').localeCompare(a.f || '') || (b.ts || 0) - (a.ts || 0));
-    const u = (p) => (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0), c = (p) => totPed(p.it).tot;
+    const u = (p) => (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0), c = (p) => totPed(p.it, p.dp).tot;
     const n = (e) => l.filter((p) => p.est === e).length;
     const comp = (p) => { const co = p.comp && S.com.get(p.comp); return co && !co._d ? (co.num || 's/n') + ' · ' + fechaTxt(co.f) : (p.est === 'rec' ? (p.recF ? fechaTxt(p.recF) : 'Sí') : ''); };
     return { kpis: [['Pedidos', String(l.length)], ['Por enviar', String(n('pend'))], ['Enviados', String(n('env')), 'esperando que lleguen'], ['Recibidos', String(n('rec'))], ['Total c/IVA', money(l.reduce((t, p) => t + c(p), 0))]],
@@ -3619,7 +3627,7 @@ const REP = {
   pedxprov(F){
     const l = vivos('ped').filter((p) => enRango(p.f, F));
     const m = agrupar(l, (p) => p.pr, (o, p) => { o.n = (o.n || 0) + 1; o[p.est] = (o[p.est] || 0) + 1; o.u = (o.u || 0) + (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
-      o.c = (o.c || 0) + totPed(p.it).tot; o.ult = !o.ult || p.f > o.ult ? p.f : o.ult; });
+      o.c = (o.c || 0) + totPed(p.it, p.dp).tot; o.ult = !o.ult || p.f > o.ult ? p.f : o.ult; });
     const ids = Array.from(m.keys()).sort((a, b) => nomProv(a).localeCompare(nomProv(b)));
     const filas = ids.map((id) => { const o = m.get(id); return [h(nomProv(id)), o.n, o.pend || 0, o.env || 0, o.rec || 0, o.u, r2(o.c), fechaTxt(o.ult)]; });
     return { cab: ['Proveedor', 'Pedidos', 'Por enviar', 'Enviados', 'Recibidos', 'Unidades', 'Total c/IVA', 'Último pedido'], num: [1, 2, 3, 4, 5, 6], fmt: { 6: M$ }, filas,
@@ -3886,7 +3894,14 @@ function calcPed(x){
   const sub = r2((Number(x.q) || 0) * (Number(x.co) || 0)); const vi = r2(sub * iva / 100);
   return { iva, sub, vi, tot: r2(sub + vi) };
 }
-const totPed = (it) => (it || []).reduce((t, x) => { const k = calcPed(x); t.sub = r2(t.sub + k.sub); t.iva = r2(t.iva + k.vi); t.tot = r2(t.tot + k.tot); return t; }, { sub: 0, iva: 0, tot: 0 });
+/** Totales del pedido con descuento general (dp %): el IVA se calcula después del descuento */
+function totPed(it, dp){
+  const f = 1 - Math.min(100, Math.max(0, Number(dp) || 0)) / 100;
+  const t = { bruto: 0, desc: 0, sub: 0, iva: 0, tot: 0 };
+  (it || []).forEach((x) => { const k = calcPed(x); t.bruto += k.sub; const b = k.sub * f; t.sub += b; t.iva += b * k.iva / 100; });
+  t.bruto = r2(t.bruto); t.sub = r2(t.sub); t.desc = r2(t.bruto - t.sub); t.iva = r2(t.iva); t.tot = r2(t.sub + t.iva);
+  return t;
+}
 function sugerido(p, s, vend30){
   const mi = Number(p.mi) || 0;
   return Math.max(1, Math.ceil(Math.max(mi * 2 - s, vend30 - Math.max(0, s), mi - s)));
@@ -4013,7 +4028,7 @@ function verPedidos(){
     return '<h3 class="rgh" style="margin:10px 0 6px">' + ico3d('truck', ['#F2BC4A', '#C08510']) + h(k) + ' <span class="badge">' + ps.length + '</span></h3><div class="card" style="padding:4px 10px"><div class="list">' +
       ps.map((p) => '<div class="li" data-id="' + h(p.id) + '"><div class="grow"><div class="t">' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
         '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf((p.it || []).reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' u.' + (p.nota ? ' · ' + h(p.nota) : '') + '</div></div>' +
-        '<div class="v">' + money(totPed(p.it).tot) + '<div class="small muted" style="font-weight:400">total c/IVA</div></div></div>').join('') + '</div></div>';
+        '<div class="v">' + money(totPed(p.it, p.dp).tot) + '<div class="small muted" style="font-weight:400">total c/IVA</div></div></div>').join('') + '</div></div>';
   }).join('') : '<div class="empty"><b>No hay pedidos a proveedores</b>Créalos desde Reportes → Stock bajo y agotados marcando lo que necesitas, o con “Nuevo pedido”.</div>',
     foot: '<button class="btn" data-x>Cerrar</button><a class="btn c3d co" href="#rep?r=stockbajo" id="vpSb">' + ic('alert') + 'Ver stock bajo</a><button class="btn c3d cv" id="vpN">' + ic('plus') + 'Nuevo pedido</button>' });
   m.q('#vpN').onclick = () => { m.close(); verPedido(null); };
@@ -4031,7 +4046,13 @@ function verPedido(p0){
     '<div class="grid3"><label class="f">Proveedor<select class="in" id="ppPr"' + (bloqueado ? ' disabled' : '') + '>' + opcionesProv(P.pr) + '</select></label>' +
     '<label class="f">Fecha<input class="in" type="date" id="ppF" value="' + h(P.f) + '"' + (bloqueado ? ' disabled' : '') + '></label>' +
     '<label class="f">Estado<select class="in" id="ppE"><option value="pend">Por enviar</option><option value="env">Enviado</option><option value="rec">Recibido</option></select></label></div>' +
-    (bloqueado ? '' : '<div style="margin:10px 0" id="ppBus"></div>') + '<div class="cart" id="ppBody" style="margin-top:0"></div><div id="ppFoot" style="margin-top:8px"></div>' +
+    (bloqueado ? '' : '<div style="margin:10px 0" id="ppBus"></div>') +
+    '<div class="pedhead"><b>' + ic('box') + 'Productos del pedido</b><span class="spacer"></span>' +
+      (bloqueado ? '' : '<label class="pedivd">IVA por defecto %<input class="mini pct" id="ppIvaD" inputmode="decimal" value="' + numf(ls.get('pedIvaD', cfg().iva)) + '"></label><button class="btn sm" id="ppIvaT" type="button">Aplicar a todos</button>') + '</div>' +
+    '<div class="cart" id="ppBody" style="margin-top:0"></div>' +
+    '<div class="peddesc"><b>Descuento del pedido</b><div class="small muted">En % o en $ sobre el subtotal sin IVA. El IVA y el total se calculan con el descuento.</div>' +
+      '<div class="grid2" style="margin-top:6px"><label class="f">Descuento %<input class="in" id="ppDp" inputmode="decimal" placeholder="0"' + (bloqueado ? ' disabled' : '') + '></label><label class="f">Descuento $<input class="in" id="ppDv" inputmode="decimal" placeholder="0.00"' + (bloqueado ? ' disabled' : '') + '></label></div></div>' +
+    '<div id="ppFoot" style="margin-top:8px"></div>' +
     '<label class="f" style="margin-top:8px">Nota para el proveedor<input class="in" id="ppN" value="' + h(P.nota || '') + '" placeholder="Ej.: entregar el lunes, confirmar precios"></label>',
     foot: '<button class="btn" id="ppX">' + (nuevo ? 'Cancelar' : 'Cerrar') + '</button>' + (!nuevo ? '<button class="btn danger" id="ppDel">' + ic('trash') + 'Eliminar</button>' : '') +
       '<button class="btn c3d cb" id="ppPdf">' + ic('pdf') + 'PDF</button><button class="btn c3d cv" id="ppWa">' + ic('wa') + 'Enviar por WhatsApp</button>' +
@@ -4039,9 +4060,13 @@ function verPedido(p0){
   m.q('#ppE').value = P.est;
   const leer = () => { P.pr = m.q('#ppPr').value; P.f = m.q('#ppF').value || hoyISO(); P.est = m.q('#ppE').value; P.nota = m.q('#ppN').value.trim(); };
   const pintarPie = () => {
-    const u = P.it.reduce((t, x) => t + (Number(x.q) || 0), 0); const T = totPed(P.it);
+    const u = P.it.reduce((t, x) => t + (Number(x.q) || 0), 0); const T = totPed(P.it, P.dp);
     m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div>' +
-      '<div class="tcas"><span>Subtotal</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total</span><b>' + money(T.tot) + '</b></div></div>';
+      (T.desc ? '<div class="tcas"><span>Descuento</span><b>−' + money(T.desc) + '</b></div>' : '') +
+      '<div class="tcas"><span>Subtotal sin IVA</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>Total IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total con IVA</span><b>' + money(T.tot) + '</b></div></div>';
+    const dv = m.q('#ppDv'), dpi = m.q('#ppDp');
+    if (dpi && document.activeElement !== dpi) dpi.value = P.dp ? numf(r4(P.dp)) : '';
+    if (dv && document.activeElement !== dv) dv.value = T.desc ? T.desc.toFixed(2) : '';
   };
   const pintar = () => {
     const dis = bloqueado ? ' disabled' : '';
@@ -4049,22 +4074,29 @@ function verPedido(p0){
       return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</div></div></div>' +
       '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm" data-mov title="Mandar este producto al pedido de otro proveedor">' + ic('truck') + 'Otro proveedor</button><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
       '<div class="ctrl np pedctrl"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></label>' +
-      '<label class="minilbl">Costo s/IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></label>' +
-      '<label class="minilbl">IVA %<input class="mini pct" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></label>' +
-      '<label class="minilbl">Subtotal<input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></label>' +
-      '<label class="minilbl">Total c/IVA<input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></label></div></div>'; }).join('') :
+      '<label class="minilbl">IVA %<input class="mini pct ivain" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></label>' +
+      '<label class="minilbl">P. sin IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></label>' +
+      '<label class="minilbl">P. con IVA<input class="mini" data-k="ci" inputmode="decimal" value="' + (x.co ? r2(x.co * (1 + k.iva / 100)).toFixed(2) : '') + '"' + dis + '></label>' +
+      '<label class="minilbl lsub">Subtotal<input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></label>' +
+      '<label class="minilbl ltot">Total<input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></label></div></div>'; }).join('') :
       '<div class="empty card">Agrega los productos que vas a pedir</div>';
     pintarPie();
   };
   if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else P.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' });
     if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; } pintar(); }, { ph: 'Agregar producto al pedido…' });
+  if (m.q('#ppIvaD')) {
+    m.q('#ppIvaD').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); ls.set('pedIvaD', v); };
+    m.q('#ppIvaT').onclick = () => { const v = Math.max(0, parseFloat(String(m.q('#ppIvaD').value).replace(',', '.')) || 0); ls.set('pedIvaD', v); P.it.forEach((x) => { x.iva = v; }); pintar(); toast('IVA ' + numf(v) + '% aplicado a todos los productos'); };
+  }
+  m.q('#ppDp').onchange = (e) => { P.dp = Math.min(100, Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0)); pintarPie(); };
+  m.q('#ppDv').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const b = totPed(P.it, 0).bruto; P.dp = b ? Math.min(100, v / b * 100) : 0; pintarPie(); };
   m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = P.it[+tr.dataset.i];
     const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const iv = calcPed(x).iva;
-    if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v;
+    if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v; else if (k === 'ci') x.co = r4(v / (1 + iv / 100));
     else if (k === 'sub') x.co = x.q ? r4(v / x.q) : 0; else if (k === 'tot') x.co = x.q ? r4(v / x.q / (1 + iv / 100)) : 0;
     // actualiza solo esa fila (sin perder el cursor) y los totales
     const c = calcPed(x); const put2 = (kk, val) => { const el = tr.querySelector('[data-k="' + kk + '"]'); if (el && el !== e.target) el.value = val; };
-    put2('q', numf(x.q)); put2('co', x.co ? r4(x.co) : ''); put2('iva', numf(c.iva)); put2('sub', c.sub.toFixed(2)); put2('tot', c.tot.toFixed(2));
+    put2('q', numf(x.q)); put2('co', x.co ? r4(x.co) : ''); put2('ci', x.co ? r2(x.co * (1 + c.iva / 100)).toFixed(2) : ''); put2('iva', numf(c.iva)); put2('sub', c.sub.toFixed(2)); put2('tot', c.tot.toFixed(2));
     if (k !== 'sub' && k !== 'tot') { /* nada */ } else e.target.value = (k === 'sub' ? c.sub : c.tot).toFixed(2);
     pintarPie(); };
   m.q('#ppBody').onclick = (e) => {
