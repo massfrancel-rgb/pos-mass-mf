@@ -509,7 +509,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31e';
+const APP_VER = '2026-10-31f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2472,8 +2472,24 @@ function pintarPedidosPendientes(cont){
   };
 }
 /** Abre una compra nueva con los productos del pedido (al guardar, el pedido queda "Recibido") */
-function compraDesdePedido(P){
+async function compraDesdePedido(P){
   if (!P) return;
+  // productos escritos a mano en el pedido: se crean en el inventario
+  const nuevos = (P.it || []).filter((x) => x.q > 0 && !S.prod.get(x.p));
+  if (nuevos.length) {
+    let base = 0; const usados = new Set(nuevos.map((x) => x.p));
+    S.prod.forEach((p) => { const n = parseInt(p.id, 10); if (String(n) === String(p.id) && n > base) base = n; });
+    usados.forEach((c) => { const n = parseInt(c, 10); if (String(n) === String(c) && n > base) base = n; });
+    const recs = [];
+    for (const x of nuevos) {
+      const id = /^NUEVO-/.test(x.p) ? String(++base) : x.p;
+      recs.push({ id, n: x.n, co: Number(x.co) || 0, pv: 0, iva: x.iva == null ? cfg().iva : Number(x.iva), un: x.un || 'UND', prov: P.pr, c: '', m: '' });
+      x.p = id; delete x.nuevo;
+    }
+    await putMuchos('prod', recs);
+    await put('ped', Object.assign({}, P));
+    toast(recs.length + (recs.length === 1 ? ' producto nuevo creado' : ' productos nuevos creados') + ' en el inventario (ponles el PVP en la compra).');
+  }
   const prov = S.prov.get(P.pr) || {};
   if (RUTA !== 'compras') irA('compras');
   setTimeout(() => editarCompra(null, { id: uid('co'), pr: P.pr, num: '', f: hoyISO(), fp: prov.pl ? 'cr' : 'co', pl: prov.pl || 30, nota: 'Pedido ' + P.num, act: true, ped: P.id,
@@ -4036,6 +4052,36 @@ function verPedidos(){
   m.b.onclick = (e) => { const li = e.target.closest('[data-id]'); if (li) { m.close(); verPedido(S.ped.get(li.dataset.id)); } };
 }
 
+/* ---------- Agregar productos a un pedido (del inventario o uno nuevo escrito a mano) ---------- */
+function agregarAlPedido(P, listo){
+  const ivaD = Number(ls.get('pedIvaD', cfg().iva));
+  const m = modal({ title: 'Agregar producto al pedido ' + P.num, body:
+    '<div class="small muted" style="font-weight:700;margin-bottom:6px">Del inventario: busca, escanea o dicta</div><div id="apBus"></div><div class="small" id="apOk" style="min-height:18px;margin-top:6px"></div>' +
+    '<div class="peddesc" style="margin-top:12px"><b>¿No está en el inventario? Escríbelo</b><div class="small muted">Se crea en el inventario cuando registres la compra del pedido.</div>' +
+      '<div class="grid2" style="margin-top:8px"><label class="f">Código (opcional)<input class="in" id="apCod" placeholder="Ej.: 93222"></label><label class="f">Cantidad<input class="in" id="apQ" inputmode="decimal" value="1"></label></div>' +
+      '<label class="f" style="margin-top:8px">Descripción del producto<input class="in" id="apN" placeholder="Ej.: TANQUE PRESION TORNADO 50 GL"></label>' +
+      '<div class="grid2" style="margin-top:8px"><label class="f">P. sin IVA<input class="in" id="apCo" inputmode="decimal" placeholder="0.00"></label><label class="f">IVA %<input class="in" id="apIva" inputmode="decimal" value="' + numf(ivaD) + '"></label></div>' +
+      '<button type="button" class="btn c3d cv" id="apAddN" style="margin-top:10px">' + ic('plus') + 'Agregar este producto</button></div>',
+    foot: '<button class="btn pri" data-x>Listo</button>' });
+  const avisar = (t) => { m.q('#apOk').innerHTML = '<span style="color:#0f6b55;font-weight:700">✓ ' + h(t) + '</span>'; };
+  montarBuscador(m.q('#apBus'), (p) => {
+    const ex = P.it.find((x) => x.p === p.id);
+    if (ex) ex.q = r2((Number(ex.q) || 0) + 1);
+    else P.it.push({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' });
+    avisar(p.n + (ex ? ' · ahora ' + numf(ex.q) + ' u.' : ' agregado')); listo();
+  }, { ph: 'Buscar producto por nombre o código…', onUnknown: (code) => { m.q('#apCod').value = code; m.q('#apN').focus(); toast('Ese código no está en el inventario: escribe la descripción abajo.'); } });
+  const num = (id) => Math.max(0, parseFloat(String(m.q(id).value).replace(',', '.')) || 0);
+  m.q('#apAddN').onclick = () => {
+    const n = m.q('#apN').value.trim().toUpperCase(); if (!n) return toast('Escribe la descripción del producto.', true);
+    const cod = m.q('#apCod').value.trim();
+    if (cod && S.prod.get(cod) && !S.prod.get(cod)._d) return toast('El código ' + cod + ' ya existe (' + S.prod.get(cod).n + '). Búscalo arriba.', true);
+    const q = num('#apQ') || 1;
+    P.it.push({ p: cod || ('NUEVO-' + Date.now().toString(36).toUpperCase()), n, q, co: r4(num('#apCo')), coU: 0, iva: num('#apIva'), un: 'UND', nuevo: 1 });
+    ['#apCod', '#apN', '#apCo'].forEach((i) => { m.q(i).value = ''; }); m.q('#apQ').value = '1';
+    avisar(n + ' agregado (producto nuevo)'); listo();
+  };
+}
+
 /* ---------- Editar / ver un pedido ---------- */
 function verPedido(p0){
   const nuevo = !p0;
@@ -4050,6 +4096,7 @@ function verPedido(p0){
     '<div class="pedhead"><b>' + ic('box') + 'Productos del pedido</b><span class="spacer"></span>' +
       (bloqueado ? '' : '<label class="pedivd">IVA por defecto %<input class="mini pct" id="ppIvaD" inputmode="decimal" value="' + numf(ls.get('pedIvaD', cfg().iva)) + '"></label><button class="btn sm" id="ppIvaT" type="button">Aplicar a todos</button>') + '</div>' +
     '<div class="cart" id="ppBody" style="margin-top:0"></div>' +
+    (bloqueado ? '' : '<button type="button" class="btn c3d cv" id="ppAdd" style="margin-top:8px">' + ic('plus') + 'Agregar producto</button>') +
     '<div class="peddesc"><b>Descuento del pedido</b><div class="small muted">En % o en $ sobre el subtotal sin IVA. El IVA y el total se calculan con el descuento.</div>' +
       '<div class="grid2" style="margin-top:6px"><label class="f">Descuento %<input class="in" id="ppDp" inputmode="decimal" placeholder="0"' + (bloqueado ? ' disabled' : '') + '></label><label class="f">Descuento $<input class="in" id="ppDv" inputmode="decimal" placeholder="0.00"' + (bloqueado ? ' disabled' : '') + '></label></div></div>' +
     '<div id="ppFoot" style="margin-top:8px"></div>' +
@@ -4090,6 +4137,7 @@ function verPedido(p0){
   }
   m.q('#ppDp').onchange = (e) => { P.dp = Math.min(100, Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0)); pintarPie(); };
   m.q('#ppDv').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const b = totPed(P.it, 0).bruto; P.dp = b ? Math.min(100, v / b * 100) : 0; pintarPie(); };
+  if (m.q('#ppAdd')) m.q('#ppAdd').onclick = () => agregarAlPedido(P, () => { pintar(); });
   m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = P.it[+tr.dataset.i];
     const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const iv = calcPed(x).iva;
     if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v; else if (k === 'ci') x.co = r4(v / (1 + iv / 100));
