@@ -510,7 +510,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02a';
+const APP_VER = '2026-11-02b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2275,6 +2275,52 @@ function kardex(p){
 
 /* ---------- Conteo físico con escáner ---------- */
 function conteoActual(){ return ls.get('conteo', null); }
+const unidCnt = (x) => (x.ord || []).reduce((t, id) => t + (Number((x.it || {})[id]) || 0), 0);
+const fhTxt = (ts) => ts ? fechaTxt(fechaISO(new Date(ts))) + ' ' + horaTxt(ts) : '—';
+/** Pide el nombre con el que se guarda el conteo */
+function pedirNombreConteo(C){
+  return new Promise((res) => {
+    const ya = S.cnt.get(C.id) && !S.cnt.get(C.id)._d;
+    const m = modal({ title: 'Guardar conteo', body: '<label class="f">Nombre del conteo<input class="in" id="gcNom" value="' + h(C.nom || '') + '" placeholder="Ej.: Percha 3 - herramientas"></label>' +
+      '<p class="small muted" style="margin:6px 0 0">Fecha: <b>' + fhTxt(Date.now()) + '</b> · ' + (C.ord || []).length + ' productos · ' + numf(unidCnt(C)) + ' unidades</p>' +
+      (ya ? '<label class="chk" style="margin-top:10px"><input type="checkbox" id="gcNuevo"> Guardar como un conteo nuevo (no reemplazar “' + h(S.cnt.get(C.id).nom) + '”)</label>' : ''),
+      foot: '<button class="btn" data-x>Cancelar</button><button class="btn pri" id="gcOk">' + ic('check') + 'Guardar</button>', onClose: () => res(null) });
+    const ok = () => { const nom = m.q('#gcNom').value.trim(); if (!nom) return toast('Escribe un nombre para el conteo.', true);
+      const nuevo = !!(m.q('#gcNuevo') && m.q('#gcNuevo').checked); m.el.remove(); res({ nom, nuevo }); };
+    m.q('#gcOk').onclick = ok; m.q('#gcNom').addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); });
+    setTimeout(() => { m.q('#gcNom').focus(); m.q('#gcNom').select(); }, 50);
+  });
+}
+/** Lista de todos los conteos guardados (sin terminar y aplicados) */
+function verConteosGuardados(alAbrir){
+  const m = modal({ title: 'Conteos guardados', wide: true, body: '<div class="row" style="margin-bottom:8px"><input class="in grow" id="cgQ" type="search" placeholder="Buscar por nombre"><select class="in" id="cgE" style="width:auto"><option value="">Todos</option><option value="abierto">Sin terminar</option><option value="apl">Aplicados</option></select></div><div id="cgL"></div>',
+    foot: '<button class="btn" data-x>Cerrar</button>' });
+  const pintar = () => {
+    const w = norm(m.q('#cgQ').value), e = m.q('#cgE').value;
+    const l = vivos('cnt').filter((x) => (!w || norm(x.nom).includes(w)) && (!e || (e === 'apl') === (x.est === 'apl'))).sort((a, b) => Math.max(b.sv || 0, b.aplTs || 0) - Math.max(a.sv || 0, a.aplTs || 0));
+    m.q('#cgL').innerHTML = l.length ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>Nombre</th><th>Estado</th><th>Iniciado</th><th>Guardado / aplicado</th><th class="n">Productos</th><th class="n">Unid.</th><th>Por</th><th></th></tr></thead><tbody>' +
+      l.map((x) => { const ap = x.est === 'apl';
+        return '<tr><td><b>' + h(x.nom) + '</b></td><td>' + (ap ? '<span class="badge ok">Aplicado</span>' : '<span class="badge gold">Sin terminar</span>') + '</td><td>' + fhTxt(x.ini) + '</td><td>' + fhTxt(ap ? x.aplTs : x.sv) + '</td>' +
+          '<td class="n">' + (x.ord || []).length + '</td><td class="n">' + numf(unidCnt(x)) + '</td><td>' + h(nomVend(ap ? x.aplV : x.v)) + '</td><td style="white-space:nowrap">' +
+          (ap ? '' : '<button class="btn sm c3d cv" data-a="cont" data-id="' + h(x.id) + '">Continuar</button> ') +
+          '<button class="btn sm" data-a="ren" data-id="' + h(x.id) + '" title="Cambiar nombre">' + ic('edit') + '</button> <button class="btn sm" data-a="exp" data-id="' + h(x.id) + '" title="Exportar a Excel">' + ic('sheet') + '</button> ' +
+          '<button class="btn sm danger" data-a="del" data-id="' + h(x.id) + '" title="Eliminar">' + ic('trash') + '</button></td></tr>'; }).join('') + '</tbody></table></div>' :
+      '<div class="empty"><b>No hay conteos guardados</b>Durante un conteo toca “Guardar conteo” y ponle un nombre.</div>';
+  };
+  m.q('#cgQ').oninput = pintar; m.q('#cgE').onchange = pintar;
+  m.q('#cgL').onclick = async (ev) => {
+    const b = ev.target.closest('[data-a]'); if (!b) return; const x = S.cnt.get(b.dataset.id); if (!x) return;
+    if (b.dataset.a === 'cont') { m.close(); alAbrir(x); }
+    else if (b.dataset.a === 'ren') { const n = await pedirTexto('Cambiar nombre', 'Nombre del conteo', x.nom); if (n && n.trim()) { await put('cnt', Object.assign({}, x, { nom: n.trim() })); const C = conteoActual(); if (C && C.id === x.id) { C.nom = n.trim(); ls.set('conteo', C); } pintar(); } }
+    else if (b.dataset.a === 'exp') exportarFilas(x.nom, ['Código', 'Producto', 'Contado', 'Stock antes', 'Diferencia aplicada'], (x.ord || []).map((id) => [id, (S.prod.get(id) || { n: id }).n, x.it[id], (x.antes || {})[id] == null ? '' : x.antes[id], (x.difs || {})[id] == null ? '' : x.difs[id]]));
+    else if (b.dataset.a === 'del') { if (await confirmar('¿Eliminar el conteo "' + x.nom + '" de la lista?' + (x.est === 'apl' ? ' Los ajustes de stock que ya se aplicaron NO se deshacen.' : ''), 'Eliminar', true)) { await borrar('cnt', x.id); const C = conteoActual(); if (C && C.id === x.id) ls.del('conteo'); pintar(); } }
+  };
+  pintar();
+}
+function abrirConteo(x){
+  if (!x) return; const copia = JSON.parse(JSON.stringify(x)); delete copia._u; delete copia._d; copia.cambios = 0;
+  ls.set('conteo', copia); const b = $('iBody'); if (b) b.onclick = null; toast('Continuando “' + x.nom + '”'); invConteo();
+}
 function invConteo(){
   const b = $('iBody'); let C = conteoActual();
   if (!C) {
@@ -2285,13 +2331,15 @@ function invConteo(){
       (abierto ? '<button class="btn sm c3d cv" data-cont="' + h(x.id) + '">' + ic('scan') + 'Continuar</button><button class="btn sm icon danger" data-borc="' + h(x.id) + '" aria-label="Eliminar">' + ic('trash') + '</button>' : '<button class="btn sm" data-verc="' + h(x.id) + '">' + ic('sheet') + 'Exportar</button>') + '</div>';
     b.innerHTML = '<div class="stack">' +
       (gs.length ? '<div class="card stack"><h3 style="margin:0">' + ic('clip') + ' Conteos guardados para continuar (' + gs.length + ')</h3><div class="list">' + gs.map((x) => fila(x, true)).join('') + '</div></div>' : '') +
+      (vivos('cnt').length ? '<button class="btn c3d cb" id="ctLista" style="align-self:flex-start">' + ic('list') + 'Ver todos los conteos guardados (' + vivos('cnt').length + ')</button>' : '') +
       '<div class="card stack"><h3>Nuevo conteo de inventario con escáner</h3><p style="margin:0">Escanea cada producto de la percha. Cada lectura suma 1 (o escribe la cantidad). Puedes <b>guardar el conteo</b> y seguirlo después, en este u otro equipo. Al terminar, la app compara con el stock del sistema y guarda los ajustes.</p>' +
       '<label class="f">Nombre del conteo<input class="in" id="ctNom" value="Conteo ' + fechaTxt(hoyISO()) + '"></label>' +
       '<button class="btn pri" id="ctIni">' + ic('scan') + 'Empezar conteo</button></div>' +
       (ap.length ? '<div class="card stack"><h3 style="margin:0">Últimos conteos aplicados</h3><div class="list">' + ap.map((x) => fila(x, false)).join('') + '</div></div>' : '') + '</div>';
     $('ctIni').onclick = () => { ls.set('conteo', { id: uid('ct'), nom: $('ctNom').value.trim() || 'Conteo', ini: Date.now(), it: {}, ord: [], modo: 'suma', cambios: 0 }); invConteo(); };
     b.onclick = async (e) => {
-      const c = e.target.closest('[data-cont]'); if (c) { const x = S.cnt.get(c.dataset.cont); if (!x) return; const copia = JSON.parse(JSON.stringify(x)); delete copia._u; delete copia._d; copia.cambios = 0; ls.set('conteo', copia); b.onclick = null; toast('Continuando ' + x.nom); invConteo(); return; }
+      const c = e.target.closest('[data-cont]'); if (c) { abrirConteo(S.cnt.get(c.dataset.cont)); return; }
+      if (e.target.closest('#ctLista')) { verConteosGuardados(abrirConteo); return; }
       const d = e.target.closest('[data-borc]'); if (d) { const x = S.cnt.get(d.dataset.borc); if (x && await confirmar('¿Eliminar el conteo guardado "' + x.nom + '"? No se aplica ningún ajuste.', 'Eliminar', true)) { await borrar('cnt', x.id); invConteo(); } return; }
       const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarFilas(x.nom, ['Código', 'Producto', 'Contado', 'Stock antes', 'Diferencia aplicada'], (x.ord || []).map((id) => [id, (S.prod.get(id) || { n: id }).n, x.it[id], (x.antes || {})[id] == null ? '' : x.antes[id], (x.difs || {})[id] == null ? 0 : x.difs[id]])); }
     };
@@ -2301,13 +2349,15 @@ function invConteo(){
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
     '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
-    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
+    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
   const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
-  const guardarNube = async () => {
+  const guardarNube = async (silencioso) => {
+    if (!silencioso) { const r = await pedirNombreConteo(C); if (!r) return false; C.nom = r.nom; if (r.nuevo) C.id = uid('ct'); }
     C.sv = Date.now(); C.v = USR.id; C.est = 'abierto'; C.cambios = 0;
     const rec = JSON.parse(JSON.stringify(C)); delete rec.cambios; await put('cnt', rec);
-    ls.set('conteo', C); estado();
+    ls.set('conteo', C); estado(); const t0 = document.querySelector('#iBody .card b'); if (t0) t0.textContent = C.nom;
+    return true;
   };
   const sumar = (p, q) => { if (!(p.id in C.it)) { C.it[p.id] = 0; C.ord.unshift(p.id); } else { C.ord = [p.id].concat(C.ord.filter((x) => x !== p.id)); } C.it[p.id] = r2(C.it[p.id] + q); guardar(); pintar(); };
   const leer = async (p) => {
@@ -2328,8 +2378,13 @@ function invConteo(){
   };
   $('ctBody').onchange = (e) => { const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
   $('ctBody').onclick = (e) => { const x = e.target.closest('[data-del]'); if (!x) return; delete C.it[x.dataset.del]; C.ord = C.ord.filter((i) => i !== x.dataset.del); guardar(); pintar(); };
-  $('ctSave').onclick = async () => { await guardarNube(); toast('Conteo guardado ✓ Puedes seguirlo después desde este u otro equipo.'); };
-  $('ctSaveX').onclick = async () => { await guardarNube(); ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
+  $('ctSave').onclick = async () => { if (await guardarNube()) toast('Conteo “' + C.nom + '” guardado ✓'); };
+  $('ctLista2').onclick = () => verConteosGuardados(async (x) => {
+    if (x.id === C.id) return toast('Ya estás en ese conteo.');
+    if (C.cambios && C.ord.length) { await guardarNube(true); toast('El conteo “' + C.nom + '” se guardó antes de cambiar.'); }
+    abrirConteo(x);
+  });
+  $('ctSaveX').onclick = async () => { if (!(await guardarNube())) return; ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
   $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Sistema', 'Contado', 'Diferencia'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s)]; }));
@@ -3349,6 +3404,7 @@ const REPORTES = [
   ['stockbajo', 'Stock bajo y agotados', 'Inventario', 0, 'Para reponer primero lo que más se vende', 1, ['cat']],
   ['rotacion', 'Rotación y días de stock', 'Inventario', 1, 'Para cuántos días alcanza el stock', 0, ['cat']],
   ['ajustes', 'Ajustes de inventario', 'Inventario', 1, 'Conteos, daños, pérdidas y correcciones'],
+  ['conteos', 'Conteos guardados', 'Inventario', 0, 'Todos los conteos con nombre y fecha'],
   ['compras', 'Compras por proveedor', 'Compras y cuentas', 1, 'Base, IVA y total por proveedor'],
   ['cxc', 'Cuentas por cobrar', 'Compras y cuentas', 0, 'Ventas a crédito pendientes', 1],
   ['cxp', 'Compras a crédito', 'Compras y cuentas', 1, 'Vencimientos con proveedores', 1],
@@ -3400,7 +3456,7 @@ function pgReportes(){
 }
 const RICON = { resumen: 'chart', caja: 'cash', dias: 'cal', horas: 'clock', periodos: 'compare', vendedores: 'badge', formas: 'wallet', clientes: 'users', anulados: 'ban', iva: 'percent',
   productos: 'trophy', abc: 'layers', comparar: 'compare', kardex: 'list', categorias: 'grid', marcas: 'tag', sinmov: 'pause',
-  existencias: 'box', inventario: 'grid', invmarca: 'tag', stockbajo: 'alert', rotacion: 'rotate', ajustes: 'edit', compras: 'truck', cxc: 'wallet', cxp: 'receipt', pedidos: 'users', pedprov: 'clip', pedxprov: 'truck', pedprod: 'box' };
+  existencias: 'box', inventario: 'grid', invmarca: 'tag', stockbajo: 'alert', rotacion: 'rotate', ajustes: 'edit', conteos: 'scan', compras: 'truck', cxc: 'wallet', cxp: 'receipt', pedidos: 'users', pedprov: 'clip', pedxprov: 'truck', pedprod: 'box' };
 const RCOLOR = { Ventas: [['#F6C453', '#C98A12'], ['#FFB27A', '#E0661B'], ['#F59E9E', '#D64545']],
   Productos: [['#7CC4FF', '#1F6FD1'], ['#A98BFF', '#6A3FD8'], ['#7FE0E6', '#138A9A']],
   Inventario: [['#86E3A1', '#1E9A55'], ['#C9E86F', '#6E9A12'], ['#6FE0C2', '#0E8A6E']],
@@ -3653,6 +3709,19 @@ const REP = {
     return { cab: ['Pedido', 'Fecha', 'Cliente', 'Vendedor', 'Productos', 'Total'], num: [4, 5], fmt: { 5: M$ }, clic: true,
       filas: vs.map((v) => [v.num, fechaTxt(v.f), h(nomCli(v)), h(nomVend(v.v)), (v.it || []).length, v.tot]), pie: ['Total', '', '', '', '', r2(vs.reduce((s, v) => s + v.tot, 0))],
       after: (out) => { qs('tbody', out).onclick = (e) => { const r = e.target.closest('[data-j]'); if (r) verDocumento(vs[+r.dataset.j]); }; } };
+  },
+  conteos(F){
+    const l = vivos('cnt').filter((x) => enRango(fechaISO(new Date(x.est === 'apl' ? x.aplTs : (x.sv || x.ini))), F)).sort((a, b) => Math.max(b.sv || 0, b.aplTs || 0) - Math.max(a.sv || 0, a.aplTs || 0));
+    const dif = (x) => Object.values(x.difs || {}).length;
+    return { kpis: [['Conteos', String(l.length)], ['Sin terminar', String(l.filter((x) => x.est !== 'apl').length)], ['Aplicados', String(l.filter((x) => x.est === 'apl').length)]],
+      cab: ['Nombre', 'Estado', 'Iniciado', 'Guardado / aplicado', 'Productos', 'Unidades', 'Ajustes', 'Por'], num: [4, 5, 6], clic: true,
+      filas: l.map((x) => [h(x.nom), x.est === 'apl' ? '<span class="badge ok">Aplicado</span>' : '<span class="badge gold">Sin terminar</span>', fhTxt(x.ini), fhTxt(x.est === 'apl' ? x.aplTs : x.sv), (x.ord || []).length, unidCnt(x), x.est === 'apl' ? dif(x) : '', h(nomVend(x.est === 'apl' ? x.aplV : x.v))]),
+      raw: l.map((x) => [x.nom, x.est === 'apl' ? 'Aplicado' : 'Sin terminar', fhTxt(x.ini), fhTxt(x.est === 'apl' ? x.aplTs : x.sv), (x.ord || []).length, unidCnt(x), x.est === 'apl' ? dif(x) : '', nomVend(x.est === 'apl' ? x.aplV : x.v)]),
+      html: l.length ? '<p class="small muted" style="margin-top:0">Toca un conteo sin terminar para continuarlo.</p>' : '<div class="note">No hay conteos guardados en este período.</div>',
+      after: (out) => { const tb = qs('tbody', out); if (tb) tb.onclick = (e) => { const r = e.target.closest('[data-j]'); if (!r) return; const x = l[+r.dataset.j];
+        if (x.est === 'apl') return toast('Ese conteo ya se aplicó. Expórtalo desde Inventario → Conteo → Conteos guardados.');
+        const C = conteoActual(); if (C && C.id !== x.id && C.ord && C.ord.length && C.cambios) return toast('Tienes otro conteo abierto con cambios sin guardar. Guárdalo primero.', true);
+        const copia = JSON.parse(JSON.stringify(x)); delete copia._u; delete copia._d; copia.cambios = 0; ls.set('conteo', copia); location.hash = 'inv?t=conteo'; }; } };
   },
   pedprov(F){
     const l = vivos('ped').filter((p) => enRango(p.f, F)).sort((a, b) => (b.f || '').localeCompare(a.f || '') || (b.ts || 0) - (a.ts || 0));
