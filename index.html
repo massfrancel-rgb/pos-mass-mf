@@ -511,7 +511,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02e';
+const APP_VER = '2026-11-02f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2349,7 +2349,7 @@ function invConteo(){
   b.onclick = null;
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
-    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">Costo s/IVA</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
+    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">Costo s/IVA</th><th class="n">PVP s/IVA</th><th class="n">PVP c/IVA</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
     '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn" id="ctAnf">' + ic('upload') + 'Excel para Anfibius</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
   const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
@@ -2370,15 +2370,26 @@ function invConteo(){
   modoBtns();
   const montar = () => montarBuscador($('ctBus'), leer, { ph: 'Escanea o busca el producto contado…', continuo: C.modo === 'suma', scanTitulo: 'Conteo · cada lectura suma 1', onUnknown: (code) => codigoDesconocido(code, (p) => { if (p) sumar(p, 1); }) });
   montar();
+  const ivaDe = (p) => (p.iva == null ? cfg().iva : Number(p.iva)) || 0;
+  const celdasPvp = (id, p) => {
+    const iv = ivaDe(p), pvA = Number(p.pv) || 0, pv = C.pv && C.pv[id] != null ? C.pv[id] : pvA, cam = C.pv && C.pv[id] != null && Math.abs(C.pv[id] - pvA) > 0.004;
+    const co = C.co && C.co[id] != null ? C.co[id] : (Number(p.co) || 0), sin = pv / (1 + iv / 100), mg = sin > 0 && co > 0 ? Math.round((sin - co) / sin * 1000) / 10 : null;
+    return '<td class="n"><input class="mini' + (cam ? ' cocamb' : '') + '" data-pvs="' + h(id) + '" inputmode="decimal" value="' + (pv ? r2(sin).toFixed(2) : '') + '"><div class="small muted">IVA ' + numf(iv) + '%</div></td>' +
+      '<td class="n"><input class="mini strong' + (cam ? ' cocamb' : '') + '" data-pvc="' + h(id) + '" inputmode="decimal" value="' + (pv ? r2(pv).toFixed(2) : '') + '" title="PVP anterior: ' + money(pvA) + '"><div class="small" style="color:' + (mg == null ? 'inherit' : mg < 10 ? 'var(--warn-fg)' : 'var(--ok-fg)') + '">' + (mg == null ? '' : 'margen ' + mg + '%') + '</div></td>';
+  };
   const pintar = () => {
     $('ctN').textContent = C.ord.length + ' productos contados · ' + numf(C.ord.reduce((s, id) => s + (C.it[id] || 0), 0)) + ' unidades';
     $('ctBody').innerHTML = C.ord.length ? C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id), c = C.it[id], d = r2(c - s);
       return '<tr><td>' + h(p.n) + '<div class="small muted">' + h(id) + '</div></td><td class="n">' + numf(s) + '</td><td class="n"><input class="mini" data-id="' + h(id) + '" inputmode="decimal" value="' + numf(c) + '"></td>' +
         '<td class="n" style="color:' + (d ? (d > 0 ? 'var(--ok-fg)' : 'var(--warn-fg)') : 'inherit') + ';font-weight:800">' + (d > 0 ? '+' : '') + numf(d) + '</td>' +
-        '<td class="n"><input class="mini' + (C.co && C.co[id] != null && C.co[id] !== Number(p.co || 0) ? ' cocamb' : '') + '" data-co="' + h(id) + '" inputmode="decimal" value="' + (C.co && C.co[id] != null ? C.co[id] : (Number(p.co) || 0)) + '" title="Costo anterior: ' + money(Number(p.co) || 0) + '"></td><td><button class="btn sm icon ghost" data-del="' + h(id) + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>'; }).join('') :
-      '<tr><td colspan="6" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
+        '<td class="n"><input class="mini' + (C.co && C.co[id] != null && C.co[id] !== Number(p.co || 0) ? ' cocamb' : '') + '" data-co="' + h(id) + '" inputmode="decimal" value="' + (C.co && C.co[id] != null ? C.co[id] : (Number(p.co) || 0)) + '" title="Costo anterior: ' + money(Number(p.co) || 0) + '"></td>' + celdasPvp(id, p) + '<td><button class="btn sm icon ghost" data-del="' + h(id) + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>'; }).join('') :
+      '<tr><td colspan="8" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
   };
   $('ctBody').onchange = (e) => {
+    const ps = e.target.dataset.pvs || e.target.dataset.pvc;
+    if (ps) { const p = S.prod.get(ps) || {}; let n = parseFloat(String(e.target.value).replace(',', '.')); C.pv = C.pv || {};
+      if (!isNaN(n) && e.target.dataset.pvs) n = n * (1 + ivaDe(p) / 100);
+      if (isNaN(n) || n < 0 || Math.abs(n - (Number(p.pv) || 0)) < 0.004) delete C.pv[ps]; else C.pv[ps] = r2(n); guardar(); pintar(); return; }
     const ci = e.target.dataset.co; if (ci) { const n = parseFloat(String(e.target.value).replace(',', '.')); C.co = C.co || {}; const ant = Number((S.prod.get(ci) || {}).co) || 0;
       if (isNaN(n) || n < 0 || Math.abs(n - ant) < 0.00005) delete C.co[ci]; else C.co[ci] = Number(n.toFixed(4)); guardar(); pintar(); return; }
     const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
@@ -2392,22 +2403,23 @@ function invConteo(){
   $('ctSaveX').onclick = async () => { if (!(await guardarNube())) return; ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
-  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
-    return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0]; }));
-  $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
+  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo', 'IVA %', 'PVP anterior (c/IVA)', 'PVP nuevo (c/IVA)', 'PVP nuevo (s/IVA)'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
+    return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0, ivaDe(p), Number(p.pv) || 0, C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0, r2((C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0) / (1 + ivaDe(p) / 100))]; }));
+  $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, pvps: C.pv || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
   $('ctApl').onclick = async () => {
     const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id)) })).filter((x) => x.d);
     if (!C.ord.length) return toast('No hay productos contados.', true);
-    const cos = Object.keys(C.co || {}).filter((id) => S.prod.get(id));
-    if (!(await confirmar((difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias de stock.') + (cos.length ? ' Se actualizará el costo de ' + cos.length + ' producto(s).' : '') + ' ¿Aplicar?', 'Aplicar'))) return;
-    if (cos.length) await putMuchos('prod', cos.map((id) => Object.assign({}, S.prod.get(id), { co: C.co[id] })));
+    const cos = Object.keys(C.co || {}).filter((id) => S.prod.get(id)); const pvs = Object.keys(C.pv || {}).filter((id) => S.prod.get(id));
+    if (!(await confirmar((difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias de stock.') + (cos.length ? ' Se actualizará el costo de ' + cos.length + ' producto(s).' : '') + (pvs.length ? ' Se actualizará el PVP de ' + pvs.length + ' producto(s).' : '') + ' ¿Aplicar?', 'Aplicar'))) return;
+    const cam = Array.from(new Set(cos.concat(pvs)));
+    if (cam.length) await putMuchos('prod', cam.map((id) => { const o = Object.assign({}, S.prod.get(id)); if (C.co && C.co[id] != null) o.co = C.co[id]; if (C.pv && C.pv[id] != null) o.pv = C.pv[id]; return o; }));
     const now = Date.now();
     const antes = {}; C.ord.forEach((id) => { antes[id] = stockDe(id); });
     await putMuchos('mov', difs.map((x, i) => ({ id: uid('mv') + i, p: x.id, q: x.d, tp: 'conteo', mot: C.nom, ct: C.id, f: hoyISO(), ts: now, v: USR.id })));
     const rec = JSON.parse(JSON.stringify(C)); delete rec.cambios;
     rec.est = 'apl'; rec.aplTs = now; rec.aplV = USR.id; rec.antes = antes; rec.difs = {}; difs.forEach((x) => { rec.difs[x.id] = x.d; }); if (!rec.sv) rec.sv = now; if (!rec.v) rec.v = USR.id;
     await put('cnt', rec);
-    ls.del('conteo'); toast(difs.length + ' ajustes de stock' + (cos.length ? ' y ' + cos.length + ' costos' : '') + ' aplicados.'); invConteo();
+    ls.del('conteo'); toast(difs.length + ' ajustes de stock' + (cos.length ? ', ' + cos.length + ' costos' : '') + (pvs.length ? ', ' + pvs.length + ' PVP' : '') + ' aplicados.'); invConteo();
   };
   pintar(); estado();
 }
@@ -3442,7 +3454,7 @@ async function exportarAnfibius(opts){
     F.filas.forEach((f0, idx) => {
       const cod = String(f0[iC]).trim(); enFmt.add(cod);
       if (soloIds && !soloIds.has(cod)) return;
-      let p = S.prod.get(cod); if (p && opts.costos && opts.costos[cod] != null) p = Object.assign({}, p, { co: opts.costos[cod] });
+      let p = S.prod.get(cod); if (p && opts.costos && opts.costos[cod] != null) p = Object.assign({}, p, { co: opts.costos[cod] }); if (p && opts.pvps && opts.pvps[cod] != null) p = Object.assign({}, p, { pv: opts.pvps[cod] });
       const f = cab.map((c, i) => (f0[i] === undefined ? '' : f0[i]));
       let cambio = false;
       if (p && !p._d) {
@@ -3482,7 +3494,7 @@ async function exportarAnfibius(opts){
       descargar(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'FORMATO_DE_ANFIBIUS ' + hoyISO() + (opts.titulo ? ' ' + String(opts.titulo).replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_') : '') + '.xlsx');
       // el formato guardado queda con los valores exportados (la próxima vez solo salen los nuevos cambios)
       const o = r.o; const F2 = await metaGet('anfFmt', F);
-      F2.filas.forEach((f) => { let p = S.prod.get(String(f[iC]).trim()); if (p && opts.costos && opts.costos[String(f[iC]).trim()] != null) p = Object.assign({}, p, { co: opts.costos[String(f[iC]).trim()] }); if (!p || (soloIds && !soloIds.has(String(f[iC]).trim()))) return;
+      F2.filas.forEach((f) => { let p = S.prod.get(String(f[iC]).trim()); if (p && opts.costos && opts.costos[String(f[iC]).trim()] != null) p = Object.assign({}, p, { co: opts.costos[String(f[iC]).trim()] }); if (p && opts.pvps && opts.pvps[String(f[iC]).trim()] != null) p = Object.assign({}, p, { pv: opts.pvps[String(f[iC]).trim()] }); if (!p || (soloIds && !soloIds.has(String(f[iC]).trim()))) return;
         if (o.co && iCo >= 0 && Number(p.co) >= 0) f[iCo] = Number(Number(p.co).toFixed(4)); if (o.pv && iP >= 0 && Number(p.pv) > 0) f[iP] = r2(p.pv);
         if (o.n && iD >= 0 && p.n) f[iD] = p.n; if (o.mi && iMi >= 0 && Number(p.mi) > 0) f[iMi] = Number(p.mi); });
       await metaSet('anfFmt', F2); F = F2;
