@@ -516,11 +516,12 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02g';
+const APP_VER = '2026-11-02h';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-  qr: 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js'
+  qr: 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  exceljs: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
 };
 const $ = (id) => document.getElementById(id);
 const qs = (s, r) => (r || document).querySelector(s);
@@ -550,6 +551,7 @@ function cargarScript(src){
     document.head.appendChild(s);
   });
 }
+async function libExcelJS(){ if (!window.ExcelJS) await cargarScript(LIB.exceljs); return window.ExcelJS; }
 async function libXLSX(){ if (!window.XLSX) await cargarScript(LIB.xlsx); return window.XLSX; }
 async function libPDF(){ if (!window.jspdf) await cargarScript(LIB.jspdf); return window.jspdf.jsPDF; }
 function descargar(blob, nombre){
@@ -2281,6 +2283,11 @@ function kardex(p){
 
 /* ---------- Conteo físico con escáner ---------- */
 function conteoActual(){ return ls.get('conteo', null); }
+/** Excel del conteo en formato tabla con colores (si no se puede cargar ExcelJS, sale el Excel simple) */
+async function exportarConteoXL(nombre, cab, filas){
+  try { await exportarTablaXL({ nombre, cab, filas, tabla: true, texto: [0], color: colorStockXL, anchos: { 1: 48 } }); }
+  catch (e) { exportarFilas(nombre, cab, filas); }
+}
 const unidCnt = (x) => (x.ord || []).reduce((t, id) => t + (Number((x.it || {})[id]) || 0), 0);
 const fhTxt = (ts) => ts ? fechaTxt(fechaISO(new Date(ts))) + ' ' + horaTxt(ts) : '—';
 /** Pide el nombre con el que se guarda el conteo */
@@ -2318,7 +2325,7 @@ function verConteosGuardados(alAbrir){
     const b = ev.target.closest('[data-a]'); if (!b) return; const x = S.cnt.get(b.dataset.id); if (!x) return;
     if (b.dataset.a === 'cont') { m.close(); alAbrir(x); }
     else if (b.dataset.a === 'ren') { const n = await pedirTexto('Cambiar nombre', 'Nombre del conteo', x.nom); if (n && n.trim()) { await put('cnt', Object.assign({}, x, { nom: n.trim() })); const C = conteoActual(); if (C && C.id === x.id) { C.nom = n.trim(); ls.set('conteo', C); } pintar(); } }
-    else if (b.dataset.a === 'exp') exportarFilas(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; }));
+    else if (b.dataset.a === 'exp') exportarConteoXL(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; }));
     else if (b.dataset.a === 'del') { if (await confirmar('¿Eliminar el conteo "' + x.nom + '" de la lista?' + (x.est === 'apl' ? ' Los ajustes de stock que ya se aplicaron NO se deshacen.' : ''), 'Eliminar', true)) { await borrar('cnt', x.id); const C = conteoActual(); if (C && C.id === x.id) ls.del('conteo'); pintar(); } }
   };
   pintar();
@@ -2347,7 +2354,7 @@ function invConteo(){
       const c = e.target.closest('[data-cont]'); if (c) { abrirConteo(S.cnt.get(c.dataset.cont)); return; }
       if (e.target.closest('#ctLista')) { verConteosGuardados(abrirConteo); return; }
       const d = e.target.closest('[data-borc]'); if (d) { const x = S.cnt.get(d.dataset.borc); if (x && await confirmar('¿Eliminar el conteo guardado "' + x.nom + '"? No se aplica ningún ajuste.', 'Eliminar', true)) { await borrar('cnt', x.id); invConteo(); } return; }
-      const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarFilas(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; })); }
+      const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarConteoXL(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; })); }
     };
     return;
   }
@@ -2420,7 +2427,7 @@ function invConteo(){
   $('ctSaveX').onclick = async () => { if (!(await guardarNube())) return; ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
-  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo', 'IVA %', 'PVP anterior (c/IVA)', 'PVP nuevo (c/IVA)', 'PVP nuevo (s/IVA)'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
+  $('ctX').onclick = () => exportarConteoXL(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo', 'IVA %', 'PVP anterior (c/IVA)', 'PVP nuevo (c/IVA)', 'PVP nuevo (s/IVA)'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
     return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0, ivaDe(p), Number(p.pv) || 0, C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0, r2((C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0) / (1 + ivaDe(p) / 100))]; }));
   $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, pvps: C.pv || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
   $('ctApl').onclick = async () => {
@@ -3043,6 +3050,31 @@ async function exportarFilas(nombre, cab, filas, extraHojas){
   } catch (e) { toast(e.message, true); }
 }
 
+/** Excel con colores y formato de tabla (ExcelJS).
+ *  o: { nombre, archivo, hoja, cab, filas, tabla (bool), texto: [índices de columnas de texto], color: (nombreCol, valor, fila) => 'amarillo'|'rosa'|'verde'|null, anchos: {i: n} } */
+const COLOR_XL = { amarillo: ['FFFFF3C4', 'FF5A4300'], rosa: ['FFFFE1E6', 'FFB4233C'], verde: ['FFDDF5E5', 'FF18794E'], azul: ['FFE7EEFF', 'FF1F3A93'] };
+async function exportarTablaXL(o){
+  const E = await libExcelJS(); const wb = new E.Workbook(); wb.creator = 'POS MASS MF';
+  const ws = wb.addWorksheet(String(o.hoja || o.nombre || 'Hoja1').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
+  const filas = o.filas.map((f) => f.map((v, i) => ((o.texto || []).includes(i) && v != null && v !== '' ? String(v) : (v === '' ? null : v))));
+  if (o.tabla !== false && filas.length) {
+    ws.addTable({ name: 'Tabla' + Date.now().toString(36), ref: 'A1', headerRow: true, style: { theme: 'TableStyleMedium2', showRowStripes: true },
+      columns: o.cab.map((c, i) => ({ name: String(c || ('Columna' + (i + 1))), filterButton: true })), rows: filas });
+  } else {
+    ws.addRow(o.cab); filas.forEach((f) => ws.addRow(f));
+    ws.getRow(1).font = { bold: true };
+  }
+  (o.texto || []).forEach((i) => { ws.getColumn(i + 1).numFmt = '@'; });
+  o.cab.forEach((c, i) => { const w = (o.anchos && o.anchos[i]) || Math.min(50, Math.max(String(c).length + 3, ...filas.slice(0, 200).map((f) => String(f[i] == null ? '' : f[i]).length + 2))); ws.getColumn(i + 1).width = w; });
+  if (o.color) filas.forEach((f, r) => f.forEach((v, i) => { const k = o.color(o.cab[i], v, f); if (!k || !COLOR_XL[k]) return;
+    const cell = ws.getCell(r + 2, i + 1); cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_XL[k][0] } }; cell.font = { bold: true, color: { argb: COLOR_XL[k][1] } }; }));
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  const buf = await wb.xlsx.writeBuffer();
+  descargar(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), o.archivo || (String(o.nombre).replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_') + ' ' + hoyISO() + '.xlsx'));
+}
+/** Colores de inventario: stock sistema amarillo, diferencia rosa (negativa) o verde (cero o positiva) */
+const colorStockXL = (c, v) => { const n = norm(c); if (/^stock sistema/.test(n)) return 'amarillo'; if (/^diferencia/.test(n)) return Number(v) < 0 ? 'rosa' : 'verde'; if (/^resultado$/.test(n)) return v === 'Disminuye' ? 'rosa' : 'verde'; return null; };
+
 const CAMPOS_PROD = [
   ['id', 'Código interno *', /^(c[oó]d(igo|\.)?( (interno|producto|art[ií]culo|item))?|item|sku|referencia|ref\.?)$/],
   ['n', 'Nombre / descripción *', /descrip|nombre|producto|art[ií]culo|detalle/],
@@ -3458,7 +3490,9 @@ async function exportarAnfibius(opts){
     (iCo >= 0 ? '<label class="chk"><input type="checkbox" id="afCo" checked> Costo</label>' : '') + (iP >= 0 ? '<label class="chk"><input type="checkbox" id="afP" checked> PVP</label>' : '') +
     (iD >= 0 ? '<label class="chk"><input type="checkbox" id="afD"> Descripción</label>' : '') + (iMi >= 0 ? '<label class="chk"><input type="checkbox" id="afMi"> Stock mínimo</label>' : '') +
     '<label class="chk"><input type="checkbox" id="afSt"' + (ls.get('anfStock', true) ? ' checked' : '') + '> Agregar ' + (opts.stock ? 'columnas <b>Stock sistema, Stock contado y Diferencia</b> al final' : 'columna <b>Stock</b> al final (stock actual de POS)') + '</label>' +
-    '<div class="small muted" style="margin-left:28px">El formato de productos de Anfibius no trae Stock. Si Anfibius no acepta el archivo con esta columna, desmárcala.</div></div>' +
+    '<div class="small muted" style="margin-left:28px">El formato de productos de Anfibius no trae Stock. Si Anfibius no acepta el archivo con esta columna, desmárcala.</div>' +
+    '<label class="chk"><input type="checkbox" id="afTab"' + (ls.get('anfTabla', true) ? ' checked' : '') + '> Formato de tabla de Excel con colores (Stock sistema amarillo, Diferencia rosada o verde)</label>' +
+    '<div class="small muted" style="margin-left:28px">Si Anfibius no acepta el archivo, desmarca esta opción para que salga como el original.</div></div>' +
     '<div class="small muted" style="font-weight:700">Qué productos incluir</div><div class="seg" id="afQ" style="margin-top:6px"><button data-v="cam">Solo los que cambiaron</button><button data-v="todo">' + (soloIds ? 'Todos los del conteo' : 'Todos') + '</button></div>' +
     '<div class="note" id="afRes" style="margin-top:12px"></div>',
     foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d cv" id="afOk">' + ic('download') + 'Descargar Excel</button>' });
@@ -3502,13 +3536,18 @@ async function exportarAnfibius(opts){
   m.q('#afOk').onclick = async () => {
     const r = calcular(); if (!r.filas.length) return toast('No hay productos con cambios para exportar.', true);
     try {
-      ls.set('anfStock', r.o.st);
-      const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([r.o.st ? cab.concat(opts.stock ? ['Stock sistema', 'Stock contado', 'Diferencia'] : ['Stock']) : cab].concat(r.filas));
-      for (let i = 1; i <= r.filas.length; i++) { const ref = X.utils.encode_cell({ r: i, c: iC }); if (ws[ref]) { ws[ref].t = 's'; ws[ref].v = String(ws[ref].v); ws[ref].z = '@'; } }
-      ws['!cols'] = cab.map((c, i) => ({ wch: i === iD ? 50 : Math.max(8, String(c).length + 2) }));
-      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Hoja1');
-      const out = X.write(wb, { bookType: 'xlsx', type: 'array' });
-      descargar(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'FORMATO_DE_ANFIBIUS ' + hoyISO() + (opts.titulo ? ' ' + String(opts.titulo).replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_') : '') + '.xlsx');
+      ls.set('anfStock', r.o.st); const tab = chk('#afTab'); ls.set('anfTabla', tab);
+      const cab2 = r.o.st ? cab.concat(opts.stock ? ['Stock sistema', 'Stock contado', 'Diferencia'] : ['Stock']) : cab;
+      const archivo = 'FORMATO_DE_ANFIBIUS ' + hoyISO() + (opts.titulo ? ' ' + String(opts.titulo).replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_') : '') + '.xlsx';
+      if (tab) await exportarTablaXL({ nombre: 'Hoja1', hoja: 'Hoja1', archivo, cab: cab2, filas: r.filas, tabla: true, texto: [iC], color: colorStockXL, anchos: { [iD]: 50 } });
+      else {
+        const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([cab2].concat(r.filas));
+        for (let i = 1; i <= r.filas.length; i++) { const ref = X.utils.encode_cell({ r: i, c: iC }); if (ws[ref]) { ws[ref].t = 's'; ws[ref].v = String(ws[ref].v); ws[ref].z = '@'; } }
+        ws['!cols'] = cab2.map((c, i) => ({ wch: i === iD ? 50 : Math.max(8, String(c).length + 2) }));
+        const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Hoja1');
+        const out = X.write(wb, { bookType: 'xlsx', type: 'array' });
+        descargar(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), archivo);
+      }
       // el formato guardado queda con los valores exportados (la próxima vez solo salen los nuevos cambios)
       const o = r.o; const F2 = await metaGet('anfFmt', F);
       F2.filas.forEach((f) => { let p = S.prod.get(String(f[iC]).trim()); if (p && opts.costos && opts.costos[String(f[iC]).trim()] != null) p = Object.assign({}, p, { co: opts.costos[String(f[iC]).trim()] }); if (p && opts.pvps && opts.pvps[String(f[iC]).trim()] != null) p = Object.assign({}, p, { pv: opts.pvps[String(f[iC]).trim()] }); if (!p || (soloIds && !soloIds.has(String(f[iC]).trim()))) return;

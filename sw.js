@@ -1,9 +1,10 @@
 // POS MASS MF — guarda la app para abrir rápido y vender sin internet.
-const VERSION = 'pos-mass-mf-2026-11-02g';
+const VERSION = 'pos-mass-mf-2026-11-02h';
 const BASE = ['./', 'index.html', 'manifest.json', 'logo_mass.png', 'pos-192.png', 'pos-512.png', 'pos-180.png', 'catalogo.json'];
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(BASE).then(() => Promise.all(LIBS.map((u) => c.add(u).catch(() => {}))))).then(() => self.skipWaiting()));
