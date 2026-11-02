@@ -462,6 +462,11 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .ci .pedctrl .lsub .mini{background:#E7EEFF;border-color:#9DB3FF}.ci .pedctrl .ltot .mini{background:#E3F6EA;border-color:#8BD3A6}
 .card h3 > svg{width:20px;height:20px;vertical-align:-4px;margin-right:4px}
 .mini.cocamb{background:#FFF3C4;border-color:#E2B33A;font-weight:800}
+.mini.ctsis{background:#FFF3C4;border-color:#E2B33A;font-weight:800;color:#5a4300}
+.mini.ctneg{background:#FFE1E6;border-color:#F29BAA;font-weight:800;color:#B4233C}
+.mini.ctpos{background:#DDF5E5;border-color:#8BD3A6;font-weight:800;color:#18794E}
+.ctcod{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}
+#ctHead th.sortable{cursor:pointer;user-select:none}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -511,7 +516,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02f';
+const APP_VER = '2026-11-02g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2349,7 +2354,7 @@ function invConteo(){
   b.onclick = null;
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
-    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">Costo s/IVA</th><th class="n">PVP s/IVA</th><th class="n">PVP c/IVA</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
+    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead id="ctHead"></thead><tbody id="ctBody"></tbody></table></div>' +
     '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn" id="ctAnf">' + ic('upload') + 'Excel para Anfibius</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
   const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
@@ -2379,11 +2384,20 @@ function invConteo(){
   };
   const pintar = () => {
     $('ctN').textContent = C.ord.length + ' productos contados · ' + numf(C.ord.reduce((s, id) => s + (C.it[id] || 0), 0)) + ' unidades';
-    $('ctBody').innerHTML = C.ord.length ? C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id), c = C.it[id], d = r2(c - s);
-      return '<tr><td>' + h(p.n) + '<div class="small muted">' + h(id) + '</div></td><td class="n">' + numf(s) + '</td><td class="n"><input class="mini" data-id="' + h(id) + '" inputmode="decimal" value="' + numf(c) + '"></td>' +
-        '<td class="n" style="color:' + (d ? (d > 0 ? 'var(--ok-fg)' : 'var(--warn-fg)') : 'inherit') + ';font-weight:800">' + (d > 0 ? '+' : '') + numf(d) + '</td>' +
+    // encabezado con orden (Código, Producto, Sistema, Contado, Dif.)
+    const so = ls.get('ctSort', null);
+    const th = (k, t, n) => '<th class="' + (n ? 'n ' : '') + 'sortable" data-cs="' + k + '">' + t + ' <i class="sarr">' + (so && so.k === k ? (so.d ? '▼' : '▲') : '↕') + '</i></th>';
+    $('ctHead').innerHTML = '<tr>' + th('cod', 'Código') + th('nom', 'Producto') + th('sis', 'Sistema', 1) + th('con', 'Contado', 1) + th('dif', 'Dif.', 1) +
+      '<th class="n">Costo s/IVA</th><th class="n">PVP s/IVA</th><th class="n">PVP c/IVA</th><th>' + (so ? '<button class="btn sm ghost" data-cs="" title="Volver al orden de lectura">↺</button>' : '') + '</th></tr>';
+    let lista = C.ord.slice();
+    if (so) { const val = (id) => { const p = S.prod.get(id) || { n: id }; const st = stockDe(id), c = Number(C.it[id]) || 0;
+        return so.k === 'cod' ? id : so.k === 'nom' ? String(p.n || '').replace(/^[^0-9A-Za-zÀ-ÿÑñ]+/, '') : so.k === 'sis' ? st : so.k === 'con' ? c : r2(c - st); };
+      lista.sort((a, b) => { const x = val(a), y = val(b); const r = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'es', { numeric: true, sensitivity: 'base' }); return so.d ? -r : r; }); }
+    $('ctBody').innerHTML = lista.length ? lista.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id), c = C.it[id], d = r2(c - s);
+      return '<tr><td class="ctcod">' + h(id) + '</td><td>' + h(p.n) + '</td><td class="n"><input class="mini ctsis" value="' + numf(s) + '" readonly tabindex="-1"></td><td class="n"><input class="mini" data-id="' + h(id) + '" inputmode="decimal" value="' + numf(c) + '"></td>' +
+        '<td class="n"><input class="mini ' + (d < 0 ? 'ctneg' : 'ctpos') + '" value="' + (d > 0 ? '+' : '') + numf(d) + '" readonly tabindex="-1"></td>' +
         '<td class="n"><input class="mini' + (C.co && C.co[id] != null && C.co[id] !== Number(p.co || 0) ? ' cocamb' : '') + '" data-co="' + h(id) + '" inputmode="decimal" value="' + (C.co && C.co[id] != null ? C.co[id] : (Number(p.co) || 0)) + '" title="Costo anterior: ' + money(Number(p.co) || 0) + '"></td>' + celdasPvp(id, p) + '<td><button class="btn sm icon ghost" data-del="' + h(id) + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>'; }).join('') :
-      '<tr><td colspan="8" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
+      '<tr><td colspan="9" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
   };
   $('ctBody').onchange = (e) => {
     const ps = e.target.dataset.pvs || e.target.dataset.pvc;
@@ -2393,6 +2407,9 @@ function invConteo(){
     const ci = e.target.dataset.co; if (ci) { const n = parseFloat(String(e.target.value).replace(',', '.')); C.co = C.co || {}; const ant = Number((S.prod.get(ci) || {}).co) || 0;
       if (isNaN(n) || n < 0 || Math.abs(n - ant) < 0.00005) delete C.co[ci]; else C.co[ci] = Number(n.toFixed(4)); guardar(); pintar(); return; }
     const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
+  $('ctHead').onclick = (e) => { const t = e.target.closest('[data-cs]'); if (!t) return; const k = t.dataset.cs; const so = ls.get('ctSort', null);
+    if (!k) ls.del('ctSort'); else ls.set('ctSort', so && so.k === k ? (so.d ? null : { k, d: true }) : { k, d: false });
+    if (ls.get('ctSort', 0) === null) ls.del('ctSort'); pintar(); };
   $('ctBody').onclick = (e) => { const x = e.target.closest('[data-del]'); if (!x) return; delete C.it[x.dataset.del]; C.ord = C.ord.filter((i) => i !== x.dataset.del); guardar(); pintar(); };
   $('ctSave').onclick = async () => { if (await guardarNube()) toast('Conteo “' + C.nom + '” guardado ✓'); };
   $('ctLista2').onclick = () => verConteosGuardados(async (x) => {
