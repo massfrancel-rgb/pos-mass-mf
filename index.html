@@ -511,7 +511,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02d';
+const APP_VER = '2026-11-02e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2313,7 +2313,7 @@ function verConteosGuardados(alAbrir){
     const b = ev.target.closest('[data-a]'); if (!b) return; const x = S.cnt.get(b.dataset.id); if (!x) return;
     if (b.dataset.a === 'cont') { m.close(); alAbrir(x); }
     else if (b.dataset.a === 'ren') { const n = await pedirTexto('Cambiar nombre', 'Nombre del conteo', x.nom); if (n && n.trim()) { await put('cnt', Object.assign({}, x, { nom: n.trim() })); const C = conteoActual(); if (C && C.id === x.id) { C.nom = n.trim(); ls.set('conteo', C); } pintar(); } }
-    else if (b.dataset.a === 'exp') exportarFilas(x.nom, ['Código', 'Producto', 'Stock contado', 'Stock antes', 'Diferencia aplicada'], (x.ord || []).map((id) => [id, (S.prod.get(id) || { n: id }).n, x.it[id], (x.antes || {})[id] == null ? '' : x.antes[id], (x.difs || {})[id] == null ? '' : x.difs[id]]));
+    else if (b.dataset.a === 'exp') exportarFilas(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; }));
     else if (b.dataset.a === 'del') { if (await confirmar('¿Eliminar el conteo "' + x.nom + '" de la lista?' + (x.est === 'apl' ? ' Los ajustes de stock que ya se aplicaron NO se deshacen.' : ''), 'Eliminar', true)) { await borrar('cnt', x.id); const C = conteoActual(); if (C && C.id === x.id) ls.del('conteo'); pintar(); } }
   };
   pintar();
@@ -2342,7 +2342,7 @@ function invConteo(){
       const c = e.target.closest('[data-cont]'); if (c) { abrirConteo(S.cnt.get(c.dataset.cont)); return; }
       if (e.target.closest('#ctLista')) { verConteosGuardados(abrirConteo); return; }
       const d = e.target.closest('[data-borc]'); if (d) { const x = S.cnt.get(d.dataset.borc); if (x && await confirmar('¿Eliminar el conteo guardado "' + x.nom + '"? No se aplica ningún ajuste.', 'Eliminar', true)) { await borrar('cnt', x.id); invConteo(); } return; }
-      const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarFilas(x.nom, ['Código', 'Producto', 'Stock contado', 'Stock antes', 'Diferencia aplicada'], (x.ord || []).map((id) => [id, (S.prod.get(id) || { n: id }).n, x.it[id], (x.antes || {})[id] == null ? '' : x.antes[id], (x.difs || {})[id] == null ? 0 : x.difs[id]])); }
+      const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarFilas(x.nom, ['Código', 'Producto', 'Stock sistema (antes)', 'Stock contado', 'Diferencia'], (x.ord || []).map((id) => { const sis = (x.antes || {})[id] != null ? x.antes[id] : stockDe(id); return [id, (S.prod.get(id) || { n: id }).n, sis, x.it[id], r2((Number(x.it[id]) || 0) - sis)]; })); }
     };
     return;
   }
@@ -2392,8 +2392,9 @@ function invConteo(){
   $('ctSaveX').onclick = async () => { if (!(await guardarNube())) return; ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
-  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Costo anterior', 'Costo nuevo'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s), Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0]; }));
-  $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, stock: Object.assign({}, C.it) });
+  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
+    return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0]; }));
+  $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
   $('ctApl').onclick = async () => {
     const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id)) })).filter((x) => x.d);
     if (!C.ord.length) return toast('No hay productos contados.', true);
@@ -3427,7 +3428,7 @@ async function exportarAnfibius(opts){
     '<div class="small muted" style="font-weight:700">Actualizar con los datos de POS</div><div class="stack" style="gap:6px;margin:6px 0 10px">' +
     (iCo >= 0 ? '<label class="chk"><input type="checkbox" id="afCo" checked> Costo</label>' : '') + (iP >= 0 ? '<label class="chk"><input type="checkbox" id="afP" checked> PVP</label>' : '') +
     (iD >= 0 ? '<label class="chk"><input type="checkbox" id="afD"> Descripción</label>' : '') + (iMi >= 0 ? '<label class="chk"><input type="checkbox" id="afMi"> Stock mínimo</label>' : '') +
-    '<label class="chk"><input type="checkbox" id="afSt"' + (ls.get('anfStock', true) ? ' checked' : '') + '> Agregar columna <b>Stock</b> al final (' + (opts.stock ? 'cantidad contada' : 'stock actual de POS') + ')</label>' +
+    '<label class="chk"><input type="checkbox" id="afSt"' + (ls.get('anfStock', true) ? ' checked' : '') + '> Agregar ' + (opts.stock ? 'columnas <b>Stock sistema, Stock contado y Diferencia</b> al final' : 'columna <b>Stock</b> al final (stock actual de POS)') + '</label>' +
     '<div class="small muted" style="margin-left:28px">El formato de productos de Anfibius no trae Stock. Si Anfibius no acepta el archivo con esta columna, desmárcala.</div></div>' +
     '<div class="small muted" style="font-weight:700">Qué productos incluir</div><div class="seg" id="afQ" style="margin-top:6px"><button data-v="cam">Solo los que cambiaron</button><button data-v="todo">' + (soloIds ? 'Todos los del conteo' : 'Todos') + '</button></div>' +
     '<div class="note" id="afRes" style="margin-top:12px"></div>',
@@ -3451,7 +3452,10 @@ async function exportarAnfibius(opts){
         if (o.mi && iMi >= 0 && Number(p.mi) > 0 && Number(f[iMi]) !== Number(p.mi)) { f[iMi] = Number(p.mi); cambio = true; }
       }
       f[iC] = cod;
-      if (o.st) { const st = opts.stock && opts.stock[cod] != null ? Number(opts.stock[cod]) : (p && !p._d ? stockDe(cod) : ''); f.push(st); if (soloIds) cambio = true; }
+      if (o.st) {
+        if (opts.stock) { const sis = opts.sistema && opts.sistema[cod] != null ? Number(opts.sistema[cod]) : stockDe(cod); const cont = opts.stock[cod] != null ? Number(opts.stock[cod]) : sis; f.push(sis, cont, r2(cont - sis)); cambio = true; }
+        else f.push(p && !p._d ? stockDe(cod) : '');
+      }
       if (modo === 'todo' || cambio) { filas.push(f); if (cambio) cambios.push(idx); }
     });
     const nuevos = (soloIds ? Array.from(soloIds) : vivos('prod').map((p) => p.id)).filter((id) => !enFmt.has(String(id)) && S.prod.get(id));
@@ -3470,7 +3474,7 @@ async function exportarAnfibius(opts){
     const r = calcular(); if (!r.filas.length) return toast('No hay productos con cambios para exportar.', true);
     try {
       ls.set('anfStock', r.o.st);
-      const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([r.o.st ? cab.concat(['Stock']) : cab].concat(r.filas));
+      const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([r.o.st ? cab.concat(opts.stock ? ['Stock sistema', 'Stock contado', 'Diferencia'] : ['Stock']) : cab].concat(r.filas));
       for (let i = 1; i <= r.filas.length; i++) { const ref = X.utils.encode_cell({ r: i, c: iC }); if (ws[ref]) { ws[ref].t = 's'; ws[ref].v = String(ws[ref].v); ws[ref].z = '@'; } }
       ws['!cols'] = cab.map((c, i) => ({ wch: i === iD ? 50 : Math.max(8, String(c).length + 2) }));
       const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Hoja1');
