@@ -460,6 +460,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .peddesc > b{color:#0f6b55;text-transform:uppercase;font-size:13px}
 .ci .pedctrl .ivain{background:#FDEBD0}
 .ci .pedctrl .lsub .mini{background:#E7EEFF;border-color:#9DB3FF}.ci .pedctrl .ltot .mini{background:#E3F6EA;border-color:#8BD3A6}
+.card h3 > svg{width:20px;height:20px;vertical-align:-4px;margin-right:4px}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -509,7 +510,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-10-31f';
+const APP_VER = '2026-11-02a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -682,7 +683,7 @@ function thumb(p, cls){
     : '<span class="th ph ' + (cls || '') + '"></span>';
 }
 
-const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj', 'ped', 'imp'];
+const TABLAS = ['prod', 'cli', 'prov', 'vend', 'vta', 'com', 'mov', 'cfg', 'foto', 'bor', 'adj', 'ped', 'imp', 'cnt'];
 const S = {}; TABLAS.forEach((t) => { S[t] = new Map(); });
 const DOC = { F: 'Factura', N: 'Nota de venta', P: 'Pedido', C: 'Nota de crédito' };
 const FPAGO = { ef: 'Efectivo', tr: 'Transferencia', tj: 'Tarjeta', cr: 'Crédito' };
@@ -2277,17 +2278,37 @@ function conteoActual(){ return ls.get('conteo', null); }
 function invConteo(){
   const b = $('iBody'); let C = conteoActual();
   if (!C) {
-    b.innerHTML = '<div class="card stack"><h3>Conteo de inventario con escáner</h3><p style="margin:0">Escanea cada producto de la percha. Cada lectura suma 1 (o escribe la cantidad). Al terminar, la app compara con el stock del sistema y guarda los ajustes.</p>' +
+    const gs = vivos('cnt').filter((x) => x.est !== 'apl').sort((a, b2) => (b2.sv || 0) - (a.sv || 0));
+    const ap = vivos('cnt').filter((x) => x.est === 'apl').sort((a, b2) => (b2.aplTs || 0) - (a.aplTs || 0)).slice(0, 10);
+    const fila = (x, abierto) => '<div class="li"><div class="grow"><div class="t">' + h(x.nom) + (abierto ? ' <span class="badge gold">Sin terminar</span>' : ' <span class="badge ok">Aplicado</span>') + '</div>' +
+      '<div class="s">' + (x.ord || []).length + ' productos · ' + numf((x.ord || []).reduce((t, id) => t + (Number((x.it || {})[id]) || 0), 0)) + ' u. · ' + (abierto ? 'guardado ' : 'aplicado ') + fechaTxt(fechaISO(new Date(abierto ? x.sv : x.aplTs))) + ' ' + horaTxt(abierto ? x.sv : x.aplTs) + ' por ' + h(nomVend(abierto ? x.v : x.aplV)) + '</div></div>' +
+      (abierto ? '<button class="btn sm c3d cv" data-cont="' + h(x.id) + '">' + ic('scan') + 'Continuar</button><button class="btn sm icon danger" data-borc="' + h(x.id) + '" aria-label="Eliminar">' + ic('trash') + '</button>' : '<button class="btn sm" data-verc="' + h(x.id) + '">' + ic('sheet') + 'Exportar</button>') + '</div>';
+    b.innerHTML = '<div class="stack">' +
+      (gs.length ? '<div class="card stack"><h3 style="margin:0">' + ic('clip') + ' Conteos guardados para continuar (' + gs.length + ')</h3><div class="list">' + gs.map((x) => fila(x, true)).join('') + '</div></div>' : '') +
+      '<div class="card stack"><h3>Nuevo conteo de inventario con escáner</h3><p style="margin:0">Escanea cada producto de la percha. Cada lectura suma 1 (o escribe la cantidad). Puedes <b>guardar el conteo</b> y seguirlo después, en este u otro equipo. Al terminar, la app compara con el stock del sistema y guarda los ajustes.</p>' +
       '<label class="f">Nombre del conteo<input class="in" id="ctNom" value="Conteo ' + fechaTxt(hoyISO()) + '"></label>' +
-      '<button class="btn pri" id="ctIni">' + ic('scan') + 'Empezar conteo</button></div>';
-    $('ctIni').onclick = () => { ls.set('conteo', { id: uid('ct'), nom: $('ctNom').value.trim() || 'Conteo', ini: Date.now(), it: {}, ord: [], modo: 'suma' }); invConteo(); };
+      '<button class="btn pri" id="ctIni">' + ic('scan') + 'Empezar conteo</button></div>' +
+      (ap.length ? '<div class="card stack"><h3 style="margin:0">Últimos conteos aplicados</h3><div class="list">' + ap.map((x) => fila(x, false)).join('') + '</div></div>' : '') + '</div>';
+    $('ctIni').onclick = () => { ls.set('conteo', { id: uid('ct'), nom: $('ctNom').value.trim() || 'Conteo', ini: Date.now(), it: {}, ord: [], modo: 'suma', cambios: 0 }); invConteo(); };
+    b.onclick = async (e) => {
+      const c = e.target.closest('[data-cont]'); if (c) { const x = S.cnt.get(c.dataset.cont); if (!x) return; const copia = JSON.parse(JSON.stringify(x)); delete copia._u; delete copia._d; copia.cambios = 0; ls.set('conteo', copia); b.onclick = null; toast('Continuando ' + x.nom); invConteo(); return; }
+      const d = e.target.closest('[data-borc]'); if (d) { const x = S.cnt.get(d.dataset.borc); if (x && await confirmar('¿Eliminar el conteo guardado "' + x.nom + '"? No se aplica ningún ajuste.', 'Eliminar', true)) { await borrar('cnt', x.id); invConteo(); } return; }
+      const v = e.target.closest('[data-verc]'); if (v) { const x = S.cnt.get(v.dataset.verc); if (x) exportarFilas(x.nom, ['Código', 'Producto', 'Contado', 'Stock antes', 'Diferencia aplicada'], (x.ord || []).map((id) => [id, (S.prod.get(id) || { n: id }).n, x.it[id], (x.antes || {})[id] == null ? '' : x.antes[id], (x.difs || {})[id] == null ? 0 : x.difs[id]])); }
+    };
     return;
   }
-  b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span></div></div>' +
+  b.onclick = null;
+  b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
     '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
-    '<div class="row"><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
-  const guardar = () => ls.set('conteo', C);
+    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
+  const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
+  const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
+  const guardarNube = async () => {
+    C.sv = Date.now(); C.v = USR.id; C.est = 'abierto'; C.cambios = 0;
+    const rec = JSON.parse(JSON.stringify(C)); delete rec.cambios; await put('cnt', rec);
+    ls.set('conteo', C); estado();
+  };
   const sumar = (p, q) => { if (!(p.id in C.it)) { C.it[p.id] = 0; C.ord.unshift(p.id); } else { C.ord = [p.id].concat(C.ord.filter((x) => x !== p.id)); } C.it[p.id] = r2(C.it[p.id] + q); guardar(); pintar(); };
   const leer = async (p) => {
     if (C.modo === 'pide') { const q = await pedirTexto(p.n, 'Cantidad contada (se suma a lo ya contado: ' + numf(C.it[p.id] || 0) + ')', '1', 'num'); const n = parseFloat(String(q).replace(',', '.')); if (!isNaN(n)) sumar(p, n); }
@@ -2307,7 +2328,9 @@ function invConteo(){
   };
   $('ctBody').onchange = (e) => { const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
   $('ctBody').onclick = (e) => { const x = e.target.closest('[data-del]'); if (!x) return; delete C.it[x.dataset.del]; C.ord = C.ord.filter((i) => i !== x.dataset.del); guardar(); pintar(); };
-  $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?', 'Descartar', true)) { ls.del('conteo'); invConteo(); } };
+  $('ctSave').onclick = async () => { await guardarNube(); toast('Conteo guardado ✓ Puedes seguirlo después desde este u otro equipo.'); };
+  $('ctSaveX').onclick = async () => { await guardarNube(); ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
+  $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
   $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Sistema', 'Contado', 'Diferencia'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s)]; }));
   $('ctApl').onclick = async () => {
@@ -2315,10 +2338,14 @@ function invConteo(){
     if (!C.ord.length) return toast('No hay productos contados.', true);
     if (!(await confirmar(difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias. ¿Cerrar el conteo?', 'Aplicar'))) return;
     const now = Date.now();
+    const antes = {}; C.ord.forEach((id) => { antes[id] = stockDe(id); });
     await putMuchos('mov', difs.map((x, i) => ({ id: uid('mv') + i, p: x.id, q: x.d, tp: 'conteo', mot: C.nom, ct: C.id, f: hoyISO(), ts: now, v: USR.id })));
+    const rec = JSON.parse(JSON.stringify(C)); delete rec.cambios;
+    rec.est = 'apl'; rec.aplTs = now; rec.aplV = USR.id; rec.antes = antes; rec.difs = {}; difs.forEach((x) => { rec.difs[x.id] = x.d; }); if (!rec.sv) rec.sv = now; if (!rec.v) rec.v = USR.id;
+    await put('cnt', rec);
     ls.del('conteo'); toast(difs.length + ' ajustes aplicados.'); invConteo();
   };
-  pintar();
+  pintar(); estado();
 }
 
 function invMovs(){
