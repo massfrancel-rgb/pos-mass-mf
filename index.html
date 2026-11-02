@@ -461,6 +461,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .ci .pedctrl .ivain{background:#FDEBD0}
 .ci .pedctrl .lsub .mini{background:#E7EEFF;border-color:#9DB3FF}.ci .pedctrl .ltot .mini{background:#E3F6EA;border-color:#8BD3A6}
 .card h3 > svg{width:20px;height:20px;vertical-align:-4px;margin-right:4px}
+.mini.cocamb{background:#FFF3C4;border-color:#E2B33A;font-weight:800}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -510,7 +511,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02b';
+const APP_VER = '2026-11-02c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2348,8 +2349,8 @@ function invConteo(){
   b.onclick = null;
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
-    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
-    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
+    '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Producto</th><th class="n">Sistema</th><th class="n">Contado</th><th class="n">Dif.</th><th class="n">Costo s/IVA</th><th></th></tr></thead><tbody id="ctBody"></tbody></table></div>' +
+    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn" id="ctAnf">' + ic('upload') + 'Excel para Anfibius</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
   const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
   const guardarNube = async (silencioso) => {
@@ -2373,10 +2374,14 @@ function invConteo(){
     $('ctN').textContent = C.ord.length + ' productos contados · ' + numf(C.ord.reduce((s, id) => s + (C.it[id] || 0), 0)) + ' unidades';
     $('ctBody').innerHTML = C.ord.length ? C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id), c = C.it[id], d = r2(c - s);
       return '<tr><td>' + h(p.n) + '<div class="small muted">' + h(id) + '</div></td><td class="n">' + numf(s) + '</td><td class="n"><input class="mini" data-id="' + h(id) + '" inputmode="decimal" value="' + numf(c) + '"></td>' +
-        '<td class="n" style="color:' + (d ? (d > 0 ? 'var(--ok-fg)' : 'var(--warn-fg)') : 'inherit') + ';font-weight:800">' + (d > 0 ? '+' : '') + numf(d) + '</td><td><button class="btn sm icon ghost" data-del="' + h(id) + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>'; }).join('') :
-      '<tr><td colspan="5" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
+        '<td class="n" style="color:' + (d ? (d > 0 ? 'var(--ok-fg)' : 'var(--warn-fg)') : 'inherit') + ';font-weight:800">' + (d > 0 ? '+' : '') + numf(d) + '</td>' +
+        '<td class="n"><input class="mini' + (C.co && C.co[id] != null && C.co[id] !== Number(p.co || 0) ? ' cocamb' : '') + '" data-co="' + h(id) + '" inputmode="decimal" value="' + (C.co && C.co[id] != null ? C.co[id] : (Number(p.co) || 0)) + '" title="Costo anterior: ' + money(Number(p.co) || 0) + '"></td><td><button class="btn sm icon ghost" data-del="' + h(id) + '" aria-label="Quitar">' + ic('x') + '</button></td></tr>'; }).join('') :
+      '<tr><td colspan="6" class="center muted" style="padding:20px">Escanea el primer producto con el botón ' + ic('scan').replace('class=""', 'style="width:16px;height:16px;vertical-align:-3px"') + ' o con un lector.</td></tr>';
   };
-  $('ctBody').onchange = (e) => { const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
+  $('ctBody').onchange = (e) => {
+    const ci = e.target.dataset.co; if (ci) { const n = parseFloat(String(e.target.value).replace(',', '.')); C.co = C.co || {}; const ant = Number((S.prod.get(ci) || {}).co) || 0;
+      if (isNaN(n) || n < 0 || Math.abs(n - ant) < 0.00005) delete C.co[ci]; else C.co[ci] = Number(n.toFixed(4)); guardar(); pintar(); return; }
+    const id = e.target.dataset.id; if (!id) return; const n = parseFloat(e.target.value.replace(',', '.')); C.it[id] = isNaN(n) ? 0 : n; guardar(); pintar(); };
   $('ctBody').onclick = (e) => { const x = e.target.closest('[data-del]'); if (!x) return; delete C.it[x.dataset.del]; C.ord = C.ord.filter((i) => i !== x.dataset.del); guardar(); pintar(); };
   $('ctSave').onclick = async () => { if (await guardarNube()) toast('Conteo “' + C.nom + '” guardado ✓'); };
   $('ctLista2').onclick = () => verConteosGuardados(async (x) => {
@@ -2387,18 +2392,21 @@ function invConteo(){
   $('ctSaveX').onclick = async () => { if (!(await guardarNube())) return; ls.del('conteo'); toast('Conteo "' + C.nom + '" guardado. Para seguir, toca Continuar.'); invConteo(); };
   $('ctDesc').onclick = async () => { if (await confirmar('¿Descartar este conteo sin aplicar ajustes?' + (S.cnt.get(C.id) ? ' También se borra el conteo guardado.' : ''), 'Descartar', true)) { if (S.cnt.get(C.id)) await borrar('cnt', C.id); ls.del('conteo'); invConteo(); } };
   $('ctEtq').onclick = () => imprimirEtiquetas(C.ord.map((id) => ({ p: S.prod.get(id), q: C.it[id] })), 'Etiquetas del conteo');
-  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Sistema', 'Contado', 'Diferencia'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s)]; }));
+  $('ctX').onclick = () => exportarFilas(C.nom, ['Código', 'Producto', 'Sistema', 'Contado', 'Diferencia', 'Costo anterior', 'Costo nuevo'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); return [id, p.n, s, C.it[id], r2(C.it[id] - s), Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0]; }));
+  $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {} });
   $('ctApl').onclick = async () => {
     const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id)) })).filter((x) => x.d);
     if (!C.ord.length) return toast('No hay productos contados.', true);
-    if (!(await confirmar(difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias. ¿Cerrar el conteo?', 'Aplicar'))) return;
+    const cos = Object.keys(C.co || {}).filter((id) => S.prod.get(id));
+    if (!(await confirmar((difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias de stock.') + (cos.length ? ' Se actualizará el costo de ' + cos.length + ' producto(s).' : '') + ' ¿Aplicar?', 'Aplicar'))) return;
+    if (cos.length) await putMuchos('prod', cos.map((id) => Object.assign({}, S.prod.get(id), { co: C.co[id] })));
     const now = Date.now();
     const antes = {}; C.ord.forEach((id) => { antes[id] = stockDe(id); });
     await putMuchos('mov', difs.map((x, i) => ({ id: uid('mv') + i, p: x.id, q: x.d, tp: 'conteo', mot: C.nom, ct: C.id, f: hoyISO(), ts: now, v: USR.id })));
     const rec = JSON.parse(JSON.stringify(C)); delete rec.cambios;
     rec.est = 'apl'; rec.aplTs = now; rec.aplV = USR.id; rec.antes = antes; rec.difs = {}; difs.forEach((x) => { rec.difs[x.id] = x.d; }); if (!rec.sv) rec.sv = now; if (!rec.v) rec.v = USR.id;
     await put('cnt', rec);
-    ls.del('conteo'); toast(difs.length + ' ajustes aplicados.'); invConteo();
+    ls.del('conteo'); toast(difs.length + ' ajustes de stock' + (cos.length ? ' y ' + cos.length + ' costos' : '') + ' aplicados.'); invConteo();
   };
   pintar(); estado();
 }
@@ -3087,6 +3095,10 @@ function pgExcel(){
       '<label class="btn c3d cb" style="align-self:flex-start">' + ic('upload') + 'Elegir archivo de ventas<input type="file" id="xVtaAnf" accept=".xlsx,.xls,.xlsm" hidden></label></div>' : '') +
     '<div class="card stack"><h3>Importar clientes o proveedores</h3><div class="row"><label class="btn">' + ic('users') + 'Clientes<input type="file" id="xCli" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' +
       (puede('compras') ? '<label class="btn">' + ic('truck') + 'Proveedores<input type="file" id="xProv" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' : '') + '</div></div>' +
+    (pp ? '<div class="card stack"><h3>' + ic('upload') + ' Exportar a Anfibius (formato de actualización)</h3><p class="small muted" style="margin:0">Genera el Excel con el <b>mismo formato de Anfibius</b> (ID, Codigo, Descripcion, PVP… Costo…) con los costos y precios de POS MASS MF, para subirlo a Anfibius y actualizarlo. ' +
+      'Primero sube el formato que exportas de Anfibius (solo una vez, o cuando haya productos nuevos en Anfibius): de ahí se toma el <b>ID</b> de cada producto.</p>' +
+      '<div class="row"><label class="btn">' + ic('upload') + 'Subir formato de Anfibius<input type="file" id="xAnfF" accept=".xlsx,.xls" hidden></label><span class="small" id="xAnfInfo"></span></div>' +
+      '<button class="btn c3d cv" id="xAnfX" style="align-self:flex-start">' + ic('download') + 'Descargar Excel para Anfibius</button></div>' : '') +
     '<div class="card stack"><h3>Exportar</h3><p class="small muted" style="margin:0">Un solo libro de Excel con hojas de productos y stock, ventas, detalle de ventas, compras, clientes, proveedores y ajustes.</p>' +
       '<div class="row"><button class="btn pri" id="xTodo">' + ic('download') + 'Exportar todo a Excel</button><button class="btn" id="xStock">' + ic('box') + 'Solo productos y stock</button></div></div>' +
     '<div class="card stack"><h3>Fotos del Catálogo MASS</h3><p class="small muted" style="margin:0">Cuando subas o cambies fotos en tu app Catálogo MASS y las publiques, pulsa aquí para que aparezcan también en POS MASS MF. ' +
@@ -3101,6 +3113,12 @@ function pgExcel(){
   $('xTodo').onclick = exportarTodo;
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
+  if ($('xAnfF')) {
+    const info = async () => { const F = await metaGet('anfFmt', null); $('xAnfInfo').innerHTML = F ? '✓ Formato cargado: <b>' + numf(F.filas.length) + '</b> productos · ' + h(F.nombre) + ' · ' + fechaTxt(F.fecha) : '<span style="color:var(--warn-fg)">Aún no has subido el formato de Anfibius.</span>'; };
+    info();
+    $('xAnfF').onchange = async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await cargarFormatoAnfibius(f); info(); } catch (err) { toast(err.message, true); } };
+    $('xAnfX').onclick = () => exportarAnfibius();
+  }
   if ($('xVtaAnf')) $('xVtaAnf').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarVentasAnfibius(f); };
   const infoFotos = () => { const i2 = ls.get('fotosInfo', null); $('xFotosInfo').innerHTML = i2 ? 'Fotos disponibles: <b>' + i2.n + '</b>' + (i2.fecha ? ' · catálogo del ' + fechaTxt(i2.fecha) : '') + ' · actualizado ' + fechaTxt(fechaISO(new Date(i2.ts))) + ' ' + horaTxt(i2.ts) + ' (' + h(i2.origen) + ')' : 'Fotos disponibles: <b>' + FOTOS.size + '</b>'; };
   infoFotos();
@@ -3374,6 +3392,96 @@ async function importarVentasAnfibius(file){
   if (nuevosCli.length) await putMuchos('cli', nuevosCli);
   for (let i = 0; i < recs.length; i += 5000) { await putMuchos('vta', recs.slice(i, i + 5000)); toast('Guardando ventas… ' + Math.min(recs.length, i + 5000).toLocaleString('es') + ' de ' + recs.length.toLocaleString('es')); }
   toast(recs.length.toLocaleString('es') + ' ventas de Anfibius importadas.');
+}
+
+/* =====================================================================
+   EXPORTAR A ANFIBIUS (mismo formato que exporta Anfibius: ID, Codigo, Descripcion, PVP…, Costo…)
+   ===================================================================== */
+const colAnf = (cab, re) => cab.findIndex((c) => re.test(norm(c)));
+async function cargarFormatoAnfibius(file){
+  const hojas = await leerExcel(file);
+  const H = hojas.find((x) => (x.filas[0] || []).some((c) => /^codigo$/.test(norm(c)))) || hojas[0];
+  const cab = (H.filas[0] || []).map((c) => String(c).trim());
+  if (colAnf(cab, /^id$/) < 0 || colAnf(cab, /^codigo$/) < 0) throw new Error('Este archivo no tiene las columnas ID y Codigo del formato de Anfibius.');
+  const ic2 = colAnf(cab, /^codigo$/);
+  const filas = H.filas.slice(1).filter((f) => f && String(f[ic2] == null ? '' : f[ic2]).trim() !== '');
+  await metaSet('anfFmt', { cab, filas, nombre: file.name, fecha: hoyISO() });
+  const enPos = filas.filter((f) => S.prod.get(String(f[ic2]).trim())).length;
+  toast('Formato de Anfibius cargado: ' + filas.length + ' productos (' + enPos + ' coinciden con POS).');
+  return true;
+}
+/** opts: { ids: [códigos] (opcional, p. ej. los de un conteo), titulo } */
+async function exportarAnfibius(opts){
+  opts = opts || {};
+  let F = await metaGet('anfFmt', null);
+  if (!F) {
+    const m0 = modal({ title: 'Falta el formato de Anfibius', body: '<p style="margin-top:0">Para exportar con el formato de Anfibius, sube primero el Excel que exportas de Anfibius (el que tiene las columnas <b>ID, Codigo, Descripcion, PVP… Costo</b>). Solo se hace una vez.</p>' +
+      '<label class="btn pri">' + ic('upload') + 'Subir formato de Anfibius<input type="file" id="afF" accept=".xlsx,.xls" hidden></label>', foot: '<button class="btn" data-x>Cancelar</button>' });
+    m0.q('#afF').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { await cargarFormatoAnfibius(f); m0.close(); exportarAnfibius(opts); } catch (err) { toast(err.message, true); } };
+    return;
+  }
+  const cab = F.cab, iC = colAnf(cab, /^codigo$/), iD = colAnf(cab, /^descripcion$/), iP = colAnf(cab, /^pvp$/), iCo = colAnf(cab, /^costo$/), iMi = colAnf(cab, /^stock minimo$/);
+  const soloIds = opts.ids ? new Set(opts.ids.map(String)) : null;
+  const m = modal({ title: 'Excel para Anfibius' + (opts.titulo ? ' · ' + opts.titulo : ''), body:
+    '<p class="small muted" style="margin-top:0">Formato: <b>' + h(F.nombre) + '</b> (' + numf(F.filas.length) + ' productos, cargado el ' + fechaTxt(F.fecha) + '). Las demás columnas se copian igual que en Anfibius.</p>' +
+    '<div class="small muted" style="font-weight:700">Actualizar con los datos de POS</div><div class="stack" style="gap:6px;margin:6px 0 10px">' +
+    (iCo >= 0 ? '<label class="chk"><input type="checkbox" id="afCo" checked> Costo</label>' : '') + (iP >= 0 ? '<label class="chk"><input type="checkbox" id="afP" checked> PVP</label>' : '') +
+    (iD >= 0 ? '<label class="chk"><input type="checkbox" id="afD"> Descripción</label>' : '') + (iMi >= 0 ? '<label class="chk"><input type="checkbox" id="afMi"> Stock mínimo</label>' : '') + '</div>' +
+    '<div class="small muted" style="font-weight:700">Qué productos incluir</div><div class="seg" id="afQ" style="margin-top:6px"><button data-v="cam">Solo los que cambiaron</button><button data-v="todo">' + (soloIds ? 'Todos los del conteo' : 'Todos') + '</button></div>' +
+    '<div class="note" id="afRes" style="margin-top:12px"></div>',
+    foot: '<button class="btn" data-x>Cancelar</button><button class="btn c3d cv" id="afOk">' + ic('download') + 'Descargar Excel</button>' });
+  let modo = 'cam';
+  const chk = (id) => !!(m.q(id) && m.q(id).checked);
+  const calcular = () => {
+    const o = { co: chk('#afCo'), pv: chk('#afP'), n: chk('#afD'), mi: chk('#afMi') };
+    const filas = [], cambios = [];
+    const enFmt = new Set();
+    F.filas.forEach((f0, idx) => {
+      const cod = String(f0[iC]).trim(); enFmt.add(cod);
+      if (soloIds && !soloIds.has(cod)) return;
+      let p = S.prod.get(cod); if (p && opts.costos && opts.costos[cod] != null) p = Object.assign({}, p, { co: opts.costos[cod] });
+      const f = cab.map((c, i) => (f0[i] === undefined ? '' : f0[i]));
+      let cambio = false;
+      if (p && !p._d) {
+        if (o.co && iCo >= 0 && Number(p.co) >= 0 && Math.abs((Number(f[iCo]) || 0) - Number(p.co)) > 0.00005) { f[iCo] = Number(Number(p.co).toFixed(4)); cambio = true; }
+        if (o.pv && iP >= 0 && Number(p.pv) > 0 && Math.abs((Number(f[iP]) || 0) - Number(p.pv)) > 0.004) { f[iP] = r2(p.pv); cambio = true; }
+        if (o.n && iD >= 0 && p.n && String(f[iD]).trim() !== p.n) { f[iD] = p.n; cambio = true; }
+        if (o.mi && iMi >= 0 && Number(p.mi) > 0 && Number(f[iMi]) !== Number(p.mi)) { f[iMi] = Number(p.mi); cambio = true; }
+      }
+      f[iC] = cod;
+      if (modo === 'todo' || cambio) { filas.push(f); if (cambio) cambios.push(idx); }
+    });
+    const nuevos = (soloIds ? Array.from(soloIds) : vivos('prod').map((p) => p.id)).filter((id) => !enFmt.has(String(id)) && S.prod.get(id));
+    return { filas, cambios, nuevos, o };
+  };
+  const pintar = () => {
+    qsa('#afQ button', m.el).forEach((b) => b.classList.toggle('on', b.dataset.v === modo));
+    const r = calcular();
+    m.q('#afRes').innerHTML = 'Se exportarán <b>' + numf(r.filas.length) + '</b> productos · <b>' + numf(r.cambios.length) + '</b> con cambios.' +
+      (r.nuevos.length ? '<br><span style="color:var(--warn-fg)">' + numf(r.nuevos.length) + ' productos de POS no están en el formato de Anfibius (no tienen ID). Créalos primero en Anfibius y vuelve a subir el formato.</span> <button class="btn sm" id="afNv" type="button">Ver lista</button>' : '');
+    if (m.q('#afNv')) m.q('#afNv').onclick = () => exportarFilas('Productos que faltan en Anfibius', ['Código', 'Descripción', 'Costo', 'PVP', 'IVA %'], r.nuevos.map((id) => { const p = S.prod.get(id); return [id, p.n, Number(p.co) || 0, Number(p.pv) || 0, p.iva == null ? cfg().iva : p.iva]; }));
+  };
+  m.q('#afQ').onclick = (e) => { const b = e.target.closest('button'); if (b) { modo = b.dataset.v; pintar(); } };
+  m.el.addEventListener('change', (e) => { if (e.target.type === 'checkbox') pintar(); });
+  m.q('#afOk').onclick = async () => {
+    const r = calcular(); if (!r.filas.length) return toast('No hay productos con cambios para exportar.', true);
+    try {
+      const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([cab].concat(r.filas));
+      for (let i = 1; i <= r.filas.length; i++) { const ref = X.utils.encode_cell({ r: i, c: iC }); if (ws[ref]) { ws[ref].t = 's'; ws[ref].v = String(ws[ref].v); ws[ref].z = '@'; } }
+      ws['!cols'] = cab.map((c, i) => ({ wch: i === iD ? 50 : Math.max(8, String(c).length + 2) }));
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Hoja1');
+      const out = X.write(wb, { bookType: 'xlsx', type: 'array' });
+      descargar(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), 'FORMATO_DE_ANFIBIUS ' + hoyISO() + (opts.titulo ? ' ' + String(opts.titulo).replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_') : '') + '.xlsx');
+      // el formato guardado queda con los valores exportados (la próxima vez solo salen los nuevos cambios)
+      const o = r.o; const F2 = await metaGet('anfFmt', F);
+      F2.filas.forEach((f) => { let p = S.prod.get(String(f[iC]).trim()); if (p && opts.costos && opts.costos[String(f[iC]).trim()] != null) p = Object.assign({}, p, { co: opts.costos[String(f[iC]).trim()] }); if (!p || (soloIds && !soloIds.has(String(f[iC]).trim()))) return;
+        if (o.co && iCo >= 0 && Number(p.co) >= 0) f[iCo] = Number(Number(p.co).toFixed(4)); if (o.pv && iP >= 0 && Number(p.pv) > 0) f[iP] = r2(p.pv);
+        if (o.n && iD >= 0 && p.n) f[iD] = p.n; if (o.mi && iMi >= 0 && Number(p.mi) > 0) f[iMi] = Number(p.mi); });
+      await metaSet('anfFmt', F2); F = F2;
+      m.close(); toast('Excel para Anfibius descargado: ' + r.filas.length + ' productos.');
+    } catch (e) { toast(e.message, true); }
+  };
+  pintar();
 }
 
 /* =====================================================================
