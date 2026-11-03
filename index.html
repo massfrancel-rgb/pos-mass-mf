@@ -467,6 +467,8 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .mini.ctpos{background:#DDF5E5;border-color:#8BD3A6;font-weight:800;color:#18794E}
 .ctcod{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:700}
 #ctHead th.sortable{cursor:pointer;user-select:none}
+.stseg{flex-wrap:wrap}.stseg button b{display:inline-block;margin-left:4px;padding:0 7px;border-radius:999px;background:rgba(0,0,0,.08);font-size:12px}
+.stseg button.on b{background:rgba(255,255,255,.25)}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -516,7 +518,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-02h';
+const APP_VER = '2026-11-03a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2130,7 +2132,8 @@ function invProductos(){
   b.innerHTML = '<div class="stack"><div class="searchbar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + IC.search + '</svg>' +
     '<input class="in grow" id="pQ" type="search" placeholder="Buscar nombre, código o código de barras"><button class="btn pri icon" id="pScan" aria-label="Escanear">' + ic('scan') + '</button></div>' +
     '<div class="row"><select class="in" id="pCat" style="flex:1 1 180px;width:auto"><option value="">Todas las categorías</option>' + cats.map((c) => '<option>' + h(c) + '</option>').join('') + '</select>' +
-    '<select class="in" id="pFil" style="flex:1 1 180px;width:auto"><option value="">Todos</option><option value="bajo">Stock bajo el mínimo</option><option value="cero">Sin stock (0 o menos)</option><option value="neg">Stock negativo</option><option value="con">Con stock</option><option value="sinb">Sin código de barras</option><option value="sinc">Sin costo</option></select></div>' +
+    '<select class="in" id="pFil" style="flex:1 1 180px;width:auto"><option value="">Todos</option><option value="bajo">Stock bajo el mínimo</option><option value="cero">Stock 0 (sin stock)</option><option value="neg">Stock negativo</option><option value="con">Con stock</option><option value="sinb">Sin código de barras</option><option value="sinc">Sin costo</option></select></div>' +
+    '<div class="seg stseg" id="pSeg"><button data-v="">Todos <b></b></button><button data-v="con">Con stock <b></b></button><button data-v="cero">Stock 0 <b></b></button><button data-v="bajo">Bajo el mínimo <b></b></button></div>' +
     '<div class="small muted" id="pRes"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th>Producto</th><th class="n">Stock</th><th class="n">PVP</th>' + (puede('prod') ? '<th class="n">Costo</th>' : '') + '</tr></thead><tbody id="pBody"></tbody></table></div>' +
     '<button class="btn hide" id="pMas">Ver más</button></div>';
   let lim = 150;
@@ -2147,6 +2150,11 @@ function invProductos(){
     });
     l.sort((a, b) => a.n.localeCompare(b.n));
     $('pRes').textContent = l.length + ' productos';
+    // botones rápidos con cantidades (según búsqueda y categoría)
+    const base = vivos('prod').filter((p) => { if (cat && p.c !== cat) return false; if (w.length) { const hay = p._h || (p._h = norm(p.id + ' ' + (p.b || '') + ' ' + p.n + ' ' + (p.m || '') + ' ' + (p.c || ''))); if (!w.every((x) => hay.includes(x))) return false; } return true; });
+    let nCon = 0, nCero = 0, nBajo = 0; base.forEach((p) => { const s2 = stockDe(p.id); if (s2 > 0) nCon++; else nCero++; if (Number(p.mi) > 0 && s2 <= Number(p.mi)) nBajo++; });
+    const cnt = { '': base.length, con: nCon, cero: nCero, bajo: nBajo };
+    qsa('#pSeg button').forEach((x) => { x.classList.toggle('on', x.dataset.v === fil); x.querySelector('b').textContent = numf(cnt[x.dataset.v]); });
     $('pBody').innerHTML = l.slice(0, lim).map((p) => { const s = stockDe(p.id);
       return '<tr class="click" data-id="' + h(p.id) + '"><td>' + h(p.id) + (p.b ? '<div class="small muted">' + h(p.b) + '</div>' : '') + '</td><td><div class="pcell">' + thumb(p, 'sm') + '<div>' + h(p.n) + '<div class="small muted">' + h([p.m, p.c].filter(Boolean).join(' · ')) + '</div></div></div></td>' +
         '<td class="n"><span class="stockchip ' + (s <= 0 ? 'no' : (Number(p.mi) && s <= Number(p.mi) ? 'lo' : '')) + '">' + numf(s) + '</span></td><td class="n">' + money(p.pv) + '</td>' + (puede('prod') ? '<td class="n">' + (Number(p.co) ? money(p.co) : '—') + '</td>' : '') + '</tr>'; }).join('') ||
@@ -2154,7 +2162,9 @@ function invProductos(){
     $('pMas').classList.toggle('hide', l.length <= lim);
   };
   let t; $('pQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { lim = 150; filtrar(); }, 150); };
-  $('pCat').onchange = $('pFil').onchange = () => { lim = 150; filtrar(); };
+  $('pCat').onchange = $('pFil').onchange = () => { lim = 150; ls.set('invFil', $('pFil').value); filtrar(); };
+  $('pSeg').onclick = (e) => { const x = e.target.closest('button'); if (!x) return; $('pFil').value = x.dataset.v; ls.set('invFil', x.dataset.v); lim = 150; filtrar(); };
+  $('pFil').value = ls.get('invFil', '');
   $('pMas').onclick = () => { lim += 300; filtrar(); };
   $('pBody').onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) editarProducto(S.prod.get(r.dataset.id)); };
   $('pScan').onclick = () => escanear((code) => {
