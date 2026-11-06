@@ -527,7 +527,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-06b';
+const APP_VER = '2026-11-06c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5212,12 +5212,15 @@ async function compartirImgEtq(lista, C){
     const cod = String(x.p.id || 'etq').replace(/[^\w\-]+/g, '_');
     files.push({ f: new File([blob], 'Etiqueta ' + cod + (x.q > 1 ? ' x' + x.q : '') + ' ' + C.w + 'x' + C.h + '.png', { type: 'image/png' }), p: x.p, q: x.q, url: URL.createObjectURL(blob) });
   }
+  // también un PDF con todas (una página por etiqueta, con sus copias) por si la app acepta PDF
+  let pdfF = null; try { const d = await pdfEtiquetas(lista, Object.assign({}, C, { cols: 1, gap: 0 })); pdfF = new File([d.output('blob')], 'Etiquetas ' + lista.reduce((t, x) => t + x.q, 0) + ' (' + C.w + 'x' + C.h + ').pdf', { type: 'application/pdf' }); } catch (e) {}
   const puede = (fs) => !!(navigator.canShare && navigator.canShare({ files: fs }));
   const compartir = async (fs) => { try { await navigator.share({ files: fs, title: 'Etiquetas' }); return true; } catch (e) { if (e && e.name === 'AbortError') return true; return false; } };
   // ventana con un botón (el toque del usuario permite abrir la lista de compartir)
   const m = modal({ title: files.length + (files.length === 1 ? ' etiqueta lista' : ' etiquetas listas'), body:
     '<p class="small muted" style="margin-top:0">Toca <b>Enviar</b> y elige <b>FlashLabel Pro</b>. En FlashLabel pon la cantidad de copias que dice cada etiqueta.</p>' +
-    (files.length > 1 ? '<button class="btn c3d cv" id="ciTodas" style="width:100%;margin-bottom:10px">' + ic('upload') + 'Enviar las ' + files.length + ' juntas</button>' : '') +
+    (files.length > 1 ? '<button class="btn c3d cv" id="ciTodas" style="width:100%;margin-bottom:8px">' + ic('upload') + 'Enviar las ' + files.length + ' imágenes juntas</button>' : '') +
+    (pdfF ? '<button class="btn c3d cb" id="ciPdf" style="width:100%;margin-bottom:6px">' + ic('pdf') + 'Enviar todas en un PDF (' + lista.reduce((t, x) => t + x.q, 0) + ' páginas)</button><div class="small muted" style="margin-bottom:10px">Cada página es una etiqueta, con las copias ya repetidas. Sirve si FlashLabel Pro acepta PDF.</div>' : '') +
     '<div class="list" id="ciL">' + files.map((x, i) => '<div class="li"><img src="' + x.url + '" style="width:84px;height:auto;border:1px solid var(--line);border-radius:6px;background:#fff"><div class="grow"><div class="t">' + h(x.p.n) + '</div><div class="s">' + h(x.p.id) + ' · <b>' + x.q + ' copia(s)</b></div></div>' +
       '<button class="btn sm c3d cv" data-ci="' + i + '">' + ic('upload') + 'Enviar</button></div>').join('') + '</div>',
     foot: '<button class="btn" data-x>Cerrar</button>', onClose: () => files.forEach((x) => URL.revokeObjectURL(x.url)) });
@@ -5226,6 +5229,7 @@ async function compartirImgEtq(lista, C){
     if (puede(fs) && await compartir(fs)) return;
     toast('Esa app no acepta varias imágenes juntas: envíalas con el botón de cada etiqueta.', true);
   };
+  if (m.q('#ciPdf')) m.q('#ciPdf').onclick = async () => { if (puede([pdfF]) && await compartir([pdfF])) return; descargar(pdfF, pdfF.name); toast('PDF descargado: ábrelo desde FlashLabel Pro.'); };
   m.q('#ciL').onclick = async (e) => { const b = e.target.closest('[data-ci]'); if (!b) return; const x = files[+b.dataset.ci];
     if (puede([x.f]) && await compartir([x.f])) { b.innerHTML = '✓ Enviada'; b.classList.remove('cv'); return; }
     descargar(x.f, x.f.name); toast('Imagen descargada: ábrela desde FlashLabel.'); };
