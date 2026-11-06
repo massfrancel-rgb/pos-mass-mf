@@ -524,7 +524,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-05b';
+const APP_VER = '2026-11-05c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4824,8 +4824,11 @@ function imprimirEtiquetas(items, titulo, opts){
         '<label class="f">Avance al final para cortar (mm)<input class="in" id="eFin" inputmode="decimal" placeholder="10"></label></div>' +
         '<div class="small muted">Con 0 no queda espacio. El margen superior se pone antes de cada etiqueta y el inferior después. Desmárcalo si usas rollo de etiquetas adhesivas (respeta el alto de la etiqueta).</div></div>' +
         '<div id="eEtqOp" style="margin-top:6px"><div class="note" style="margin:0 0 6px">Cada etiqueta usa exactamente su <b>alto + la separación</b>. Antes de imprimir, <b>presiona una vez el botón de la impresora</b> para que el papel quede al inicio de una etiqueta.</div>' +
-          '<div class="grid2"><label class="f">Avance antes de la primera (mm)<input class="in" id="eIni" inputmode="decimal" placeholder="0"></label>' +
+          '<div class="grid2"><label class="f">Retroceder papel antes de imprimir (mm)<input class="in" id="eRet" inputmode="decimal" placeholder="0"></label>' +
+          '<label class="f">Comando para retroceder<select class="in" id="eRetM"><option value="k">ESC K (puntos)</option><option value="e">ESC e (líneas)</option></select></label>' +
+          '<label class="f">Avance antes de la primera (mm)<input class="in" id="eIni" inputmode="decimal" placeholder="0"></label>' +
           '<label class="f">Avance al terminar (mm)<input class="in" id="eFin2" inputmode="decimal" placeholder="0"></label></div>' +
+          '<div class="small muted">La impresora deja el papel en la cuchilla, unos mm <b>más adelante</b> que el cabezal. Por eso la primera etiqueta sale corrida: <b>retrocede</b> esa distancia antes de imprimir y <b>avánzala</b> al terminar (los dos con el mismo número).</div>' +
           '<label class="chk" style="margin-top:6px"><input type="checkbox" id="eFF"> Enviar comando "buscar inicio de etiqueta" (GS FF)</label></div>' +
         '<div class="row" id="eBTrow" style="margin-top:6px"><button class="btn sm c3d cb" id="eBTbus" type="button">' + ic('search') + 'Buscar impresora Bluetooth</button><span class="small" id="eBTnom"></span></div>' +
         '<div class="small muted" id="eMetAyuda" style="margin-top:6px"></div></div>' +
@@ -4849,14 +4852,14 @@ function imprimirEtiquetas(items, titulo, opts){
     const M = ETQ_MEDIDAS.find((x) => x[0] !== 'custom' && x[2] === C.w && x[3] === C.h && x[4] === C.cols);
     C.med = M ? M[0] : 'custom'; q('#eMed').value = C.med;
     C.dpi = +q('#eDpi').value; C.tipo = q('#eTipo').value; C.met = q('#eMet').value; C.leng = q('#eLeng').value; C.papel = +q('#ePap').value; C.recorte = q('#eRec').checked; C.fin = Math.max(0, num('#eFin', 10)); C.mSup = Math.max(0, num('#eMs', 1)); C.mInf = Math.max(0, num('#eMi', 1));
-    if (C.leng === 'escposE') { C.eIni = Math.max(0, num('#eIni', 0)); C.fin = Math.max(0, num('#eFin2', 0)); C.eFF = q('#eFF').checked; }
+    if (C.leng === 'escposE') { C.eIni = Math.max(0, num('#eIni', 0)); C.fin = Math.max(0, num('#eFin2', 0)); C.eFF = q('#eFF').checked; C.eRet = Math.max(0, num('#eRet', 0)); C.eRetM = q('#eRetM').value; }
     C.tienda = q('#eTi').checked; C.nombre = q('#eNo').checked; C.precio = q('#ePr').checked; C.codTxt = q('#eCt').checked; C.ivaTxt = q('#eIv').checked;
     C.offX = num('#eOx', 0); C.offY = num('#eOy', 0);
     guardarEtq(C);
   };
   const ponerCampos = () => {
     q('#eMed').value = ETQ_MEDIDAS.some((x) => x[0] === C.med) ? C.med : 'custom';
-    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eMet').value = C.met || (esCelular() ? 'bt' : 'sistema'); q('#eLeng').value = C.leng || 'escpos'; q('#ePap').value = String(C.papel == null ? 384 : C.papel); q('#eRec').checked = C.recorte !== false; q('#eFin').value = C.fin == null ? 10 : C.fin; q('#eMs').value = C.mSup == null ? 1 : C.mSup; q('#eMi').value = C.mInf == null ? 1 : C.mInf; q('#eIni').value = C.eIni || ''; q('#eFin2').value = C.leng === 'escposE' && C.fin ? C.fin : ''; q('#eFF').checked = !!C.eFF; ayudaMet();
+    q('#eW').value = C.w; q('#eH').value = C.h; q('#eCols').value = String(C.cols); q('#eGap').value = C.gap || ''; q('#eGv').value = C.gv || ''; q('#eDpi').value = String(C.dpi); q('#eTipo').value = C.tipo; q('#eMet').value = C.met || (esCelular() ? 'bt' : 'sistema'); q('#eLeng').value = C.leng || 'escpos'; q('#ePap').value = String(C.papel == null ? 384 : C.papel); q('#eRec').checked = C.recorte !== false; q('#eFin').value = C.fin == null ? 10 : C.fin; q('#eMs').value = C.mSup == null ? 1 : C.mSup; q('#eMi').value = C.mInf == null ? 1 : C.mInf; q('#eIni').value = C.eIni || ''; q('#eRet').value = C.eRet || ''; q('#eRetM').value = C.eRetM || 'k'; q('#eFin2').value = C.leng === 'escposE' && C.fin ? C.fin : ''; q('#eFF').checked = !!C.eFF; ayudaMet();
     q('#eTi').checked = C.tienda; q('#eNo').checked = C.nombre; q('#ePr').checked = C.precio; q('#eCt').checked = C.codTxt; q('#eIv').checked = C.ivaTxt; q('#eOx').value = C.offX || ''; q('#eOy').value = C.offY || '';
   };
   const prevW = () => Math.max(120, Math.min(360, (q('#ePrev').clientWidth || 330) - 36));
@@ -5108,7 +5111,9 @@ function comandosEtq(lista, C, leng){
       else E = centrarBits(E, anchoP);
       const alto = Math.round(C.h * dpm), paso = Math.round((C.h + (Number(C.gv) || 0)) * dpm);
       const out = new Uint8Array(E.bpr * paso); out.set(E.bits.subarray(0, E.bpr * Math.min(E.h, alto)));
-      if (f === filas[0]) { partes.push(new Uint8Array([0x1b, 0x40])); const ini = Math.round((Number(C.eIni) || 0) * dpm); if (ini > 0) partes.push(avanceEsc(ini)); }
+      if (f === filas[0]) { partes.push(new Uint8Array([0x1b, 0x40]));
+        let ret = Math.round((Number(C.eRet) || 0) * dpm); while (ret > 0) { const k = Math.min(255, ret); partes.push(new Uint8Array(C.eRetM === 'e' ? [0x1b, 0x65, Math.max(1, Math.round(k / 8))] : [0x1b, 0x4b, k])); ret -= k; }   // retroceder papel
+        const ini = Math.round((Number(C.eIni) || 0) * dpm); if (ini > 0) partes.push(avanceEsc(ini)); }
       for (let y0 = 0; y0 < paso; y0 += 240) { const h0 = Math.min(240, paso - y0);
         partes.push(new Uint8Array([0x1d, 0x76, 0x30, 0x00, E.bpr & 255, E.bpr >> 8, h0 & 255, h0 >> 8]), out.subarray(y0 * E.bpr, (y0 + h0) * E.bpr)); }
       if (C.eFF) partes.push(new Uint8Array([0x1d, 0x0c]));
