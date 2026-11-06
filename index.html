@@ -527,7 +527,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-06c';
+const APP_VER = '2026-11-06d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5255,7 +5255,7 @@ function imprimirSistema(html){
    ===================================================================== */
 const esEstacion = () => !!ls.get('estacion', false);
 const estCfg = () => Object.assign({ w: 0, h: 0, cols: 1, gap: 0, gv: 0, modo: 'pc' }, ls.get('estCfg', {}));
-const estRawbt = () => estCfg().modo === 'rawbt';
+const estRawbt = () => estCfg().modo === 'rawbt' || estCfg().modo === 'app';   // celular: imprime cuando se toca el botón
 async function enviarAEstacion(lista){
   const job = { id: uid('im'), ts: Date.now(), f: hoyISO(), v: USR ? USR.id : '', it: lista.map((x) => ({ p: x.p.id, q: x.q })), est: 'pend' };
   await put('imp', job, true);
@@ -5300,9 +5300,9 @@ function pintarEstBadge(n){
   if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'estBadge'; b.className = 'estbadge'; document.body.appendChild(b);
     b.onclick = () => { if (estRawbt()) imprimirColaRawBT(); else irA('ajustes'); }; }
   if (estRawbt()) {
-    b.title = 'Este celular imprime con RawBT las etiquetas que llegan de la PC';
+    b.title = 'Este celular imprime las etiquetas que llegan de la PC';
     b.classList.toggle('pend', !!n);
-    b.innerHTML = ic('barcode') + (n ? 'Imprimir ' + n + ' etiquetas de la PC' : 'Estación RawBT activa · sin etiquetas');
+    b.innerHTML = ic('barcode') + (n ? 'Imprimir ' + n + ' etiquetas de la PC' : (estCfg().modo === 'app' ? 'Estación FlashLabel activa · sin etiquetas' : 'Estación RawBT activa · sin etiquetas'));
   } else { b.title = 'Esta PC imprime las etiquetas que se envían desde los teléfonos'; b.classList.remove('pend'); b.innerHTML = ic('barcode') + 'Estación de impresión activa'; }
 }
 /** En el celular-estación: imprime con RawBT todo lo que llegó de la PC (lo dispara el toque del usuario) */
@@ -5312,6 +5312,7 @@ async function imprimirColaRawBT(){
   const lista = []; pend.forEach((j) => (j.it || []).forEach((x) => { const p = S.prod.get(x.p); if (p) lista.push({ p, q: Math.max(1, Math.round(x.q) || 1) }); }));
   const C = etqCfg();
   try {
+    if (estCfg().modo === 'app') { for (const j of pend) await put('imp', Object.assign({}, j, { est: 'ok', por: 'FlashLabel', fin: Date.now() }), true); ultimoAviso = 0; pintarEstBadge(0); sincronizar(); return compartirImgEtq(lista, C); }
     if (C.leng === 'pdf') await enviarRawBT(lista, C); else enviarRawBTbytes(comandosEtq(lista, C, C.leng || 'escpos'));
   } catch (e) { return toast('No se pudo enviar a RawBT: ' + e.message, true); }
   for (const j of pend) await put('imp', Object.assign({}, j, { est: 'ok', por: 'RawBT', fin: Date.now() }), true);
@@ -5329,7 +5330,7 @@ function tarjetaEstacion(){
   return '<div class="card stack" id="estCard"><h3>Estación de impresión (PC con impresora o celular con RawBT)</h3>' +
     '<p class="small muted" style="margin:0">Actívala <b>solo en el equipo que imprime</b>: la PC que tiene la impresora conectada (por ejemplo la Zebra por USB), o el celular que tiene RawBT con la impresora Bluetooth. Los demás equipos le envían las etiquetas eligiendo <b>“Enviar a la estación de impresión”</b>.</p>' +
     '<label class="chk"><input type="checkbox" id="estOn"' + (esEstacion() ? ' checked' : '') + '> Este equipo es la estación de impresión</label>' +
-    '<label class="f">Cómo imprime esta estación<select class="in" id="estModo"><option value="pc">Impresora de esta computadora (Zebra, USB, red…)</option><option value="rawbt">Este celular con RawBT (impresora Bluetooth)</option></select></label>' +
+    '<label class="f">Cómo imprime esta estación<select class="in" id="estModo"><option value="pc">Impresora de esta computadora (Zebra, USB, red…)</option><option value="rawbt">Este celular con RawBT (impresora Bluetooth)</option><option value="app">Este celular con la app de la impresora (FlashLabel Pro / Y50)</option></select></label>' +
     '<p class="small muted" style="margin:0" id="estModoAyuda"></p>' +
     '<div class="grid3"><label class="f">Ancho de la etiqueta de esta impresora (mm)<input class="in" id="estW" inputmode="decimal" value="' + (E.w || '') + '" placeholder="igual que la general"></label>' +
     '<label class="f">Alto (mm)<input class="in" id="estH" inputmode="decimal" value="' + (E.h || '') + '" placeholder="igual que la general"></label>' +
@@ -5341,8 +5342,8 @@ function tarjetaEstacion(){
 function activarTarjetaEstacion(){
   if (!document.getElementById('estCard')) return;
   const E = estCfg(); $('estCols').value = String(E.cols || 1); $('estModo').value = E.modo || 'pc';
-  const ayuda = () => { const r = $('estModo').value === 'rawbt';
-    $('estModoAyuda').innerHTML = r ? 'Activa esto <b>en el celular</b> que tiene RawBT configurado con tu impresora Bluetooth. Cuando la PC envíe etiquetas, en este celular aparece el botón verde <b>“Imprimir N etiquetas de la PC”</b>: tócalo y salen por RawBT (Android no permite abrir RawBT sin tocar). Usa el diseño, la medida y el lenguaje de la configuración general.'
+  const ayuda = () => { const r = $('estModo').value !== 'pc';
+    $('estModoAyuda').innerHTML = $('estModo').value === 'app' ? 'Activa esto <b>en el celular</b> que tiene <b>FlashLabel Pro</b> conectada a la Y50. Cuando la PC envíe etiquetas, aquí aparece el botón verde <b>“Imprimir N etiquetas de la PC”</b>: tócalo y se abre la ventana para enviarlas a FlashLabel Pro.' : r ? 'Activa esto <b>en el celular</b> que tiene RawBT configurado con tu impresora Bluetooth. Cuando la PC envíe etiquetas, en este celular aparece el botón verde <b>“Imprimir N etiquetas de la PC”</b>: tócalo y salen por RawBT (Android no permite abrir RawBT sin tocar). Usa el diseño, la medida y el lenguaje de la configuración general.'
       : 'Activa esto en la computadora que tiene la impresora conectada. Imprime solo, con la ventana de impresión de Windows.';
     ['estW', 'estH', 'estCols', 'estPrueba'].forEach((i) => { const el = $(i).closest('label') || $(i); el.style.display = r ? 'none' : ''; }); };
   const guardar = () => { ls.set('estCfg', { w: parseFloat(String($('estW').value).replace(',', '.')) || 0, h: parseFloat(String($('estH').value).replace(',', '.')) || 0, cols: +$('estCols').value || 1, gap: 0, gv: 0, modo: $('estModo').value }); };
