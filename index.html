@@ -475,6 +475,9 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .impopt svg{width:26px;height:26px}.impopt b{font-size:15px}.impopt small{color:var(--muted);font-size:12px}
 .impopt.on{border-color:#C99A2E;background:rgba(201,154,46,.10)}.impopt:hover{border-color:#C99A2E}
 @media (max-width:420px){.impq{grid-template-columns:1fr}}
+.etqbar{margin:6px 0}.etqbar.hide{display:none}
+.etqcel{white-space:nowrap}.etqcel .etqchk{display:inline-flex;vertical-align:middle;margin-right:6px}.etqcel .etqchk input{width:22px;height:22px;accent-color:#C99A2E;cursor:pointer}
+.etqcel .etqq{width:62px;text-align:center}.etqcolh{white-space:nowrap}.etqcolh svg{width:16px;height:16px;vertical-align:-3px}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -524,7 +527,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-05c';
+const APP_VER = '2026-11-06a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2176,7 +2179,7 @@ function invProductos(){
     '<div class="row"><select class="in" id="pCat" style="flex:1 1 180px;width:auto"><option value="">Todas las categorías</option>' + cats.map((c) => '<option>' + h(c) + '</option>').join('') + '</select>' +
     '<select class="in" id="pFil" style="flex:1 1 180px;width:auto"><option value="">Todos</option><option value="bajo">Stock bajo el mínimo</option><option value="cero">Stock 0 (sin stock)</option><option value="neg">Stock negativo</option><option value="con">Con stock</option><option value="sinb">Sin código de barras</option><option value="sinc">Sin costo</option></select></div>' +
     '<div class="seg stseg" id="pSeg"><button data-v="">Todos <b></b></button><button data-v="con">Con stock <b></b></button><button data-v="cero">Stock 0 <b></b></button><button data-v="bajo">Bajo el mínimo <b></b></button></div>' +
-    '<div class="small muted" id="pRes"></div><div class="tblwrap"><table class="tbl"><thead id="pHead"></thead><tbody id="pBody"></tbody></table></div>' +
+    '<div class="pedbar etqbar" id="pEtqBar"></div><div class="small muted" id="pRes"></div><div class="tblwrap"><table class="tbl"><thead id="pHead"></thead><tbody id="pBody"></tbody></table></div>' +
     '<button class="btn hide" id="pMas">Ver más</button></div>';
   let lim = 150;
   const filtrar = () => {
@@ -2193,7 +2196,7 @@ function invProductos(){
     // orden por columna (Código, Producto, Stock, PVP, Costo)
     const so = ls.get('invSort', { k: 'nom', d: false });
     const th = (k, t, n) => '<th class="' + (n ? 'n ' : '') + 'sortable" data-is="' + k + '">' + t + ' <i class="sarr">' + (so.k === k ? (so.d ? '▼' : '▲') : '↕') + '</i></th>';
-    $('pHead').innerHTML = '<tr>' + th('cod', 'Código') + th('nom', 'Producto') + th('st', 'Stock', 1) + th('pv', 'PVP', 1) + (puede('prod') ? th('co', 'Costo', 1) : '') + '</tr>';
+    $('pHead').innerHTML = '<tr>' + th('cod', 'Código') + th('nom', 'Producto') + '<th class="center etqcolh" title="Marca los productos para imprimir sus etiquetas">' + ic('barcode') + ' Etiquetas</th>' + th('st', 'Stock', 1) + th('pv', 'PVP', 1) + (puede('prod') ? th('co', 'Costo', 1) : '') + '</tr>';
     const nomK = (p) => p._nk || (p._nk = String(p.n || '').replace(/^[^0-9A-Za-zÀ-ÿÑñ]+/, ''));
     const cmpT = (x, y) => String(x).localeCompare(String(y), 'es', { numeric: true, sensitivity: 'base' });
     const val = { cod: (p) => p.id, nom: nomK, st: (p) => stockDe(p.id), pv: (p) => Number(p.pv) || 0, co: (p) => Number(p.co) || 0 }[so.k] || nomK;
@@ -2207,8 +2210,9 @@ function invProductos(){
     qsa('#pSeg button').forEach((x) => { x.classList.toggle('on', x.dataset.v === fil); x.querySelector('b').textContent = numf(cnt[x.dataset.v]); });
     $('pBody').innerHTML = l.slice(0, lim).map((p) => { const s = stockDe(p.id);
       return '<tr class="click" data-id="' + h(p.id) + '"><td>' + h(p.id) + (p.b ? '<div class="small muted">' + h(p.b) + '</div>' : '') + '</td><td><div class="pcell">' + thumb(p, 'sm') + '<div>' + h(p.n) + '<div class="small muted">' + h([p.m, p.c].filter(Boolean).join(' · ')) + '</div></div></div></td>' +
+        '<td class="center etqcel" data-noab="1"><label class="etqchk"><input type="checkbox" data-ek="' + h(p.id) + '"' + (SELETQ.has(p.id) ? ' checked' : '') + '></label><input class="mini etqq" data-eq="' + h(p.id) + '" inputmode="numeric" value="' + (SELETQ.has(p.id) ? SELETQ.get(p.id) : '') + '" placeholder="0"></td>' +
         '<td class="n"><span class="stockchip ' + (s <= 0 ? 'no' : (Number(p.mi) && s <= Number(p.mi) ? 'lo' : '')) + '">' + numf(s) + '</span></td><td class="n">' + money(p.pv) + '</td>' + (puede('prod') ? '<td class="n">' + (Number(p.co) ? money(p.co) : '—') + '</td>' : '') + '</tr>'; }).join('') ||
-      '<tr><td colspan="5" class="center muted">Sin resultados</td></tr>';
+      '<tr><td colspan="6" class="center muted">Sin resultados</td></tr>';
     $('pMas').classList.toggle('hide', l.length <= lim);
   };
   let t; $('pQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { lim = 150; filtrar(); }, 150); };
@@ -2218,7 +2222,28 @@ function invProductos(){
   $('pMas').onclick = () => { lim += 300; filtrar(); };
   $('pHead').onclick = (e) => { const t2 = e.target.closest('[data-is]'); if (!t2) return; const k = t2.dataset.is; const so = ls.get('invSort', { k: 'nom', d: false });
     ls.set('invSort', so.k === k ? { k, d: !so.d } : { k, d: false }); lim = 150; filtrar(); };
-  $('pBody').onclick = (e) => { const r = e.target.closest('[data-id]'); if (r) editarProducto(S.prod.get(r.dataset.id)); };
+  $('pBody').onclick = (e) => { if (e.target.closest('[data-noab]')) return; const r = e.target.closest('[data-id]'); if (r) editarProducto(S.prod.get(r.dataset.id)); };
+  // marcar productos para imprimir etiquetas (casilla + cantidad)
+  const pintaEtqBar = () => {
+    const n = SELETQ.size, u = Array.from(SELETQ.values()).reduce((t, q) => t + q, 0);
+    $('pEtqBar').innerHTML = '<span><b>' + n + '</b> productos marcados · <b>' + numf(u) + '</b> etiquetas</span><span class="spacer"></span>' +
+      '<button class="btn sm" id="peStock" type="button" title="Poner como cantidad el stock de cada producto marcado">Cantidad = stock</button>' +
+      '<button class="btn sm" id="peLimp" type="button">' + ic('x') + 'Desmarcar</button><button class="btn sm c3d co" id="peImp" type="button">' + ic('barcode') + 'Imprimir etiquetas</button>';
+    $('pEtqBar').classList.toggle('hide', !n);
+    if (!n) return;
+    $('peLimp').onclick = () => { SELETQ.clear(); guardaSel(); filtrar(); };
+    $('peStock').onclick = () => { SELETQ.forEach((q, id) => SELETQ.set(id, Math.max(1, Math.round(stockDe(id)) || 1))); guardaSel(); filtrar(); };
+    $('peImp').onclick = () => { const items = Array.from(SELETQ.entries()).filter(([id, q]) => S.prod.get(id) && q > 0).map(([id, q]) => ({ p: S.prod.get(id), q }));
+      if (!items.length) return toast('Pon la cantidad de etiquetas.', true); imprimirEtiquetas(items, 'Etiquetas · ' + items.length + ' productos'); };
+  };
+  const guardaSel = () => { try { ls.set('selEtq', Array.from(SELETQ.entries())); } catch (e) {} pintaEtqBar(); };
+  $('pBody').addEventListener('change', (e) => {
+    const k = e.target.dataset.ek, qi = e.target.dataset.eq;
+    if (k) { if (e.target.checked) SELETQ.set(k, SELETQ.get(k) || 1); else SELETQ.delete(k); const qq = e.target.closest('td').querySelector('[data-eq]'); qq.value = SELETQ.has(k) ? SELETQ.get(k) : ''; guardaSel(); }
+    else if (qi) { const v = Math.max(0, Math.round(parseFloat(String(e.target.value).replace(',', '.')) || 0)); if (v > 0) SELETQ.set(qi, v); else SELETQ.delete(qi);
+      const ck = e.target.closest('td').querySelector('[data-ek]'); ck.checked = v > 0; e.target.value = v > 0 ? v : ''; guardaSel(); }
+  });
+  pintaEtqBar();
   $('pScan').onclick = () => escanear((code) => {
     const p = porCodigo(code);
     if (p) { setTimeout(() => editarProducto(p), 50); return { msg: p.n }; }
@@ -2344,6 +2369,7 @@ function kardex(p){
 }
 
 /* ---------- Conteo físico con escáner ---------- */
+const SELETQ = new Map((() => { try { return ls.get('selEtq', []) || []; } catch (e) { return []; } })());
 function conteoActual(){ return ls.get('conteo', null); }
 /** Excel del conteo en formato tabla con colores (si no se puede cargar ExcelJS, sale el Excel simple) */
 async function exportarConteoXL(nombre, cab, filas){
