@@ -494,7 +494,10 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .estbar{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px}.estbar .seg{flex:1 1 auto}.estbar .seg button{min-height:34px;font-size:13px;padding:5px 8px}.estbar select{flex:1 1 160px;width:auto}
 .etqimp{padding:10px 12px;border:2px solid #8DB3E2;background:#F2F7FD}:root[data-theme="dark"] .etqimp{background:#1E2D3D;border-color:#3B5B80}
 .etqres{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#EAF6EE;border:1px solid #9BD3AE}.etqres svg{width:26px;height:26px;flex:none}.etqsum svg{width:18px;height:18px;flex:none}.etqsum{cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border:2px dashed var(--line);border-radius:12px;font-size:15px}#eCfgBox[open] .etqsum{border-style:solid;border-color:#C99A2E;background:#FFF8E6}:root[data-theme="dark"] .etqres{background:#16301F;border-color:#2F6B43}
-.estbadge{border:0;cursor:pointer;font-family:inherit;position:fixed;right:12px;bottom:12px;z-index:50;display:flex;align-items:center;gap:6px;background:#1E7A3C;color:#fff;font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.25)}.estbadge svg{width:18px;height:18px}@media (max-width:620px){.estbadge{bottom:76px}}
+.estbadge{border:0;cursor:pointer;font-family:inherit;position:fixed;right:12px;bottom:12px;z-index:50;display:flex;align-items:center;gap:6px;background:#1E7A3C;color:#fff;font-weight:700;font-size:13px;padding:7px 12px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.25)}.estbadge svg{width:18px;height:18px}@media (max-width:620px){.estbadge{bottom:auto;top:66px;right:10px}
+.estbadge:not(.pend){width:38px;height:38px;padding:0;justify-content:center;opacity:.9}
+.estbadge:not(.pend) .eb-t{display:none}
+.estbadge:not(.pend)::after{content:'';position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:#7CFFA0;border:2px solid #1E7A3C}}
 .estbadge.pend{background:#16A34A;font-size:16px;padding:12px 18px;animation:latido 1.2s ease-in-out infinite}@keyframes latido{50%{transform:scale(1.06)}}
 .etqprev .hd{position:absolute;width:var(--hd);height:var(--hd);background:#fff;border:calc(var(--hd)*.18) solid #E0322B;box-sizing:border-box;border-radius:20%;z-index:2}.hd-nw{left:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-n{left:calc(50% - var(--hd)*.5);top:calc(var(--hd)*-.5);cursor:ns-resize}.hd-ne{right:calc(var(--hd)*-.5);top:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-e{right:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}.hd-se{right:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nwse-resize}.hd-s{left:calc(50% - var(--hd)*.5);bottom:calc(var(--hd)*-.5);cursor:ns-resize}.hd-sw{left:calc(var(--hd)*-.5);bottom:calc(var(--hd)*-.5);cursor:nesw-resize}.hd-w{left:calc(var(--hd)*-.5);top:calc(50% - var(--hd)*.5);cursor:ew-resize}
 .etqprev .etq{overflow:visible!important}.etqprev{padding:16px}
@@ -527,7 +530,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-06d';
+const APP_VER = '2026-11-06e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5302,7 +5305,8 @@ function pintarEstBadge(n){
   if (estRawbt()) {
     b.title = 'Este celular imprime las etiquetas que llegan de la PC';
     b.classList.toggle('pend', !!n);
-    b.innerHTML = ic('barcode') + (n ? 'Imprimir ' + n + ' etiquetas de la PC' : (estCfg().modo === 'app' ? 'Estación FlashLabel activa · sin etiquetas' : 'Estación RawBT activa · sin etiquetas'));
+    const txt = n ? 'Imprimir ' + n + ' etiquetas de la PC' : (estCfg().modo === 'app' ? 'Estación FlashLabel activa · sin etiquetas' : 'Estación RawBT activa · sin etiquetas');
+    b.innerHTML = ic('barcode') + '<span class="eb-t">' + txt + '</span>'; if (!n) b.title = txt;
   } else { b.title = 'Esta PC imprime las etiquetas que se envían desde los teléfonos'; b.classList.remove('pend'); b.innerHTML = ic('barcode') + 'Estación de impresión activa'; }
 }
 /** En el celular-estación: imprime con RawBT todo lo que llegó de la PC (lo dispara el toque del usuario) */
@@ -5350,7 +5354,7 @@ function activarTarjetaEstacion(){
   ['estW', 'estH', 'estCols'].forEach((i) => { $(i).onchange = guardar; });
   $('estModo').onchange = () => { guardar(); ayuda(); iniciarEstacion(); };
   ayuda();
-  $('estOn').onchange = (e) => { ls.set('estacion', e.target.checked); iniciarEstacion(); toast(e.target.checked ? 'Esta PC ahora imprime las etiquetas enviadas desde los teléfonos' : 'Estación de impresión desactivada'); };
+  $('estOn').onchange = (e) => { ls.set('estacion', e.target.checked); iniciarEstacion(); toast(e.target.checked ? (estRawbt() ? 'Este celular recibirá las etiquetas que envíe la PC' : 'Esta PC ahora imprime las etiquetas enviadas desde los teléfonos') : 'Estación de impresión desactivada'); };
   $('estPrueba').onclick = () => { guardar(); const p = vivos('prod')[0] || { id: '12345', n: 'PRODUCTO DE PRUEBA', pv: 1 }; imprimirHTML(documentoEtiquetas([{ p, q: 1 }], cfgEstacion())); };
   pintarColaEst();
 }
