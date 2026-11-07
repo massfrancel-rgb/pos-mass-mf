@@ -498,7 +498,10 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .estbadge:not(.pend){width:38px;height:38px;padding:0;justify-content:center;opacity:.9}
 .estbadge:not(.pend) .eb-t{display:none}
 .estbadge.inline{position:relative;top:auto;right:auto;bottom:auto;box-shadow:0 2px 0 rgba(0,0,0,.18);font-size:12px;letter-spacing:.3px;text-transform:uppercase;min-height:36px}
-.estbadge.inline:not(.pend){width:40px;height:36px;padding:0;opacity:1;border-radius:10px}
+.estbadge.inline{border-radius:10px;justify-content:center}
+.estbadge.inline:not(.pend){width:auto;height:36px;padding:0 16px 0 12px;opacity:1}
+.estbadge.inline:not(.pend) .eb-t{display:inline}
+@media (max-width:520px){.estbadge.inline{flex:1 1 100%}}
 .estbadge.inline.pend{font-size:13px;padding:8px 14px}
 .estbadge:not(.pend)::after{content:'';position:absolute;top:2px;right:2px;width:9px;height:9px;border-radius:50%;background:#7CFFA0;border:2px solid #1E7A3C}}
 .estbadge.pend{background:#16A34A;font-size:16px;padding:12px 18px;animation:latido 1.2s ease-in-out infinite}@keyframes latido{50%{transform:scale(1.06)}}
@@ -533,7 +536,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-06f';
+const APP_VER = '2026-11-06g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5315,7 +5318,7 @@ function pintarEstBadge(n){
     b.title = 'Este celular imprime las etiquetas que llegan de la PC';
     b.classList.toggle('pend', !!n);
     const txt = n ? 'Imprimir ' + n + ' etiquetas de la PC' : (estCfg().modo === 'app' ? 'Estación FlashLabel activa · sin etiquetas' : 'Estación RawBT activa · sin etiquetas');
-    b.innerHTML = ic('barcode') + '<span class="eb-t">' + (n ? txt : 'Estación') + '</span>'; if (!n) b.title = txt;
+    b.innerHTML = ic('barcode') + '<span class="eb-t">' + (n ? txt : (estCfg().modo === 'app' ? 'Estación FlashLabel activa' : 'Estación RawBT activa')) + '</span>'; if (!n) b.title = txt;
   } else { b.title = 'Esta PC imprime las etiquetas que se envían desde los teléfonos'; b.classList.remove('pend'); b.innerHTML = ic('barcode') + 'Estación de impresión activa'; }
 }
 /** En el celular-estación: imprime con RawBT todo lo que llegó de la PC (lo dispara el toque del usuario) */
