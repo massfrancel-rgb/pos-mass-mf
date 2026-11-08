@@ -478,6 +478,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .etqbar{margin:6px 0}.etqbar.hide{display:none}
 .etqcel{white-space:nowrap}.etqcel .etqchk{display:inline-flex;vertical-align:middle;margin-right:6px}.etqcel .etqchk input{width:22px;height:22px;accent-color:#C99A2E;cursor:pointer}
 .etqcel .etqq{width:62px;text-align:center}.etqcolh{white-space:nowrap}.etqcolh svg{width:16px;height:16px;vertical-align:-3px}
+tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -536,7 +537,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-06g';
+const APP_VER = '2026-11-08a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -1160,16 +1161,32 @@ function buscarProductos(q, lim){
     if (out.length > 400) break;
   }
   out.sort((a, b) => { const ai = norm(a.n).startsWith(qn) ? 0 : 1, bi = norm(b.n).startsWith(qn) ? 0 : 1; return ai - bi; });
+  const ex = porCodigo(q);   // el código exacto (interno o de barras) siempre primero
+  if (ex) { const i = out.indexOf(ex); if (i > 0) out.splice(i, 1); if (i !== 0) out.unshift(ex); }
   return out.slice(0, lim || 40);
 }
+/** Busca un producto por lo que leyó el escáner: primero el CÓDIGO INTERNO (el de Anfibus, que va en las etiquetas),
+ *  luego el código de barras (y los alternos). Tolera mayúsculas/minúsculas, espacios, ceros a la izquierda y
+ *  símbolos que cambian según la distribución del teclado del lector (- . / ' etc.). */
+const limpiaCod = (c) => String(c == null ? '' : c).replace(/[\u0000-\u001f\u007f]/g, '').replace(/^\][A-Za-z]\d/, '').trim();
+const claveCod = (c) => limpiaCod(c).toUpperCase().replace(/[^0-9A-Z]/g, '');
 function porCodigo(code){
-  code = String(code).trim(); if (!code) return null;
-  const p = S.prod.get(code); if (p && !p._d) return p;
-  for (const x of S.prod.values()) if (!x._d && x.b && (x.b === code || (x.b2 && x.b2.split(',').includes(code)))) return x;
-  // códigos EAN con ceros iniciales
-  const sin = code.replace(/^0+/, '');
-  for (const x of S.prod.values()) if (!x._d && ((x.b && x.b.replace(/^0+/, '') === sin) || x.id.replace(/^0+/, '') === sin)) return x;
-  return null;
+  code = limpiaCod(code); if (!code) return null;
+  const ok = (x) => x && !x._d;
+  let p = S.prod.get(code); if (ok(p)) return p;
+  const alt = (x) => (x.b2 ? String(x.b2).split(/[,;\s]+/).filter(Boolean) : []);
+  for (const x of S.prod.values()) if (ok(x) && ((x.b && String(x.b).trim() === code) || alt(x).includes(code))) return x;
+  // sin distinguir mayúsculas ni símbolos (ej. "4a1154h", "A-2103" = "A.2103")
+  const k = claveCod(code); if (!k) return null;
+  const k0 = k.replace(/^0+/, '');
+  let porId = null, porB = null;
+  for (const x of S.prod.values()) {
+    if (!ok(x)) continue;
+    const ki = claveCod(x.id);
+    if (ki === k || (k0 && ki.replace(/^0+/, '') === k0)) { porId = x; break; }
+    if (!porB && x.b) { const kb = claveCod(x.b); if (kb === k || (k0 && kb.replace(/^0+/, '') === k0) || alt(x).some((c) => claveCod(c) === k)) porB = x; }
+  }
+  return porId || porB;
 }
 function chipStock(p){
   const s = stockDe(p.id); const mi = Number(p.mi) || 0;
@@ -2212,6 +2229,8 @@ function invProductos(){
     const val = { cod: (p) => p.id, nom: nomK, st: (p) => stockDe(p.id), pv: (p) => Number(p.pv) || 0, co: (p) => Number(p.co) || 0 }[so.k] || nomK;
     const num = ['st', 'pv', 'co'].includes(so.k);
     l.sort((a, b) => { const r = num ? val(a) - val(b) : cmpT(val(a), val(b)); return (so.d ? -r : r) || cmpT(nomK(a), nomK(b)); });
+    const ex = $('pQ').value.trim() ? porCodigo($('pQ').value) : null;   // escaneado: el producto exacto va primero
+    if (ex) { const i = l.indexOf(ex); if (i > 0) { l.splice(i, 1); l.unshift(ex); } else if (i < 0 && (!cat || ex.c === cat)) l.unshift(ex); }
     $('pRes').textContent = l.length + ' productos';
     // botones rápidos con cantidades (según búsqueda y categoría)
     const base = vivos('prod').filter((p) => { if (cat && p.c !== cat) return false; if (w.length) { const hay = p._h || (p._h = norm(p.id + ' ' + (p.b || '') + ' ' + p.n + ' ' + (p.m || '') + ' ' + (p.c || ''))); if (!w.every((x) => hay.includes(x))) return false; } return true; });
@@ -2226,6 +2245,10 @@ function invProductos(){
     $('pMas').classList.toggle('hide', l.length <= lim);
   };
   let t; $('pQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { lim = 150; filtrar(); }, 150); };
+  // lector de código (teclado): Enter filtra al instante y deja el texto seleccionado para el siguiente escaneo
+  $('pQ').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; e.preventDefault(); clearTimeout(t); lim = 150; filtrar();
+    const ex = porCodigo($('pQ').value); if (ex) { beep(true); const tr = document.querySelector('#pBody tr[data-id="' + CSS.escape(ex.id) + '"]'); if (tr) { tr.classList.add('flash'); setTimeout(() => tr.classList.remove('flash'), 1500); } } else beep(false);
+    $('pQ').select(); });
   $('pCat').onchange = $('pFil').onchange = () => { lim = 150; ls.set('invFil', $('pFil').value); filtrar(); };
   $('pSeg').onclick = (e) => { const x = e.target.closest('button'); if (!x) return; $('pFil').value = x.dataset.v; ls.set('invFil', x.dataset.v); lim = 150; filtrar(); };
   $('pFil').value = ls.get('invFil', '');
