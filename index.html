@@ -479,6 +479,12 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .etqcel{white-space:nowrap}.etqcel .etqchk{display:inline-flex;vertical-align:middle;margin-right:6px}.etqcel .etqchk input{width:22px;height:22px;accent-color:#C99A2E;cursor:pointer}
 .etqcel .etqq{width:62px;text-align:center}.etqcolh{white-space:nowrap}.etqcolh svg{width:16px;height:16px;vertical-align:-3px}
 tr.flash td{background:#FFF3C4 !important;transition:background .3s}
+.kpi.etqkpi{cursor:pointer;text-align:left;font:inherit;color:inherit;border:1px solid var(--line);display:flex;flex-direction:column;gap:6px;min-width:0}
+.kpi.etqkpi > span{display:flex;align-items:center;gap:5px}.kpi.etqkpi > span svg{width:15px;height:15px}
+.kpi.etqkpi .etqmini{width:100%;min-height:60px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.kpi.etqkpi .etqmini .etq{box-shadow:0 1px 4px rgba(0,0,0,.18)}
+.kpi.etqkpi .etqav{font-size:11px;color:var(--muted)}.kpi.etqkpi.mal{border-color:#E2B33A;background:#FFF8E1}.kpi.etqkpi.mal .etqav{color:#B4233C;font-weight:700}
+.kpi.etqkpi:hover{border-color:#C99A2E}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -537,7 +543,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-08b';
+const APP_VER = '2026-11-08c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2318,7 +2324,8 @@ function editarProducto(p, pre, onDone){
         (fotoPropia(p.id) ? '<button class="btn sm danger" id="epFotoX" type="button">' + ic('trash') + 'Quitar foto</button>' : '') +
         '<span class="small muted">' + (fotoPropia(p.id) ? 'Foto subida en el POS' : (fotoUrl(p.id) ? 'Foto del Catálogo MASS' : 'Sin foto')) + '</span></div>' : '') + '</div>' : '') +
     (nuevo ? '' : '<div class="kpis" style="margin-bottom:14px"><div class="kpi gold"><span>Stock actual</span><b>' + numf(s) + '</b><small>' + h(p.un || 'UND') + '</small></div>' +
-      '<div class="kpi"><span>Valor a costo</span><b>' + money(s * (Number(p.co) || 0)) + '</b></div><div class="kpi"><span>Margen</span><b id="epMg">—</b></div></div>') +
+      '<div class="kpi"><span>Valor a costo</span><b>' + money(s * (Number(p.co) || 0)) + '</b></div><div class="kpi"><span>Margen</span><b id="epMg">—</b></div>' +
+      '<button type="button" class="kpi etqkpi" id="epEtqV" title="Así se imprimirá la etiqueta (toca para imprimirla)"><span>' + ic('barcode') + 'Etiqueta</span><div class="etqmini"></div><small class="etqav"></small></button></div>') +
     '<datalist id="dlCat">' + categorias().map((c) => '<option value="' + h(c) + '">').join('') + '</datalist>' +
     '<div class="grid2"><label class="f">Código interno (Anfibus)<input class="in" id="epId" value="' + h(p.id) + '"' + (nuevo ? '' : ' disabled') + ' placeholder="Ej.: 11103"></label>' +
     '<label class="f">Código de barras<div class="row" style="flex-wrap:nowrap"><input class="in grow" id="epB" value="' + h(p.b || p.id || '') + '" placeholder="Igual al código interno" title="Si está vacío, se usa el código interno (el que va en las etiquetas)"' + (ed || puede('inv') ? '' : ' disabled') + '>' + (ed || puede('inv') ? '<button class="btn icon" id="epScan" type="button">' + ic('scan') + '</button>' : '') + '</div></label></div>' +
@@ -2340,6 +2347,14 @@ function editarProducto(p, pre, onDone){
   const margen = () => { const co = parseFloat(m.q('#epCo').value) || 0, pv = parseFloat(m.q('#epPv').value) || 0, iva = parseFloat(String(m.q('#epIva').value).replace(',', '.')) || 0;
     const base = iva ? pv / (1 + iva / 100) : pv; const e = m.q('#epMg'); if (e) e.textContent = co && base ? Math.round((base - co) / base * 100) + '%' : '—'; };
   ['#epCo', '#epPv', '#epIva'].forEach((s2) => m.q(s2).addEventListener('input', margen)); margen();
+  // vista de la etiqueta tal como se imprimirá (se actualiza al cambiar nombre, precio o código)
+  const vistaEtq = () => { const box = m.q('#epEtqV'); if (!box) return;
+    const pv = parseFloat(String(m.q('#epPv').value).replace(',', '.'));
+    const pt = Object.assign({}, p, { n: m.q('#epN').value.trim() || p.n, b: m.q('#epB').value.trim(), pv: isNaN(pv) ? 0 : pv });
+    const r = vistaEtiqueta(pt, box.querySelector('.etqmini').clientWidth || 180, 92);
+    box.querySelector('.etqmini').innerHTML = r.html; box.querySelector('.etqav').innerHTML = r.aviso; box.classList.toggle('mal', !!r.mal); };
+  ['#epN', '#epPv', '#epB'].forEach((s2) => m.q(s2) && m.q(s2).addEventListener('input', vistaEtq)); setTimeout(vistaEtq, 0);
+  if (m.q('#epEtqV')) m.q('#epEtqV').onclick = () => { if (m.q('#epEtq')) m.q('#epEtq').click(); };
   if (m.q('#epEtq')) m.q('#epEtq').onclick = () => { m.close(); imprimirEtiquetas([{ p: S.prod.get(p.id) || p, q: 1 }], 'Etiqueta de ' + p.id); };
   if (m.q('#epId')) { let ant = m.q('#epId').value.trim(); m.q('#epId').addEventListener('input', () => { const v = m.q('#epId').value.trim(); const eb = m.q('#epB'); if (!eb.value.trim() || eb.value.trim() === ant) eb.value = v; ant = v; }); }
   if (m.q('#epScan')) m.q('#epScan').onclick = () => escanear((code) => { const otro = porCodigo(code); if (otro && otro.id !== p.id) return { ok: false, msg: 'Ese código ya es de: ' + otro.n }; m.q('#epB').value = code; return { msg: 'Código ' + code }; });
@@ -4802,6 +4817,17 @@ function barrasEtq(p, C, caja){
 const textoEl = (k, p, C) => (k === 'T' ? (cfg().nombre || 'MASS FERRETERÍA') : k === 'N' ? String(p.n || '') : k === 'C' ? codigoEtiqueta(p, C.tipo).txt : k === 'P' ? (Number(p.pv) ? money(p.pv) : '') : '');
 
 /** Dibujo de una etiqueta en HTML (medidas en mm). ed = vista de diseño con casillas */
+/** Miniatura de la etiqueta con la configuración general + avisos de problemas */
+function vistaEtiqueta(p, maxW, maxH){
+  const C = etqCfg(); const px = C.w * 3.78, py = C.h * 3.78; const esc = Math.min(maxW / px, maxH / py, 3);
+  const html = '<div style="width:' + (px * esc) + 'px;height:' + (py * esc) + 'px;margin:auto"><div style="transform:scale(' + esc + ');transform-origin:0 0;width:' + C.w + 'mm">' + etiquetaHTML(p, C, false) + '</div></div>';
+  const avisos = []; let mal = false;
+  const cod = String(C.tipo === 'interno' ? p.id : (p.b || p.id) || '').trim();
+  if (!cod) { avisos.push('⚠ Sin código para el código de barras'); mal = true; }
+  try { const K = cajasEtq(C), z = barrasEtq(p, C, K.B); if (z.angosto) { avisos.push('⚠ Código muy largo: puede no leerse'); mal = true; } } catch (e) {}
+  if (!(Number(p.pv) > 0)) { avisos.push('⚠ Sin precio (PVP)'); mal = true; }
+  return { html, mal, aviso: avisos.length ? avisos.join(' · ') : C.w + '×' + C.h + ' mm · código ' + h(cod) };
+}
 function etiquetaHTML(p, C, ed, sel){
   const K = cajasEtq(C), fs = letrasEtq(C);
   let html = '';
