@@ -537,7 +537,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-08a';
+const APP_VER = '2026-11-08b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2321,7 +2321,7 @@ function editarProducto(p, pre, onDone){
       '<div class="kpi"><span>Valor a costo</span><b>' + money(s * (Number(p.co) || 0)) + '</b></div><div class="kpi"><span>Margen</span><b id="epMg">—</b></div></div>') +
     '<datalist id="dlCat">' + categorias().map((c) => '<option value="' + h(c) + '">').join('') + '</datalist>' +
     '<div class="grid2"><label class="f">Código interno (Anfibus)<input class="in" id="epId" value="' + h(p.id) + '"' + (nuevo ? '' : ' disabled') + ' placeholder="Ej.: 11103"></label>' +
-    '<label class="f">Código de barras<div class="row" style="flex-wrap:nowrap"><input class="in grow" id="epB" value="' + h(p.b || '') + '" inputmode="numeric"' + (ed || puede('inv') ? '' : ' disabled') + '>' + (ed || puede('inv') ? '<button class="btn icon" id="epScan" type="button">' + ic('scan') + '</button>' : '') + '</div></label></div>' +
+    '<label class="f">Código de barras<div class="row" style="flex-wrap:nowrap"><input class="in grow" id="epB" value="' + h(p.b || p.id || '') + '" placeholder="Igual al código interno" title="Si está vacío, se usa el código interno (el que va en las etiquetas)"' + (ed || puede('inv') ? '' : ' disabled') + '>' + (ed || puede('inv') ? '<button class="btn icon" id="epScan" type="button">' + ic('scan') + '</button>' : '') + '</div></label></div>' +
     '<label class="f" style="margin-top:10px">Nombre / descripción<input class="in" id="epN" value="' + h(p.n) + '"' + ro + '></label>' +
     '<div class="grid3" style="margin-top:10px"><label class="f">Marca<input class="in" id="epM" value="' + h(p.m || '') + '"' + ro + '></label>' +
     '<label class="f">Categoría<input class="in" id="epC" list="dlCat" value="' + h(p.c || '') + '"' + ro + '></label>' +
@@ -2341,6 +2341,7 @@ function editarProducto(p, pre, onDone){
     const base = iva ? pv / (1 + iva / 100) : pv; const e = m.q('#epMg'); if (e) e.textContent = co && base ? Math.round((base - co) / base * 100) + '%' : '—'; };
   ['#epCo', '#epPv', '#epIva'].forEach((s2) => m.q(s2).addEventListener('input', margen)); margen();
   if (m.q('#epEtq')) m.q('#epEtq').onclick = () => { m.close(); imprimirEtiquetas([{ p: S.prod.get(p.id) || p, q: 1 }], 'Etiqueta de ' + p.id); };
+  if (m.q('#epId')) { let ant = m.q('#epId').value.trim(); m.q('#epId').addEventListener('input', () => { const v = m.q('#epId').value.trim(); const eb = m.q('#epB'); if (!eb.value.trim() || eb.value.trim() === ant) eb.value = v; ant = v; }); }
   if (m.q('#epScan')) m.q('#epScan').onclick = () => escanear((code) => { const otro = porCodigo(code); if (otro && otro.id !== p.id) return { ok: false, msg: 'Ese código ya es de: ' + otro.n }; m.q('#epB').value = code; return { msg: 'Código ' + code }; });
   if (m.q('#epFile')) m.q('#epFile').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -2355,7 +2356,7 @@ function editarProducto(p, pre, onDone){
   if (m.q('#epOk')) m.q('#epOk').onclick = async () => {
     const id = (nuevo ? m.q('#epId').value.trim() : p.id) || ('N' + Date.now().toString().slice(-7));
     if (nuevo && S.prod.has(id) && !S.prod.get(id)._d) return toast('Ya existe un producto con el código ' + id, true);
-    const b = m.q('#epB').value.trim();
+    let b = m.q('#epB').value.trim(); if (!b) b = id;   // sin código de barras propio: se usa el código interno (el de las etiquetas)
     if (b) { const otro = porCodigo(b); if (otro && otro.id !== id) return toast('El código de barras ya es de: ' + otro.n, true); }
     const n = m.q('#epN').value.trim(); if (!n) return toast('Escribe el nombre.', true);
     const rec = Object.assign({}, nuevo ? {} : p, { id, b, n, m: m.q('#epM').value.trim(), c: m.q('#epC').value.trim(), un: m.q('#epU').value.trim() || 'UND',
@@ -3278,6 +3279,8 @@ function pgExcel(){
       '<label class="btn c3d cb" style="align-self:flex-start">' + ic('upload') + 'Elegir archivo de ventas<input type="file" id="xVtaAnf" accept=".xlsx,.xls,.xlsm" hidden></label></div>' : '') +
     '<div class="card stack"><h3>Importar clientes o proveedores</h3><div class="row"><label class="btn">' + ic('users') + 'Clientes<input type="file" id="xCli" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' +
       (puede('compras') ? '<label class="btn">' + ic('truck') + 'Proveedores<input type="file" id="xProv" accept=".xlsx,.xls,.xlsm,.csv" hidden></label>' : '') + '</div></div>' +
+    (pp ? '<div class="card stack"><h3>' + ic('barcode') + ' Código de barras = código interno</h3><p class="small muted" style="margin:0">Las etiquetas llevan el <b>código interno</b> (el de Anfibius). Este botón copia el código interno al campo <b>Código de barras</b> de todos los productos que lo tienen vacío. Los que ya tienen su propio código de barras (EAN del fabricante) no se tocan.</p>' +
+      '<div class="row"><button class="btn c3d cv" id="xBId">' + ic('barcode') + 'Completar códigos de barras</button><span class="small" id="xBIdInfo"></span></div></div>' : '') +
     (pp ? '<div class="card stack"><h3>' + ic('upload') + ' Exportar a Anfibius (formato de actualización)</h3><p class="small muted" style="margin:0">Genera el Excel con el <b>mismo formato de Anfibius</b> (ID, Codigo, Descripcion, PVP… Costo…) con los costos y precios de POS MASS MF, para subirlo a Anfibius y actualizarlo. ' +
       'Primero sube el formato que exportas de Anfibius (solo una vez, o cuando haya productos nuevos en Anfibius): de ahí se toma el <b>ID</b> de cada producto.</p>' +
       '<div class="row"><label class="btn">' + ic('upload') + 'Subir formato de Anfibius<input type="file" id="xAnfF" accept=".xlsx,.xls" hidden></label><span class="small" id="xAnfInfo"></span></div>' +
@@ -3296,6 +3299,20 @@ function pgExcel(){
   $('xTodo').onclick = exportarTodo;
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
+  if ($('xBId')) {
+    const vacios = () => vivos('prod').filter((p) => !String(p.b || '').trim());
+    $('xBIdInfo').textContent = numf(vacios().length) + ' productos sin código de barras';
+    $('xBId').onclick = async () => {
+      const l = vacios(); if (!l.length) return toast('Todos los productos ya tienen código de barras.');
+      if (!(await confirmar('Se pondrá el código interno como código de barras en ' + numf(l.length) + ' productos. Los que ya tienen código de barras no cambian. ¿Continuar?', 'Completar'))) return;
+      // si el código interno ya es el código de barras de OTRO producto, ese se salta para no duplicar
+      const usados = new Set(vivos('prod').map((p) => String(p.b || '').trim()).filter(Boolean));
+      const recs = l.filter((p) => !usados.has(String(p.id))).map((p) => Object.assign({}, p, { b: String(p.id) }));
+      for (let i = 0; i < recs.length; i += 500) await putMuchos('prod', recs.slice(i, i + 500));
+      toast('✓ ' + numf(recs.length) + ' productos con código de barras' + (l.length - recs.length ? ' · ' + (l.length - recs.length) + ' saltados (su código ya lo usa otro producto)' : ''));
+      $('xBIdInfo').textContent = numf(vacios().length) + ' productos sin código de barras'; sincronizar();
+    };
+  }
   if ($('xAnfF')) {
     const info = async () => { const F = await metaGet('anfFmt', null); $('xAnfInfo').innerHTML = F ? '✓ Formato cargado: <b>' + numf(F.filas.length) + '</b> productos · ' + h(F.nombre) + ' · ' + fechaTxt(F.fecha) : '<span style="color:var(--warn-fg)">Aún no has subido el formato de Anfibius.</span>'; };
     info();
