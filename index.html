@@ -485,6 +485,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .kpi.etqkpi .etqmini .etq{box-shadow:0 1px 4px rgba(0,0,0,.18)}
 .kpi.etqkpi .etqav{font-size:11px;color:var(--muted)}.kpi.etqkpi.mal{border-color:#E2B33A;background:#FFF8E1}.kpi.etqkpi.mal .etqav{color:#B4233C;font-weight:700}
 .kpi.etqkpi:hover{border-color:#C99A2E}
+.minilbl.pedira select{min-width:150px;max-width:220px;text-align:left}.minilbl.pedira.otro select{background:#EDE4FF;border-color:#8A3FD1;font-weight:700;color:#5B21B6}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -543,7 +544,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-08c';
+const APP_VER = '2026-11-09a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2795,7 +2796,8 @@ function editarCompra(c, borr){
     '<label class="f">Fecha<input class="in" id="ecF" type="date" value="' + h(D.f) + '"></label>' +
     '<label class="f">Pago<div class="row" style="flex-wrap:nowrap"><select class="in" id="ecFp"><option value="co">Contado</option><option value="cr">Crédito</option></select><select class="in" id="ecPl">' + [15, 30, 45, 60, 90, 120].map((d) => '<option value="' + d + '">' + d + ' días</option>').join('') + '</select></div></label></div>' +
     '<div id="ecPedAv"></div><div class="factfoto" id="ecFoto"></div>' +
-    '<div style="margin:10px 0" id="ecBus"></div><div class="cart" id="ecBody" style="margin-top:0"></div><div id="ecFoot" style="margin-top:10px"></div>' +
+    '<div style="margin:10px 0" id="ecBus"></div>' + (nueva ? '<div class="note" id="ecRepNote" style="margin:0 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="grow small">En cada producto puedes elegir <b>“Pedir a”</b> otro proveedor. Al tocar <b>Guardar borrador y salir</b> se crea <b>un pedido por cada proveedor</b>.</span><button type="button" class="btn sm" id="ecHab">' + ic('truck') + 'Proveedor habitual a todos</button></div>' : '') +
+    '<div class="cart" id="ecBody" style="margin-top:0"></div><div id="ecFoot" style="margin-top:10px"></div>' +
     '<label class="chk" style="margin-top:8px"><input type="checkbox" id="ecAct"> Actualizar costo y PVP de los productos con estos valores</label>' +
     '<label class="f" style="margin-top:6px">Nota<input class="in" id="ecNota" value="' + h(D.nota || '') + '"></label>',
     foot: '<button class="btn" id="ecCan">' + (nueva ? 'Guardar borrador y salir' : 'Cancelar') + '</button>' + (nueva ? '<button class="btn danger" id="ecBor">Borrar todo</button>' : '') + '<button class="btn c3d cv" id="ecOk">' + ic('check') + 'Guardar compra</button>' });
@@ -2848,17 +2850,43 @@ function editarCompra(c, borr){
       '<label class="minilbl">IVA' + campoIva('mini pct', 'data-k="iva"', x.iva) + '</label>' +
       '<label class="minilbl cciva">Costo c/IVA<input class="mini" data-k="coi" inputmode="decimal" value="' + (x.co ? conIva(x) : '') + '"></label>' +
       '<label class="minilbl">PVP nuevo<input class="mini" data-k="pvN" inputmode="decimal" value="' + (x.pvN || '') + '"></label>' +
+      (nueva ? '<label class="minilbl pedira' + (x.prx && x.prx !== D.pr ? ' otro' : '') + '">Pedir a<select class="mini" data-k="prx"><option value="">Esta compra' + (D.pr ? ' (' + h(nomProv(D.pr)) + ')' : '') + '</option>' +
+        vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).filter((v) => v.id !== D.pr).map((v) => '<option value="' + h(v.id) + '"' + (x.prx === v.id ? ' selected' : '') + '>' + h(v.nombre) + '</option>').join('') + '</select></label>' : '') +
       '<span class="spacer"></span><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button></div></div>').join('') :
       '<div class="empty card">Agrega los productos de la factura del proveedor</div>';
     m.q('#ecFoot').innerHTML = casillasCompra(D.it);
   };
   avisoPed();
   m.q('#ecBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = D.it[+tr.dataset.i];
+    if (k === 'prx') { x.prx = e.target.value || ''; if (x.prx === D.pr) x.prx = ''; guardarD(); pintar(); return; }
     const v = parseFloat(String(e.target.value).replace(',', '.')) || 0;
     if (k === 'coi') x.co = Math.round(v / (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000; else x[k] = v;
     guardarD(); pintar(); };
   m.q('#ecBody').onclick = (e) => { if (e.target.closest('[data-del]')) { D.it.splice(+e.target.closest('[data-i]').dataset.i, 1); guardarD(); pintar(); } };
-  m.q('#ecCan').onclick = async () => { await guardarYa(); m.close(); if (nueva && (D.pr || D.it.length || D.num)) toast('Compra guardada en Borradores.'); if (RUTA === 'compras') render(); };
+  if (m.q('#ecHab')) m.q('#ecHab').onclick = () => { let n = 0; D.it.forEach((x) => { const pr = provHabitual(x.p); if (pr && pr !== D.pr) { x.prx = pr; n++; } }); guardarD(); pintar(); toast(n ? n + ' producto(s) con su proveedor habitual' : 'Ningún producto tiene otro proveedor habitual.'); };
+  m.q('#ecCan').onclick = async () => {
+    // productos marcados para otro proveedor → un pedido por proveedor
+    const otros = nueva ? D.it.filter((x) => x.prx && x.prx !== D.pr && S.prov.get(x.prx)) : [];
+    if (otros.length) {
+      const grupos = new Map(); otros.forEach((x) => { if (!grupos.has(x.prx)) grupos.set(x.prx, []); grupos.get(x.prx).push(x); });
+      const ok = await confirmar('Se crearán pedidos para ' + grupos.size + ' proveedor(es): ' + Array.from(grupos.entries()).map(([pr, l]) => nomProv(pr) + ' (' + l.length + ')').join(', ') + '. Esos productos salen de esta compra' + (D.it.length > otros.length ? ' y el resto queda en el borrador' : '') + '.', 'Crear pedidos');
+      if (!ok) return;
+      const creados = [];
+      for (const [pr, l] of grupos) {
+        let P = vivos('ped').find((y) => y.pr === pr && y.est === 'pend');
+        P = P ? JSON.parse(JSON.stringify(P)) : { id: uid('pp'), num: siguientePedidoProv(), pr, f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' };
+        delete P._u; delete P._d;
+        l.forEach((x) => { const p = S.prod.get(x.p) || {}; const ex = P.it.find((z) => z.p === x.p);
+          if (ex) ex.q = r2((Number(ex.q) || 0) + (Number(x.q) || 0));
+          else P.it.push({ p: x.p, n: x.n, q: Number(x.q) || 1, co: Number(x.co) || 0, coU: Number(p.co) || 0, iva: x.iva == null ? cfg().iva : Number(x.iva), un: p.un || 'UND' }); });
+        await put('ped', P); creados.push(P.num + ' ' + nomProv(pr));
+      }
+      D.it = D.it.filter((x) => !otros.includes(x));
+      clearTimeout(tGuardar);
+      if (D.pr || D.it.length || D.num) await put('bor', Object.assign({}, D)); else if (S.bor.has(D.id)) await borrar('bor', D.id);
+      m.close(); toast('Pedidos creados: ' + creados.join(' · ')); sincronizar(); if (RUTA === 'compras') render(); return;
+    }
+    await guardarYa(); m.close(); if (nueva && (D.pr || D.it.length || D.num)) toast('Compra guardada en Borradores.'); if (RUTA === 'compras') render(); };
   if (m.q('#ecBor')) m.q('#ecBor').onclick = async () => { if (await confirmar('¿Borrar este borrador de compra?', 'Borrar', true)) { clearTimeout(tGuardar); if (S.bor.has(D.id)) await borrar('bor', D.id); await quitarFotoFactura(D.id); m.close(); if (RUTA === 'compras') render(); } };
   m.q('#ecOk').onclick = async () => {
     if (!D.pr) return toast('Elige el proveedor.', true);
