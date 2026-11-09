@@ -486,6 +486,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .kpi.etqkpi .etqav{font-size:11px;color:var(--muted)}.kpi.etqkpi.mal{border-color:#E2B33A;background:#FFF8E1}.kpi.etqkpi.mal .etqav{color:#B4233C;font-weight:700}
 .kpi.etqkpi:hover{border-color:#C99A2E}
 .minilbl.pedira select{min-width:150px;max-width:220px;text-align:left}.minilbl.pedira.otro select{background:#EDE4FF;border-color:#8A3FD1;font-weight:700;color:#5B21B6}
+.pedck{display:flex;align-items:center;padding:4px 8px 4px 0;cursor:pointer}.pedck input{width:22px;height:22px;accent-color:#B4233C;cursor:pointer}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -544,7 +545,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-09a';
+const APP_VER = '2026-11-09b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2725,16 +2726,36 @@ function pintarPedidosPendientes(cont){
   if (!cont) return;
   const l = vivos('ped').filter((p) => p.est !== 'rec').sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (!l.length) { cont.innerHTML = ''; return; }
-  cont.innerHTML = '<div class="card pedpend"><div class="row" style="margin-bottom:6px"><b>' + ic('clip') + ' Pedidos a proveedores por recibir (' + l.length + ')</b><span class="spacer"></span><button class="btn sm" id="ppTodos">Ver todos</button></div><div class="list">' +
-    l.slice(0, 8).map((p) => { const u = (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
-      return '<div class="li" data-ped="' + h(p.id) + '"><div class="grow"><div class="t">' + h(nomProv(p.pr)) + ' · ' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
+  const sel = new Set();
+  cont.innerHTML = '<div class="card pedpend"><div class="row" style="margin-bottom:6px;flex-wrap:wrap;gap:8px"><b>' + ic('clip') + ' Pedidos a proveedores por recibir (' + l.length + ')</b><span class="spacer"></span>' +
+      '<label class="chk small" style="margin:0"><input type="checkbox" id="ppAll"> Todos</label>' +
+      '<button class="btn sm danger" id="ppDel" disabled>' + ic('trash') + 'Eliminar (<span id="ppN">0</span>)</button><button class="btn sm" id="ppTodos">Ver todos</button></div><div class="list">' +
+    l.map((p) => { const u = (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
+      return '<div class="li" data-ped="' + h(p.id) + '"><label class="pedck" data-noab="1"><input type="checkbox" data-pk="' + h(p.id) + '"></label><div class="grow"><div class="t">' + h(nomProv(p.pr)) + ' · ' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
         '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf(u) + ' u. · ' + h(nomVend(p.v)) + '</div></div>' +
         '<button class="btn sm c3d cp" data-rec="' + h(p.id) + '">' + ic('truck') + 'Llegó: registrar compra</button></div>'; }).join('') + '</div></div>';
-  cont.onclick = (e) => {
+  const act = () => { cont.querySelector('#ppN').textContent = sel.size; cont.querySelector('#ppDel').disabled = !sel.size; cont.querySelector('#ppAll').checked = sel.size === l.length; };
+  cont.onchange = (e) => {
+    if (e.target.id === 'ppAll') { sel.clear(); if (e.target.checked) l.forEach((p) => sel.add(p.id)); qsa('[data-pk]', cont).forEach((c) => { c.checked = sel.has(c.dataset.pk); }); return act(); }
+    const k = e.target.dataset.pk; if (k) { if (e.target.checked) sel.add(k); else sel.delete(k); act(); }
+  };
+  cont.onclick = async (e) => {
+    if (e.target.closest('[data-noab]')) return;
+    if (e.target.closest('#ppDel')) { if (await eliminarPedidos(Array.from(sel))) render(); return; }
     const r = e.target.closest('[data-rec]'); if (r) { e.stopPropagation(); return compraDesdePedido(S.ped.get(r.dataset.rec)); }
     const li = e.target.closest('[data-ped]'); if (li) return verPedido(S.ped.get(li.dataset.ped));
     if (e.target.closest('#ppTodos')) verPedidos();
   };
+}
+/** Elimina uno o varios pedidos a proveedores (pregunta antes) */
+async function eliminarPedidos(ids){
+  const ps = ids.map((id) => S.ped.get(id)).filter((p) => p && !p._d); if (!ps.length) return false;
+  const txt = ps.length === 1 ? '¿Seguro que quieres eliminar el pedido ' + ps[0].num + ' de ' + nomProv(ps[0].pr) + '?'
+    : '¿Seguro que quieres eliminar estos ' + ps.length + ' pedidos? ' + ps.map((p) => p.num + ' (' + nomProv(p.pr) + ')').join(', ');
+  if (!(await confirmar(txt + ' No se puede deshacer.', 'Eliminar', true))) return false;
+  for (const p of ps) await borrar('ped', p.id);
+  toast(ps.length === 1 ? 'Pedido ' + ps[0].num + ' eliminado' : ps.length + ' pedidos eliminados'); sincronizar();
+  return true;
 }
 /** Abre una compra nueva con los productos del pedido (al guardar, el pedido queda "Recibido") */
 async function compraDesdePedido(P){
@@ -4503,14 +4524,17 @@ function verPedidos(){
   const m = modal({ title: 'Pedidos a proveedores (' + l.length + ')', wide: true, body: l.length ? ks.map((k) => {
     const ps = grupos.get(k).sort((a, b) => (a.est === 'rec') - (b.est === 'rec') || (b.ts || 0) - (a.ts || 0));
     return '<h3 class="rgh" style="margin:10px 0 6px">' + ico3d('truck', ['#F2BC4A', '#C08510']) + h(k) + ' <span class="badge">' + ps.length + '</span></h3><div class="card" style="padding:4px 10px"><div class="list">' +
-      ps.map((p) => '<div class="li" data-id="' + h(p.id) + '"><div class="grow"><div class="t">' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
+      ps.map((p) => '<div class="li" data-id="' + h(p.id) + '"><label class="pedck" data-noab="1"><input type="checkbox" data-pk="' + h(p.id) + '"></label><div class="grow"><div class="t">' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
         '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf((p.it || []).reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' u.' + (p.nota ? ' · ' + h(p.nota) : '') + '</div></div>' +
         '<div class="v">' + money(totPed(p.it, p.dp).tot) + '<div class="small muted" style="font-weight:400">total c/IVA</div></div></div>').join('') + '</div></div>';
   }).join('') : '<div class="empty"><b>No hay pedidos a proveedores</b>Créalos desde Reportes → Stock bajo y agotados marcando lo que necesitas, o con “Nuevo pedido”.</div>',
-    foot: '<button class="btn" data-x>Cerrar</button><a class="btn c3d co" href="#rep?r=stockbajo" id="vpSb">' + ic('alert') + 'Ver stock bajo</a><button class="btn c3d cv" id="vpN">' + ic('plus') + 'Nuevo pedido</button>' });
+    foot: '<button class="btn" data-x>Cerrar</button><button class="btn danger" id="vpDel" disabled>' + ic('trash') + 'Eliminar (<span id="vpN">0</span>)</button><a class="btn c3d co" href="#rep?r=stockbajo" id="vpSb">' + ic('alert') + 'Ver stock bajo</a><button class="btn c3d cv" id="vpN">' + ic('plus') + 'Nuevo pedido</button>' });
   m.q('#vpN').onclick = () => { m.close(); verPedido(null); };
   m.q('#vpSb').onclick = () => m.close();
-  m.b.onclick = (e) => { const li = e.target.closest('[data-id]'); if (li) { m.close(); verPedido(S.ped.get(li.dataset.id)); } };
+  const sel = new Set();
+  m.b.onchange = (e) => { const k = e.target.dataset.pk; if (!k) return; if (e.target.checked) sel.add(k); else sel.delete(k); m.q('#vpN').textContent = sel.size; m.q('#vpDel').disabled = !sel.size; };
+  m.q('#vpDel').onclick = async () => { if (await eliminarPedidos(Array.from(sel))) { m.close(); if (RUTA === 'compras' || RUTA === 'rep') render(); verPedidos(); } };
+  m.b.onclick = (e) => { if (e.target.closest('[data-noab]')) return; const li = e.target.closest('[data-id]'); if (li) { m.close(); verPedido(S.ped.get(li.dataset.id)); } };
 }
 
 /* ---------- Agregar productos a un pedido (del inventario o uno nuevo escrito a mano) ---------- */
