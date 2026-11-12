@@ -547,11 +547,12 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-11a';
+const APP_VER = '2026-11-11b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   qr: 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+  qr2: 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js',
   exceljs: 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
 };
 const $ = (id) => document.getElementById(id);
@@ -1135,11 +1136,18 @@ async function escanear(onCode, opts){
   };
   $('scClose').onclick = cerrar; $('scOk').onclick = () => { const v = $('scMan').value.trim(); if (v) { recibir(v); $('scMan').value = ''; } else cerrar(); };
   $('scMan').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('scOk').click(); } });
+  // pide la cámara: primero la trasera; si el teléfono no acepta esa opción, cualquier cámara
+  const pedirCamara = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { const er = new Error('Este navegador no permite usar la cámara'); er.name = 'SinSoporte'; throw er; }
+    try { return await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); }
+    catch (e) { if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e; return await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+  };
+  let paso = 'camara';
   try {
-    if ('BarcodeDetector' in window) {
-      const fmts = await BarcodeDetector.getSupportedFormats();
-      const det = new BarcodeDetector({ formats: fmts.filter((f) => f !== 'unknown') });
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    let det = null;
+    if ('BarcodeDetector' in window) { try { const fmts = await BarcodeDetector.getSupportedFormats(); if (fmts && fmts.length) det = new BarcodeDetector({ formats: fmts.filter((f) => f !== 'unknown') }); } catch (e) { det = null; } }
+    if (det) {
+      stream = await pedirCamara();
       video.srcObject = stream; await video.play();
       const loop = async () => {
         if (!alive) return;
@@ -1148,14 +1156,28 @@ async function escanear(onCode, opts){
       };
       loop();
     } else {
+      // Huawei, iPhone y otros sin lector integrado: se usa la librería html5-qrcode
+      paso = 'permiso';
+      const prueba = await pedirCamara(); prueba.getTracks().forEach((t) => t.stop());   // provoca la pregunta de permiso
+      paso = 'libreria';
       video.remove(); qs('.frame', ov).remove();
       const box = document.createElement('div'); box.id = 'scanFallback'; ov.insertBefore(box, qs('.bar', ov));
-      await cargarScript(LIB.qr);
-      h5 = new window.Html5Qrcode('scanFallback', { verbose: false });
-      await h5.start({ facingMode: 'environment' }, { fps: 10, qrbox: (w, hh) => ({ width: Math.floor(w * 0.84), height: Math.floor(Math.min(hh, w) * 0.42) }) }, (txt) => recibir(txt), () => {});
+      try { await cargarScript(LIB.qr); } catch (e) { await cargarScript(LIB.qr2); }
+      paso = 'camara';
+      h5 = new window.Html5Qrcode('scanFallback', { verbose: false, formatsToSupport: window.Html5QrcodeSupportedFormats ? Object.values(window.Html5QrcodeSupportedFormats).filter((v) => typeof v === 'number') : undefined });
+      const cfgScan = { fps: 10, qrbox: (w, hh) => ({ width: Math.floor(w * 0.84), height: Math.floor(Math.min(hh, w) * 0.42) }) };
+      try { await h5.start({ facingMode: 'environment' }, cfgScan, (txt) => recibir(txt), () => {}); }
+      catch (e) { const cams = await window.Html5Qrcode.getCameras(); if (!cams || !cams.length) throw e; const tras = cams.find((c) => /back|rear|trase|environment|0/i.test(c.label)) || cams[cams.length - 1]; await h5.start(tras.id, cfgScan, (txt) => recibir(txt), () => {}); }
     }
   } catch (e) {
-    $('scLast').textContent = 'No se pudo abrir la cámara. Permite el acceso a la cámara o escribe el código abajo.';
+    const n = (e && e.name) || '', msg = (e && e.message) || String(e);
+    const txt = n === 'NotAllowedError' || n === 'SecurityError' ? 'El navegador no tiene permiso para la cámara en esta página. Permítelo en los ajustes del sitio (candado o ⋮ → Configuración del sitio → Cámara).'
+      : n === 'NotFoundError' || n === 'OverconstrainedError' ? 'No se encontró una cámara disponible.'
+      : n === 'NotReadableError' ? 'La cámara está ocupada por otra app. Cierra las demás apps que usen la cámara.'
+      : n === 'SinSoporte' ? 'Este navegador no permite usar la cámara dentro de la app. Abre POS MASS MF con otro navegador (Chrome, Edge, Firefox u Opera).'
+      : paso === 'libreria' ? 'No se pudo cargar el lector de códigos. Revisa el internet y vuelve a intentar.'
+      : 'No se pudo abrir la cámara.';
+    $('scLast').innerHTML = h(txt) + ' Mientras tanto, escribe el código abajo.<div style="font-size:11px;opacity:.7;margin-top:4px">Detalle: ' + h(n + ' ' + msg).slice(0, 160) + '</div>';
   }
 }
 
