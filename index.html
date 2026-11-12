@@ -487,6 +487,8 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .kpi.etqkpi:hover{border-color:#C99A2E}
 .minilbl.pedira select{min-width:150px;max-width:220px;text-align:left}.minilbl.pedira.otro select{background:#EDE4FF;border-color:#8A3FD1;font-weight:700;color:#5B21B6}
 .pedck{display:flex;align-items:center;padding:4px 8px 4px 0;cursor:pointer}.pedck input{width:22px;height:22px;accent-color:#B4233C;cursor:pointer}
+.mini.ivain{width:64px;text-align:center;background:#FDEBD0;border-color:#E9B872;font-weight:700}.mini.ivain.ivaotro{background:#E7EEFF;border-color:#9DB3FF;color:#1F3A93}
+#pHead th.n{min-width:84px}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -545,7 +547,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-09b';
+const APP_VER = '2026-11-11a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2231,11 +2233,11 @@ function invProductos(){
     // orden por columna (Código, Producto, Stock, PVP, Costo)
     const so = ls.get('invSort', { k: 'nom', d: false });
     const th = (k, t, n) => '<th class="' + (n ? 'n ' : '') + 'sortable" data-is="' + k + '">' + t + ' <i class="sarr">' + (so.k === k ? (so.d ? '▼' : '▲') : '↕') + '</i></th>';
-    $('pHead').innerHTML = '<tr>' + th('cod', 'Código') + th('nom', 'Producto') + '<th class="center etqcolh" title="Marca los productos para imprimir sus etiquetas">' + ic('barcode') + ' Etiquetas</th>' + th('st', 'Stock', 1) + th('pv', 'PVP', 1) + (puede('prod') ? th('co', 'Costo', 1) : '') + '</tr>';
+    $('pHead').innerHTML = '<tr>' + th('cod', 'Código') + th('nom', 'Producto') + '<th class="center etqcolh" title="Marca los productos para imprimir sus etiquetas">' + ic('barcode') + ' Etiquetas</th>' + th('st', 'Stock', 1) + th('pv', 'PVP', 1) + (puede('prod') ? th('co', 'Costo s/IVA', 1) + th('iva', 'IVA %', 1) + th('coi', 'Costo c/IVA', 1) : '') + '</tr>';
     const nomK = (p) => p._nk || (p._nk = String(p.n || '').replace(/^[^0-9A-Za-zÀ-ÿÑñ]+/, ''));
     const cmpT = (x, y) => String(x).localeCompare(String(y), 'es', { numeric: true, sensitivity: 'base' });
-    const val = { cod: (p) => p.id, nom: nomK, st: (p) => stockDe(p.id), pv: (p) => Number(p.pv) || 0, co: (p) => Number(p.co) || 0 }[so.k] || nomK;
-    const num = ['st', 'pv', 'co'].includes(so.k);
+    const val = { cod: (p) => p.id, nom: nomK, st: (p) => stockDe(p.id), pv: (p) => Number(p.pv) || 0, co: (p) => Number(p.co) || 0, iva: ivaP, coi: (p) => (Number(p.co) || 0) * (1 + ivaP(p) / 100) }[so.k] || nomK;
+    const num = ['st', 'pv', 'co', 'iva', 'coi'].includes(so.k);
     l.sort((a, b) => { const r = num ? val(a) - val(b) : cmpT(val(a), val(b)); return (so.d ? -r : r) || cmpT(nomK(a), nomK(b)); });
     const ex = $('pQ').value.trim() ? porCodigo($('pQ').value) : null;   // escaneado: el producto exacto va primero
     if (ex) { const i = l.indexOf(ex); if (i > 0) { l.splice(i, 1); l.unshift(ex); } else if (i < 0 && (!cat || ex.c === cat)) l.unshift(ex); }
@@ -2248,8 +2250,10 @@ function invProductos(){
     $('pBody').innerHTML = l.slice(0, lim).map((p) => { const s = stockDe(p.id);
       return '<tr class="click" data-id="' + h(p.id) + '"><td>' + h(p.id) + (p.b ? '<div class="small muted">' + h(p.b) + '</div>' : '') + '</td><td><div class="pcell">' + thumb(p, 'sm') + '<div>' + h(p.n) + '<div class="small muted">' + h([p.m, p.c].filter(Boolean).join(' · ')) + '</div></div></div></td>' +
         '<td class="center etqcel" data-noab="1"><label class="etqchk"><input type="checkbox" data-ek="' + h(p.id) + '"' + (SELETQ.has(p.id) ? ' checked' : '') + '></label><input class="mini etqq" data-eq="' + h(p.id) + '" inputmode="numeric" value="' + (SELETQ.has(p.id) ? SELETQ.get(p.id) : '') + '" placeholder="0"></td>' +
-        '<td class="n"><span class="stockchip ' + (s <= 0 ? 'no' : (Number(p.mi) && s <= Number(p.mi) ? 'lo' : '')) + '">' + numf(s) + '</span></td><td class="n">' + money(p.pv) + '</td>' + (puede('prod') ? '<td class="n">' + (Number(p.co) ? money(p.co) : '—') + '</td>' : '') + '</tr>'; }).join('') ||
-      '<tr><td colspan="6" class="center muted">Sin resultados</td></tr>';
+        '<td class="n"><span class="stockchip ' + (s <= 0 ? 'no' : (Number(p.mi) && s <= Number(p.mi) ? 'lo' : '')) + '">' + numf(s) + '</span></td><td class="n">' + money(p.pv) + '</td>' + (puede('prod') ? '<td class="n">' + (Number(p.co) ? money4(p.co) : '—') + '</td>' +
+          '<td class="n" data-noab="1"><input class="mini ivain' + (ivaP(p) !== Number(cfg().iva) ? ' ivaotro' : '') + '" data-iv="' + h(p.id) + '" inputmode="decimal" value="' + numf(ivaP(p)) + '" title="IVA del producto: escribe 0, 5, 15…"></td>' +
+          '<td class="n"><b>' + (Number(p.co) ? money4((Number(p.co) || 0) * (1 + ivaP(p) / 100)) : '—') + '</b></td>' : '') + '</tr>'; }).join('') ||
+      '<tr><td colspan="9" class="center muted">Sin resultados</td></tr>';
     $('pMas').classList.toggle('hide', l.length <= lim);
   };
   let t; $('pQ').oninput = () => { clearTimeout(t); t = setTimeout(() => { lim = 150; filtrar(); }, 150); };
@@ -2285,6 +2289,15 @@ function invProductos(){
       const ck = e.target.closest('td').querySelector('[data-ek]'); ck.checked = v > 0; e.target.value = v > 0 ? v : ''; guardaSel(); }
   });
   pintaEtqBar();
+  // IVA editable desde la tabla (0, 5, 15…): se guarda en el producto
+  $('pBody').addEventListener('change', async (e) => {
+    const id = e.target.dataset.iv; if (!id) return; const p = S.prod.get(id); if (!p) return;
+    const v = parseFloat(String(e.target.value).replace(',', '.').replace('%', ''));
+    if (isNaN(v) || v < 0 || v > 100) { e.target.value = numf(ivaP(p)); return toast('Escribe un IVA válido (por ejemplo 0, 5 o 15).', true); }
+    if (v === ivaP(p)) return;
+    await put('prod', Object.assign({}, p, { iva: v }));
+    toast('IVA de ' + p.n + ': ' + numf(v) + '%'); setTimeout(filtrar, 50);
+  });
   $('pScan').onclick = () => escanear((code) => {
     const p = porCodigo(code);
     if (p) { setTimeout(() => editarProducto(p), 50); return { msg: p.n }; }
@@ -2420,6 +2433,8 @@ function kardex(p){
 }
 
 /* ---------- Conteo físico con escáner ---------- */
+const ivaP = (p) => (p.iva == null || p.iva === '' ? Number(cfg().iva) : Number(p.iva)) || 0;
+const money4 = (n) => { const v = Number(n) || 0; return '$' + (Math.abs(v) < 1 && Math.round(v * 100) !== v * 100 ? v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '.00') : v.toFixed(2)); };
 const SELETQ = new Map((() => { try { return ls.get('selEtq', []) || []; } catch (e) { return []; } })());
 function conteoActual(){ return ls.get('conteo', null); }
 /** Excel del conteo en formato tabla con colores (si no se puede cargar ExcelJS, sale el Excel simple) */
