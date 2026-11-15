@@ -489,6 +489,9 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .pedck{display:flex;align-items:center;padding:4px 8px 4px 0;cursor:pointer}.pedck input{width:22px;height:22px;accent-color:#B4233C;cursor:pointer}
 .mini.ivain{width:64px;text-align:center;background:#FDEBD0;border-color:#E9B872;font-weight:700}.mini.ivain.ivaotro{background:#E7EEFF;border-color:#9DB3FF;color:#1F3A93}
 #pHead th.n{min-width:84px}
+.respaviso{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:0;background:#1E4FD8;color:#fff;font:inherit;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;animation:latido 1.6s infinite}
+.respaviso svg{width:18px;height:18px}
+@media (max-width:760px){.respaviso{bottom:150px}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -547,7 +550,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-11b';
+const APP_VER = '2026-11-15a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3204,7 +3207,7 @@ function pgAjustes(){
   $('view').innerHTML = '<div class="pagehead"><h2>Ajustes</h2></div><div class="stack">' +
     '<div class="card stack"><h3>Etiquetas de código de barras</h3><p class="small muted" style="margin:0">Medida, impresora, márgenes y diseño de las etiquetas. Es una sola configuración para todos los productos y se guarda en la nube para todos los equipos.</p>' +
       '<button class="btn c3d ca" style="align-self:flex-start" onclick="imprimirEtiquetas([], \'Configuración de etiquetas\', { config: true })">' + ic('barcode') + 'Configurar etiquetas</button></div>' +
-    tarjetaImpresoras() + tarjetaEstacion() +
+    tarjetaRespaldo() + tarjetaImpresoras() + tarjetaEstacion() +
     '<div class="card stack"><h3>Nube (Google)</h3>' +
     '<p class="small muted" style="margin:0">Con la nube conectada, todos los teléfonos y la PC comparten productos, stock, ventas y compras. Sin internet la app sigue funcionando y envía los datos al reconectarse.</p>' +
     '<div class="row"><span class="badge ' + (M.nube ? (syncError ? 'warn' : 'ok') : '') + '">' + (M.nube ? (syncError ? 'Error: ' + h(syncError) : 'Conectada') : 'No conectada') + '</span><span class="small muted">' + M.pend.size + ' cambios por enviar' + (ult ? ' · última sincronización ' + fechaTxt(fechaISO(new Date(ult))) + ' ' + horaTxt(ult) : '') + '</span></div>' +
@@ -3247,16 +3250,106 @@ function pgAjustes(){
     descargar(new Blob([JSON.stringify(o)], { type: 'application/json' }), 'respaldo-pos-mass-' + hoyISO() + '.json'); };
   if ($('ajRest')) $('ajRest').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { const o = JSON.parse(await f.text()); if (!o.datos) throw new Error('Archivo no válido');
-      if (!(await confirmar('Se agregarán/actualizarán los datos del respaldo del ' + String(o.fecha).slice(0, 10) + '. ¿Continuar?', 'Restaurar'))) return;
-      for (const t of TABLAS) if (Array.isArray(o.datos[t]) && o.datos[t].length) await putMuchos(t, o.datos[t]);
-      toast('Respaldo restaurado'); render(); } catch (err) { toast('No se pudo restaurar: ' + err.message, true); }
+    e.target.value = ''; await restaurarRespaldo(await f.text());
   };
   if ($('ajBorrar')) $('ajBorrar').onclick = async () => {
     if (!(await confirmar(M.pend.size ? 'Hay ' + M.pend.size + ' cambios que aún no llegan a la nube y se perderán. ¿Borrar igual?' : 'Se borrarán los datos guardados en este equipo (la nube no se toca). ¿Continuar?', 'Borrar', true))) return;
     idb.close(); indexedDB.deleteDatabase('posmassmf'); Object.keys(localStorage).filter((k) => k.startsWith('posmass.')).forEach((k) => localStorage.removeItem(k)); location.hash = ''; location.reload();
   };
-  activarTarjetaImpresoras(); activarTarjetaEstacion();
+  activarTarjetaRespaldo(); activarTarjetaImpresoras(); activarTarjetaEstacion();
+}
+
+/* =====================================================================
+   RESPALDO AUTOMÁTICO DIARIO EN UNA CARPETA DE LA PC (Chrome / Edge)
+   Se guarda siempre con el mismo nombre: POS_MASS_MF_respaldo.json
+   (el del día anterior queda como POS_MASS_MF_respaldo_anterior.json)
+   ===================================================================== */
+const RESP_NOM = 'POS_MASS_MF_respaldo.json', RESP_ANT = 'POS_MASS_MF_respaldo_anterior.json';
+const hayCarpetas = () => 'showDirectoryPicker' in window;
+const textoRespaldo = () => { const o = { app: 'POS MASS MF', ver: APP_VER, fecha: new Date().toISOString(), equipo: ls.get('equipoNom', ''), datos: {} }; TABLAS.forEach((t) => { o.datos[t] = Array.from(S[t].values()); }); return JSON.stringify(o); };
+async function permisoCarpeta(dir, pedir){
+  const op = { mode: 'readwrite' };
+  try { if ((await dir.queryPermission(op)) === 'granted') return true; if (!pedir) return false; return (await dir.requestPermission(op)) === 'granted'; } catch (e) { return false; }
+}
+/** pedir=true solo cuando viene de un toque del usuario (el navegador pide permiso) */
+async function hacerRespaldo(pedir){
+  const dir = await metaGet('respDir', null); if (!dir) return 'sin-carpeta';
+  if (!(await permisoCarpeta(dir, pedir))) return 'sin-permiso';
+  if (!S.prod.size && !S.vta.size) return 'vacio';   // nunca pisar un respaldo bueno con datos vacíos
+  try { const prev = await (await dir.getFileHandle(RESP_NOM)).getFile();
+    const w0 = await (await dir.getFileHandle(RESP_ANT, { create: true })).createWritable(); await w0.write(await prev.arrayBuffer()); await w0.close(); } catch (e) {}
+  const w = await (await dir.getFileHandle(RESP_NOM, { create: true })).createWritable(); await w.write(textoRespaldo()); await w.close();
+  ls.set('respUlt', Date.now()); pintarAvisoResp(false);
+  return 'ok';
+}
+let avisoResp = null;
+function pintarAvisoResp(mostrar){
+  if (!mostrar) { if (avisoResp) { avisoResp.remove(); avisoResp = null; } return; }
+  if (avisoResp) return;
+  avisoResp = document.createElement('button'); avisoResp.type = 'button'; avisoResp.className = 'respaviso';
+  avisoResp.innerHTML = ic('download') + '<span>Toca para guardar el <b>respaldo de hoy</b></span>';
+  avisoResp.onclick = async () => { const r = await hacerRespaldo(true); if (r === 'ok') toast('Respaldo de hoy guardado ✓'); else if (r === 'sin-permiso') toast('El navegador no dio permiso para la carpeta.', true); };
+  document.body.appendChild(avisoResp);
+}
+async function revisarRespaldo(){
+  if (!hayCarpetas() || !USR) return;
+  const dir = await metaGet('respDir', null); if (!dir) return;
+  const ult = ls.get('respUlt', 0);
+  if (ult && fechaISO(new Date(ult)) === hoyISO()) return;   // ya se hizo hoy
+  const r = await hacerRespaldo(false);
+  if (r === 'sin-permiso') pintarAvisoResp(true);
+}
+function iniciarRespaldoAuto(){ if (!hayCarpetas()) return; setTimeout(revisarRespaldo, 60000); setInterval(revisarRespaldo, 30 * 60000); }
+
+async function restaurarRespaldo(texto){
+  try {
+    const o = JSON.parse(texto); if (!o || !o.datos) throw new Error('Archivo no válido');
+    const n = (t) => (Array.isArray(o.datos[t]) ? o.datos[t].length : 0);
+    if (!(await confirmar('Respaldo del ' + fechaTxt(String(o.fecha).slice(0, 10)) + ' ' + horaTxt(Date.parse(o.fecha)) + ' (versión ' + (o.ver || '?') + '): ' + n('prod') + ' productos, ' + n('vta') + ' documentos, ' + n('com') + ' compras, ' + n('cli') + ' clientes. ' +
+      'Se recuperarán estos datos y se volverán a subir a la nube. Lo que se haya creado después del respaldo no se borra. ¿Restaurar?', 'Restaurar'))) return false;
+    for (const t of TABLAS) if (Array.isArray(o.datos[t]) && o.datos[t].length) for (let i = 0; i < o.datos[t].length; i += 500) await putMuchos(t, o.datos[t].slice(i, i + 500));
+    toast('Respaldo restaurado ✓ Sincronizando con la nube…'); sincronizar(); render(); return true;
+  } catch (err) { toast('No se pudo restaurar: ' + err.message, true); return false; }
+}
+
+function tarjetaRespaldo(){
+  if (!esAdmin()) return '';
+  return '<div class="card stack" id="respCard"><h3>' + ic('download') + ' Respaldo automático diario</h3>' +
+    (hayCarpetas() ? '<p class="small muted" style="margin:0">Una vez al día la app guarda una copia de <b>todos los datos</b> en una carpeta de esta PC, siempre con el mismo nombre: <b>' + RESP_NOM + '</b>. La copia del día anterior queda como <b>' + RESP_ANT + '</b>. ' +
+        'Crea antes la carpeta, por ejemplo <b>C:\\Respaldos POS MASS</b>, y elígela aquí. Windows no deja usar directamente C:\\ ni carpetas del sistema.</p>' +
+        '<div class="note" id="respEst"></div>' +
+        '<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn c3d cb" id="respDir">' + ic('upload') + 'Elegir carpeta</button><button class="btn c3d cv" id="respYa">' + ic('download') + 'Respaldar ahora</button>' +
+        '<button class="btn" id="respRest">' + ic('rotate') + 'Restaurar desde la carpeta</button></div>'
+      : '<div class="note">El respaldo automático en una carpeta funciona en la <b>PC con Google Chrome o Microsoft Edge</b>. En este equipo usa “Descargar respaldo” de abajo.</div>') + '</div>';
+}
+async function activarTarjetaRespaldo(){
+  if (!$('respCard') || !hayCarpetas()) return;
+  const est = async () => { const dir = await metaGet('respDir', null); const ult = ls.get('respUlt', 0); const ok = dir && await permisoCarpeta(dir, false);
+    $('respEst').innerHTML = dir ? 'Carpeta: <b>' + h(dir.name) + '</b>' + (ok ? ' ✓' : ' · <span style="color:var(--warn-fg)">falta dar permiso (toca “Respaldar ahora”)</span>') + '<br>Último respaldo: <b>' + (ult ? fechaTxt(fechaISO(new Date(ult))) + ' ' + horaTxt(ult) : 'todavía ninguno') + '</b>'
+      : '<span style="color:var(--warn-fg)">Aún no has elegido la carpeta del respaldo.</span>'; };
+  est();
+  $('respDir').onclick = async () => {
+    try { const dir = await window.showDirectoryPicker({ id: 'posResp', mode: 'readwrite', startIn: 'documents' });
+      await metaSet('respDir', dir); const r = await hacerRespaldo(true);
+      toast(r === 'ok' ? 'Carpeta lista y primer respaldo guardado ✓' : 'Carpeta guardada'); est();
+    } catch (e) { if (e && e.name !== 'AbortError') toast('No se pudo usar esa carpeta: ' + e.message + '. Prueba con una carpeta creada por ti dentro de C:\\', true); }
+  };
+  $('respYa').onclick = async () => { const r = await hacerRespaldo(true);
+    toast(r === 'ok' ? 'Respaldo guardado ✓' : r === 'sin-carpeta' ? 'Primero elige la carpeta.' : r === 'vacio' ? 'No hay datos para respaldar todavía.' : 'El navegador no dio permiso para la carpeta.', r !== 'ok'); est(); };
+  $('respRest').onclick = async () => {
+    const dir = await metaGet('respDir', null);
+    if (!dir) return toast('Primero elige la carpeta del respaldo.', true);
+    if (!(await permisoCarpeta(dir, true))) return toast('El navegador no dio permiso para la carpeta.', true);
+    const info = async (nom) => { try { const f = await (await dir.getFileHandle(nom)).getFile(); return f; } catch (e) { return null; } };
+    const a = await info(RESP_NOM), b = await info(RESP_ANT);
+    if (!a && !b) return toast('No hay respaldos en esa carpeta.', true);
+    const fh = (f) => fechaTxt(fechaISO(new Date(f.lastModified))) + ' ' + horaTxt(f.lastModified) + ' · ' + (f.size / 1048576).toFixed(1) + ' MB';
+    const m = modal({ title: 'Restaurar respaldo', body: '<p style="margin-top:0">Elige qué copia quieres recuperar:</p><div class="stack">' +
+      (a ? '<button class="btn c3d cv" data-r="a">' + ic('rotate') + 'Respaldo más reciente · ' + fh(a) + '</button>' : '') +
+      (b ? '<button class="btn" data-r="b">' + ic('rotate') + 'Respaldo anterior · ' + fh(b) + '</button>' : '') + '</div>',
+      foot: '<button class="btn" data-x>Cancelar</button>' });
+    m.b.onclick = async (e) => { const x = e.target.closest('[data-r]'); if (!x) return; m.close(); await restaurarRespaldo(await (x.dataset.r === 'a' ? a : b).text()); };
+  };
 }
 
 /* =====================================================================
@@ -5557,6 +5650,7 @@ document.addEventListener('datos-nube', () => {
 
 // estación de impresión de etiquetas (si esta PC está marcada como estación)
 setTimeout(() => { try { iniciarEstacion(); } catch (e) {} }, 3000);
+setTimeout(() => { try { iniciarRespaldoAuto(); } catch (e) {} }, 5000);
 
 </script>
 </body>
