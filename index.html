@@ -808,6 +808,8 @@ const cfg = () => Object.assign({ id: 'emp', nombre: 'MASS FERRETERÍA', ruc: ''
 /* ---------- Stock: compras − ventas ± ajustes ---------- */
 let STOCK = new Map();
 function stockDe(id){ if (dirtyStock) calcStock(); return STOCK.get(id) || 0; }
+/** Unidades separadas por pedidos del Catálogo MASS pendientes (siguen físicamente en la tienda y en Anfibus) */
+function separadoCat(id){ let t = 0; S.vta.forEach((v) => { if (!v._d && !v.an && v.tp === 'P' && v.cat && !v.cv) (v.it || []).forEach((x) => { if (x.p === id) t += Number(x.q) || 0; }); }); return r2(t); }
 function calcStock(){
   const st = new Map(); const add = (id, q) => st.set(id, r2((st.get(id) || 0) + q));
   S.mov.forEach((m) => { if (!m._d) add(m.p, Number(m.q) || 0); });
@@ -2622,7 +2624,7 @@ function invConteo(){
     return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0, ivaDe(p), Number(p.pv) || 0, C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0, r2((C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0) / (1 + ivaDe(p) / 100))]; }));
   $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, pvps: C.pv || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
   $('ctApl').onclick = async () => {
-    const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id)) })).filter((x) => x.d);
+    const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id) - separadoCat(id)) })).filter((x) => x.d);
     if (!C.ord.length) return toast('No hay productos contados.', true);
     const cos = Object.keys(C.co || {}).filter((id) => S.prod.get(id)); const pvs = Object.keys(C.pv || {}).filter((id) => S.prod.get(id));
     if (!(await confirmar((difs.length ? 'Se guardarán ' + difs.length + ' ajustes de stock. Los productos no contados no cambian.' : 'Todo cuadra: no hay diferencias de stock.') + (cos.length ? ' Se actualizará el costo de ' + cos.length + ' producto(s).' : '') + (pvs.length ? ' Se actualizará el PVP de ' + pvs.length + ' producto(s).' : '') + ' ¿Aplicar?', 'Aplicar'))) return;
@@ -3651,7 +3653,7 @@ async function importarProductos(file){
       if (!existe || o.pre) { if (!isNaN(x.pv)) p.pv = r2(o.conIva || !p.iva ? x.pv : x.pv * (1 + p.iva / 100)); if (!isNaN(x.co)) p.co = Number(x.co.toFixed(4)); }
       if (!isNaN(x.mi)) p.mi = x.mi;
       p._d = 0; delete p._h; recs.push(p); if (existe) act++; else nuevos++;
-      if (o.st && !isNaN(x.st)) { const d = r2(x.st - (existe ? stockDe(x.id) : 0)); if (d) movs.push({ id: uid('mv') + i, p: x.id, q: d, tp: 'ajuste', mot: 'Importación Excel ' + file.name.slice(0, 40), f: hoyISO(), ts: Date.now(), v: USR.id }); }
+      if (o.st && !isNaN(x.st)) { const d = r2(x.st - (existe ? stockDe(x.id) + separadoCat(x.id) : 0)); if (d) movs.push({ id: uid('mv') + i, p: x.id, q: d, tp: 'ajuste', mot: 'Importación Excel ' + file.name.slice(0, 40), f: hoyISO(), ts: Date.now(), v: USR.id }); }
     });
     if (recs.length) await putMuchos('prod', recs);
     if (movs.length) await putMuchos('mov', movs);
