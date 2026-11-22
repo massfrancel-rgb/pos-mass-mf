@@ -812,7 +812,8 @@ function calcStock(){
   const st = new Map(); const add = (id, q) => st.set(id, r2((st.get(id) || 0) + q));
   S.mov.forEach((m) => { if (!m._d) add(m.p, Number(m.q) || 0); });
   S.com.forEach((c) => { if (!c._d && !c.an) (c.it || []).forEach((x) => add(x.p, Number(x.q) || 0)); });
-  S.vta.forEach((v) => { if (!v._d && !v.an && v.tp !== 'P') (v.it || []).forEach((x) => add(x.p, -(Number(x.q) || 0))); });
+  // los pedidos del Catálogo MASS pendientes separan stock (al facturarlos lo descuenta la factura)
+  S.vta.forEach((v) => { if (!v._d && !v.an && (v.tp !== 'P' || (v.cat && !v.cv))) (v.it || []).forEach((x) => add(x.p, -(Number(x.q) || 0))); });
   STOCK = st; dirtyStock = false;
 }
 
@@ -925,6 +926,14 @@ function pintarSync(){
   dot.className = 'dot ' + c; txt.textContent = t;
   const sn = $('syncNow'); if (sn) sn.classList.toggle('run', !!syncEnCurso);
 }
+/** Avisa cuando llegan pedidos nuevos del Catálogo MASS */
+document.addEventListener('datos-nube', () => {
+  const vistos = new Set(ls.get('catVistos', []));
+  const nuevos = vivos('vta').filter((v) => v.tp === 'P' && v.cat && !v.cv && !v.an && !vistos.has(v.id));
+  if (!nuevos.length) return;
+  nuevos.forEach((v) => vistos.add(v.id)); ls.set('catVistos', Array.from(vistos).slice(-500));
+  toast('🛒 ' + (nuevos.length === 1 ? 'Pedido nuevo del Catálogo MASS: ' + nuevos[0].num + ' · ' + nomCli(nuevos[0]) + ' · ' + money(nuevos[0].tot) : nuevos.length + ' pedidos nuevos del Catálogo MASS') + '. Verifica la transferencia en Documentos → Pedidos.');
+});
 window.addEventListener('online', () => programarSync(300));
 window.addEventListener('offline', () => { syncError = 'Sin internet'; pintarSync(); });
 setInterval(() => { if (document.visibilityState === 'visible' && M.nube && navigator.onLine) sincronizar(); }, 45000);
@@ -938,7 +947,7 @@ const PERMISOS = { compras: 'Registrar compras', inv: 'Inventario y conteos', pr
 const esAdmin = () => !!(USR && USR.rol === 'admin');
 const puede = (p) => esAdmin() || !!(USR && USR.perm && USR.perm[p]);
 const iniciales = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-const nomVend = (id) => { const v = S.vend.get(id); return v ? v.nombre : '—'; };
+const nomVend = (id) => { if (id === 'catalogo') return 'Catálogo MASS'; const v = S.vend.get(id); return v ? v.nombre : '—'; };
 const nomCli = (v) => (v.cli && v.cli.nombre) || CONSUMIDOR.nombre;
 
 /* =====================================================================
@@ -1369,12 +1378,14 @@ const guardarCart = () => ls.set('carrito', CART);
 
 /** Cantidad total de un producto en el carrito (puede estar en varias líneas) */
 const totalEnCarrito = (pid) => CART.it.filter((y) => y.p === pid).reduce((t, y) => t + (Number(y.q) || 0), 0);
+/** Lo que el pedido del catálogo que se está facturando ya tenía separado de este producto */
+const reservaPed = (pid) => { const pd = CART.pedId && S.vta.get(CART.pedId); return pd && pd.cat && !pd.cv && !pd.an && !pd._d ? (pd.it || []).filter((x) => x.p === pid).reduce((t, x) => t + (Number(x.q) || 0), 0) : 0; };
 /** Aviso cuando se pide más de lo que hay (solo si no se permite vender sin stock) */
 /** No deja poner más de lo que hay en stock: ajusta la cantidad y avisa con un recuadro.
     (Al editar un pedido guardado no se limita, porque el pedido puede esperar mercadería.) */
 function avisoStock(pid, linea){
   if (cfg().sinStock || CART.editId) return false;
-  const s = Math.max(0, stockDe(pid)), q = totalEnCarrito(pid);
+  const s = Math.max(0, stockDe(pid) + reservaPed(pid)), q = totalEnCarrito(pid);
   if (q <= s) return false;
   let exceso = r2(q - s);
   const lineas = linea ? [linea].concat(CART.it.filter((y) => y.p === pid && y !== linea)) : CART.it.filter((y) => y.p === pid);
@@ -1634,7 +1645,7 @@ function abrirCobro(){
     try { cli = await guardarClienteVenta(cli); } catch (e) { return toast(e.message, true); }
     if (tp !== 'P' && !cfg().sinStock) {
       const ids = Array.from(new Set(CART.it.map((x) => x.p)));
-      const falta = ids.filter((id) => totalEnCarrito(id) > stockDe(id)).map((id) => { const x = CART.it.find((y) => y.p === id); return x.n + ' (pides ' + numf(totalEnCarrito(id)) + ', hay ' + numf(Math.max(0, stockDe(id))) + ')'; });
+      const falta = ids.filter((id) => totalEnCarrito(id) > stockDe(id) + reservaPed(id)).map((id) => { const x = CART.it.find((y) => y.p === id); return x.n + ' (pides ' + numf(totalEnCarrito(id)) + ', hay ' + numf(Math.max(0, stockDe(id) + reservaPed(id))) + ')'; });
       if (falta.length) return alerta('No hay stock suficiente', 'No se puede ' + (tp === 'F' ? 'facturar' : 'hacer la nota de venta') + ' porque falta stock de:<br><b>' + falta.map(h).join('<br>') + '</b><br><br>Baja la cantidad, o guárdalo como <b>Pedido</b> si el cliente espera la mercadería.');
     }
     m.q('#cOk').disabled = true; m.q('#cOkP').disabled = true;
@@ -1717,6 +1728,7 @@ const enRango = (f, F) => f >= F.desde && f <= F.hasta;
 function estadoDoc(v){
   if (v.an) return '<span class="badge warn">Anulado</span>';
   if (v.tp === 'C') return '<span class="badge warn">Devolución</span>';
+  if (v.tp === 'P' && v.cat && !v.cv) return '<span class="badge gold">🛒 Catálogo · verificar transferencia</span>';
   if (v.tp === 'P') return v.cv ? '<span class="badge ok">Facturado ' + h(v.cvNum || '') + '</span>' : '<span class="badge gold">Pendiente</span>';
   const s = saldo(v); if (s > 0) return '<span class="badge info">Por cobrar ' + money(s) + '</span>';
   return '';
