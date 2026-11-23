@@ -539,6 +539,22 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .cr{--c1:#EF5350;--c2:#C62828;--c3:#7F1414}.cy{--c1:#F7D774;--c2:#E0A820;--c3:#9A6E00}
 .btn.c3d.cy{color:#3B2A00 !important;text-shadow:none}
 @media (max-width:760px){.pedpago{grid-template-columns:1fr 1fr}.pedbtns{grid-template-columns:1fr}.pcas{flex:1 1 140px}}
+.pedbar .pbtop{flex-wrap:nowrap}
+.pbsearch{flex:1 1 auto;position:relative;display:flex;align-items:center;min-width:0}
+.pbsearch > svg{position:absolute;left:12px;width:20px;height:20px;color:#8A6A1E;pointer-events:none}
+.pbsearch .in{padding-left:42px;padding-right:40px;min-height:46px;font-size:16px;font-weight:600;border:2px solid #E0B75A;background:#fff}
+.pbsearch .in:focus{border-color:#C98A12;box-shadow:0 0 0 3px rgba(201,138,18,.2)}
+.pbsearch #pbBusX{position:absolute;right:4px;min-height:36px;width:36px;z-index:2}
+.pbsearch .micwrap{flex:1 1 auto;display:flex;gap:6px;align-items:center;min-width:0}.pbsearch .micwrap .in{flex:1 1 auto;width:auto}.pbsearch .micwrap .micbtn{min-height:46px;width:48px}
+.pbsearch:has(.micwrap) #pbBusX{right:58px}
+#pbDyn{width:100%;display:flex;flex-direction:column;gap:8px}#pbDyn .pedrow + .pedrow{border-top:1px dashed rgba(120,90,20,.35);padding-top:8px}
+.pedbar .pbtop{width:100%}
+.pbres{font-size:13px;white-space:nowrap;color:#6B5418}
+.pedbar .pbcrear{min-height:46px;padding:0 18px;font-size:15px;white-space:nowrap}
+.pedbar .pbcrear:disabled{opacity:.55;filter:grayscale(.4)}
+.pedbar .pbsel select,.pedbar .pbvb select{width:auto;min-height:38px;flex:1 1 240px;max-width:420px}
+.pedbar .pbsel .pedcnt{min-width:200px}
+@media (max-width:760px){.pedbar #pbTodos{white-space:normal;height:auto;padding:8px 10px;width:100%}.pedbar .pbtop{flex-wrap:wrap}.pbsearch{flex-basis:100%}.pedbar .pbcrear{flex:1}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -597,7 +613,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23b';
+const APP_VER = '2026-11-23c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4759,6 +4775,7 @@ Object.assign(REP, {
    PEDIDOS A PROVEEDORES (no son compras: no mueven stock)
    Se arman desde el reporte "Stock bajo y agotados" o a mano.
    ===================================================================== */
+let SBQ = '';                      // búsqueda en el reporte Stock bajo
 const SELPED = new Map();          // productos marcados en el reporte: id -> { pr, q }
 
 /** Mapa producto → último proveedor que lo vendió (se calcula una vez por reporte) */
@@ -4830,27 +4847,52 @@ Object.assign(REP, {
         // proveedores presentes en la lista (para marcar en bloque)
         const cuenta = new Map(); lista.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
         const conProv = lista.filter((x) => x.pr).length;
+        // búsqueda por código, código de barras o nombre (filtra las filas sin volver a dibujar)
+        const textoDe = (x) => norm(x.p.id + ' ' + x.p.n + ' ' + (x.p.b || '') + ' ' + (x.p.b2 || ''));
+        const coincide = (x) => { const q = norm(SBQ); if (!q) return true; const t = textoDe(x); return q.split(' ').every((w) => t.includes(w)); };
+        const visibles = () => lista.filter(coincide);
         const marcar = (pr) => {
           let n = 0;
-          lista.forEach((x) => { if (!x.pr || (pr !== '*' && x.pr !== pr) || SELPED.has(x.p.id)) return; SELPED.set(x.p.id, { pr: x.pr, q: sugerido(x.p, x.s, vend.get(x.p.id) || 0) }); n++; });
+          visibles().forEach((x) => { if (!x.pr || (pr !== '*' && x.pr !== pr) || SELPED.has(x.p.id)) return; SELPED.set(x.p.id, { pr: x.pr, q: sugerido(x.p, x.s, vend.get(x.p.id) || 0) }); n++; });
           toast(n ? '✓ ' + n + (n === 1 ? ' producto marcado' : ' productos marcados') : 'Ya estaban marcados.'); render();
         };
+        bar.innerHTML = '<div class="pedrow pbtop"><div class="pbsearch">' + ic('search') + '<input class="in" id="pbBus" type="search" autocomplete="off" placeholder="Buscar producto por código o nombre…" value="' + h(SBQ) + '"><button type="button" class="btn sm ghost icon" id="pbBusX" title="Borrar búsqueda">' + ic('x') + '</button></div>' +
+          '<span class="pbres" id="pbRes"></span><button class="btn c3d co pbcrear" id="pbCrear">' + ic('clip') + '<span>Crear pedido</span></button></div><div id="pbDyn"></div>';
+        const dyn = qs('#pbDyn', bar), inpB = qs('#pbBus', bar);
+        const filtrar = () => {
+          const ok = new Set(visibles().map((x) => x.p.id)); let nv = 0;
+          qsa('tbody tr', out).forEach((tr) => { const c = tr.querySelector('[data-ck]'); if (!c) return; const v = ok.has(c.dataset.ck); tr.style.display = v ? '' : 'none'; if (v) nv++; });
+          qs('#pbRes', bar).innerHTML = SBQ.trim() ? '<b>' + nv + '</b> de ' + lista.length : lista.length + ' productos';
+          qs('#pbBusX', bar).style.visibility = SBQ ? 'visible' : 'hidden';
+          return nv;
+        };
+        let tB = 0;
+        inpB.oninput = () => { SBQ = inpB.value; clearTimeout(tB); tB = setTimeout(() => { filtrar(); pintaBar(); }, 120); };
+        inpB.onkeydown = (e) => { if (e.key === 'Escape') { inpB.value = ''; SBQ = ''; filtrar(); pintaBar(); return; }
+          if (e.key !== 'Enter') return; e.preventDefault(); SBQ = inpB.value; filtrar(); pintaBar();
+          const vis = qsa('tbody tr', out).filter((tr) => tr.style.display !== 'none' && tr.querySelector('[data-ck]'));
+          if (vis.length === 1) { const c = vis[0].querySelector('[data-ck]'); if (!c.checked) { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); }
+            const qi = vis[0].querySelector('[data-q]'); if (qi) { qi.focus(); qi.select(); } } };
+        qs('#pbBusX', bar).onclick = () => { inpB.value = ''; SBQ = ''; filtrar(); pintaBar(); inpB.focus(); };
+        qs('#pbCrear', bar).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
         const pintaBar = () => {
           const n = SELPED.size; const sinProv = Array.from(SELPED.values()).filter((s) => !s.pr).length;
           const provs = new Set(Array.from(SELPED.values()).map((s) => s.pr).filter(Boolean));
-          bar.innerHTML = '<div class="pedrow"><span class="pedcnt"><b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') + '</span>' +
-            '<span class="spacer"></span>' + (n ? '<select class="in" id="pbProv" style="width:auto;min-height:36px"><option value="">Cambiar proveedor a todos…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
-            '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button><button class="btn sm c3d co" id="pbCrear">' + ic('clip') + 'Crear pedido</button>' : '') + '</div>' +
-            (conProv ? '<div class="pedrow"><span class="small" style="font-weight:700">' + ic('check') + 'Visto bueno rápido:</span>' +
+          const vis = visibles(); const conProv = vis.filter((x) => x.pr).length;
+          const cuenta = new Map(); vis.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
+          const bc = qs('#pbCrear', bar); bc.disabled = !n; qs('span', bc).textContent = 'Crear pedido' + (n ? ' (' + n + ')' : '');
+          dyn.innerHTML = '<div class="pedrow pbsel"><span class="pedcnt"><b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') + '</span>' +
+            (n ? '<select class="in" id="pbProv"><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
+              '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button>' : '<span class="small muted">Marca la casilla de cada producto, o usa el visto bueno rápido.</span>') + '</div>' +
+            (conProv ? '<div class="pedrow pbvb"><span class="small" style="font-weight:700">' + ic('check') + 'Visto bueno rápido' + (SBQ.trim() ? ' (en la búsqueda)' : '') + ':</span>' +
               '<button class="btn sm c3d cv" id="pbTodos">Marcar todos los que tienen proveedor (' + conProv + ')</button>' +
-              '<select class="in" id="pbUno" style="width:auto;min-height:36px;flex:1 1 220px"><option value="">Marcar solo los de un proveedor…</option>' +
+              '<select class="in" id="pbUno"><option value="">Marcar solo los de un proveedor…</option>' +
               Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select></div>' : '');
-          if (qs('#pbTodos', bar)) qs('#pbTodos', bar).onclick = () => marcar('*');
-          if (qs('#pbUno', bar)) qs('#pbUno', bar).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
+          if (qs('#pbTodos', dyn)) qs('#pbTodos', dyn).onclick = () => marcar('*');
+          if (qs('#pbUno', dyn)) qs('#pbUno', dyn).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
           if (!n) return;
-          qs('#pbProv', bar).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
-          qs('#pbLimp', bar).onclick = () => { SELPED.clear(); render(); };
-          qs('#pbCrear', bar).onclick = crearPedidosDesdeSeleccion;
+          qs('#pbProv', dyn).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
+          qs('#pbLimp', dyn).onclick = () => { SELPED.clear(); render(); };
         };
         // tocar el proveedor de una fila sin marcar: aparece la lista para elegirlo
         out.onclick = (e) => { const b = e.target.closest('[data-elp]'); if (!b) return; e.stopPropagation(); const id = b.dataset.elp; const x = lista.find((y) => y.p.id === id);
@@ -4870,7 +4912,7 @@ Object.assign(REP, {
             pintaBar(); return; }
           const sq = e.target.closest('[data-q]'); if (sq) { const s = SELPED.get(sq.dataset.q); if (s) s.q = Math.max(0, parseFloat(String(sq.value).replace(',', '.')) || 0); }
         };
-        pintaBar();
+        filtrar(); pintaBar();
       } };
   }
 });
