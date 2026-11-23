@@ -555,6 +555,19 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .pedbar .pbsel select,.pedbar .pbvb select{width:auto;min-height:38px;flex:1 1 240px;max-width:420px}
 .pedbar .pbsel .pedcnt{min-width:200px}
 @media (max-width:760px){.pedbar #pbTodos{white-space:normal;height:auto;padding:8px 10px;width:100%}.pedbar .pbtop{flex-wrap:wrap}.pbsearch{flex-basis:100%}.pedbar .pbcrear{flex:1}}
+.pbordrow{display:flex;align-items:stretch;gap:12px;margin:0 0 10px;flex-wrap:wrap}.pbordrow .ordbar{margin:0;flex:1 1 520px}
+.pbcount{display:flex;align-items:center;gap:10px;padding:6px 14px;border-radius:12px;border:2px solid #C9A24A;background:#FFF8E6;min-width:190px;margin-bottom:8px}
+.pbordrow .pbcount{margin-bottom:0}
+.pbcount b{font-size:28px;line-height:1;color:#8A5A00;font-variant-numeric:tabular-nums}
+.pbcount span{display:flex;flex-direction:column;font-weight:800;font-size:13px;text-transform:uppercase;color:#5B4210}
+.pbcount small{font-weight:600;text-transform:none;font-size:11.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbcount.busq{background:#E3F6EA;border-color:#1F9D55}.pbcount.busq b{color:#18794E}
+.pbcount.cero{background:#FDECEC;border-color:#E5484D}.pbcount.cero b{color:#B42318}
+.pbmarc{display:flex;align-items:center;gap:8px;padding:4px 12px;border-radius:10px;border:1.5px solid #E0C477;background:#fff;min-width:150px}
+.pbmarc b{font-size:22px;line-height:1;color:#8A6A1E}.pbmarc span{display:flex;flex-direction:column;font-weight:800;font-size:12px;text-transform:uppercase}
+.pbmarc small{font-weight:600;text-transform:none;font-size:11px;color:var(--muted)}
+.pbmarc.on{border-color:#E08A32;background:#FFF1E0}.pbmarc.on b{color:#C2560C}
+.pedbar .pbsel .grow{flex:1 1 200px}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -613,7 +626,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23c';
+const APP_VER = '2026-11-23d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4857,12 +4870,18 @@ Object.assign(REP, {
           toast(n ? '✓ ' + n + (n === 1 ? ' producto marcado' : ' productos marcados') : 'Ya estaban marcados.'); render();
         };
         bar.innerHTML = '<div class="pedrow pbtop"><div class="pbsearch">' + ic('search') + '<input class="in" id="pbBus" type="search" autocomplete="off" placeholder="Buscar producto por código o nombre…" value="' + h(SBQ) + '"><button type="button" class="btn sm ghost icon" id="pbBusX" title="Borrar búsqueda">' + ic('x') + '</button></div>' +
-          '<span class="pbres" id="pbRes"></span><button class="btn c3d co pbcrear" id="pbCrear">' + ic('clip') + '<span>Crear pedido</span></button></div><div id="pbDyn"></div>';
+          '</div><div id="pbDyn"></div>';
+        // recuadro con el número de ítems encontrados, junto a "Ordenar por"
+        const cajaN = document.createElement('div'); cajaN.className = 'pbcount'; cajaN.id = 'pbCount';
+        const ob = qs('.ordbar', out), tw = qs('.tblwrap', out);
+        if (ob) { const fila = document.createElement('div'); fila.className = 'pbordrow noprint'; ob.parentNode.insertBefore(fila, ob); fila.appendChild(cajaN); fila.appendChild(ob); }
+        else if (tw) tw.parentNode.insertBefore(cajaN, tw);
         const dyn = qs('#pbDyn', bar), inpB = qs('#pbBus', bar);
         const filtrar = () => {
           const ok = new Set(visibles().map((x) => x.p.id)); let nv = 0;
           qsa('tbody tr', out).forEach((tr) => { const c = tr.querySelector('[data-ck]'); if (!c) return; const v = ok.has(c.dataset.ck); tr.style.display = v ? '' : 'none'; if (v) nv++; });
-          qs('#pbRes', bar).innerHTML = SBQ.trim() ? '<b>' + nv + '</b> de ' + lista.length : lista.length + ' productos';
+          cajaN.className = 'pbcount' + (SBQ.trim() ? (nv ? ' busq' : ' cero') : '');
+          cajaN.innerHTML = '<b>' + numf(nv) + '</b><span>' + (SBQ.trim() ? (nv === 1 ? 'ítem encontrado' : 'ítems encontrados') + '<small>con “' + h(SBQ.trim().slice(0, 30)) + '” · de ' + numf(lista.length) + '</small>' : 'ítems en la lista<small>escribe arriba para buscar</small>') + '</span>';
           qs('#pbBusX', bar).style.visibility = SBQ ? 'visible' : 'hidden';
           return nv;
         };
@@ -4874,20 +4893,20 @@ Object.assign(REP, {
           if (vis.length === 1) { const c = vis[0].querySelector('[data-ck]'); if (!c.checked) { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); }
             const qi = vis[0].querySelector('[data-q]'); if (qi) { qi.focus(); qi.select(); } } };
         qs('#pbBusX', bar).onclick = () => { inpB.value = ''; SBQ = ''; filtrar(); pintaBar(); inpB.focus(); };
-        qs('#pbCrear', bar).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
         const pintaBar = () => {
           const n = SELPED.size; const sinProv = Array.from(SELPED.values()).filter((s) => !s.pr).length;
           const provs = new Set(Array.from(SELPED.values()).map((s) => s.pr).filter(Boolean));
           const vis = visibles(); const conProv = vis.filter((x) => x.pr).length;
           const cuenta = new Map(); vis.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
-          const bc = qs('#pbCrear', bar); bc.disabled = !n; qs('span', bc).textContent = 'Crear pedido' + (n ? ' (' + n + ')' : '');
-          dyn.innerHTML = '<div class="pedrow pbsel"><span class="pedcnt"><b>' + n + '</b>&nbsp;marcados' + (n ? ' · ' + provs.size + ' proveedor(es)' + (sinProv ? ' · <span style="color:var(--warn-fg)">' + sinProv + ' sin proveedor</span>' : '') : '') + '</span>' +
+          dyn.innerHTML = '<div class="pedrow pbsel"><div class="pbmarc' + (n ? ' on' : '') + '"><b>' + n + '</b><span>' + (n === 1 ? 'marcado' : 'marcados') + '<small>' + (n ? provs.size + ' proveedor(es)' + (sinProv ? ' · ' + sinProv + ' sin proveedor' : '') : 'marca las casillas') + '</small></span></div>' +
             (n ? '<select class="in" id="pbProv"><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
-              '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button>' : '<span class="small muted">Marca la casilla de cada producto, o usa el visto bueno rápido.</span>') + '</div>' +
+              '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button>' : '<span class="small muted grow">Marca la casilla de cada producto, o usa el visto bueno rápido de abajo.</span>') +
+            '<span class="spacer"></span><button class="btn c3d co pbcrear" id="pbCrear"' + (n ? '' : ' disabled') + '>' + ic('clip') + 'Crear pedido' + (n ? ' (' + n + ')' : '') + '</button></div>' +
             (conProv ? '<div class="pedrow pbvb"><span class="small" style="font-weight:700">' + ic('check') + 'Visto bueno rápido' + (SBQ.trim() ? ' (en la búsqueda)' : '') + ':</span>' +
               '<button class="btn sm c3d cv" id="pbTodos">Marcar todos los que tienen proveedor (' + conProv + ')</button>' +
               '<select class="in" id="pbUno"><option value="">Marcar solo los de un proveedor…</option>' +
               Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select></div>' : '');
+          qs('#pbCrear', dyn).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
           if (qs('#pbTodos', dyn)) qs('#pbTodos', dyn).onclick = () => marcar('*');
           if (qs('#pbUno', dyn)) qs('#pbUno', dyn).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
           if (!n) return;
