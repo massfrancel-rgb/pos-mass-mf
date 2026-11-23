@@ -2231,9 +2231,10 @@ function pgInventario(){
   let tab = prm.get('t') || ls.get('invTab', 'prod');
   if (tab === 'conteo' && !puede('inv')) tab = 'prod';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + '<button class="btn sm c3d ca" id="iEtq">' + ic('barcode') + 'Etiquetas</button>' + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + '<button class="btn sm c3d ca" id="iEtq">' + ic('barcode') + 'Etiquetas</button>' + (puede('prod') ? '<button class="btn sm c3d cb" id="iFr">⚡ Fotos rápidas</button>' : '') + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
     '<div class="tabs" id="iTabs"><button data-t="prod">Productos y stock</button>' + (puede('inv') ? '<button data-t="conteo">Conteo con escáner</button><button data-t="mov">Ajustes de stock</button>' : '') + '</div><div id="iBody"></div>';
   if ($('iNuevo')) $('iNuevo').onclick = () => editarProducto(null);
+  if ($('iFr')) $('iFr').onclick = fotosRapidas;
   $('iEtq').onclick = () => imprimirEtiquetas([]);
   const go = (t) => { tab = t; ls.set('invTab', t); qsa('#iTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
     if (t === 'prod') invProductos(); else if (t === 'conteo') invConteo(); else invMovs(); };
@@ -2414,7 +2415,7 @@ function editarProducto(p, pre, onDone){
   if (m.q('#epScan')) m.q('#epScan').onclick = () => escanear((code) => { const otro = porCodigo(code); if (otro && otro.id !== p.id) return { ok: false, msg: 'Ese código ya es de: ' + otro.n }; m.q('#epB').value = code; return { msg: 'Código ' + code }; });
   if (m.q('#epFile')) m.q('#epFile').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
-    try { const d = await comprimirFoto(f); await put('foto', { id: p.id, d }); m.close(); if (RUTA === 'inv') render(); editarProducto(S.prod.get(p.id)); toast('Foto guardada. Se verá en todos los equipos.'); }
+    try { await guardarFotoProducto(p.id, f); m.close(); if (RUTA === 'inv') render(); editarProducto(S.prod.get(p.id)); toast('Foto guardada. Se verá en todos los equipos.'); }
     catch (err) { toast(err.message, true); }
   };
   if (m.q('#epFotoX')) m.q('#epFotoX').onclick = async () => { await put('foto', { id: p.id, d: '', _d: 1 }); m.close(); if (RUTA === 'inv') render(); editarProducto(S.prod.get(p.id)); toast('Foto quitada'); };
@@ -3499,7 +3500,10 @@ function pgExcel(){
       'Si no se puede conectar, descarga el <b>catalogo.json</b> de tu repositorio catalogo-mass y elígelo con el segundo botón.</p>' +
       '<div class="row"><button class="btn c3d cb" id="xFotos">' + ic('download') + 'Actualizar fotos del Catálogo MASS</button><label class="btn">' + ic('upload') + 'Elegir catalogo.json<input type="file" id="xFotosF" accept=".json,application/json" hidden></label></div>' +
       '<p class="small" id="xFotosInfo" style="margin:0"></p></div>' +
-    (adm ? '<div class="card stack"><h3>Catálogo MASS (clientes)</h3><p class="small muted" style="margin:0">Genera el archivo catalogo.json con los productos y precios de esta app, para subirlo al repositorio de tu Catálogo MASS y que los clientes vean los mismos precios.</p><button class="btn" id="xCat" style="align-self:flex-start">' + ic('download') + 'Generar catalogo.json</button></div>' : '') + '</div>';
+    (adm ? '<div class="card stack" style="border:2px solid #c99a2e"><h3>' + ic('upload') + ' Publicar en el Catálogo MASS (clientes)</h3><p class="small muted" style="margin:0">Envía al Catálogo MASS los <b>productos, precios, categorías y fotos nuevas</b> de este POS, con un solo toque. Se conservan las descripciones, cuentas para transferir y textos del catálogo. El stock que ven los clientes ya sale en vivo del POS.</p>' +
+      '<div class="row"><button class="btn c3d cv" id="xPub">' + ic('upload') + 'Publicar en el Catálogo MASS</button><button class="btn" id="xTok">' + (ls.get('ghToken', '') ? '🔑 Llave de GitHub ✓' : '🔑 Poner llave de GitHub') + '</button>' +
+      '<span class="small muted">' + (ls.get('fotosPub', []).length ? ls.get('fotosPub', []).length + ' fotos por publicar' : '') + (ls.get('ultPubCat', 0) ? ' · última publicación ' + fechaTxt(fechaISO(new Date(ls.get('ultPubCat', 0)))) + ' ' + horaTxt(ls.get('ultPubCat', 0)) : '') + '</span></div>' +
+      '<details><summary class="small">Opción manual: descargar catalogo.json</summary><button class="btn" id="xCat" style="margin-top:8px">' + ic('download') + 'Generar catalogo.json</button></details></div>' : '') + '</div>';
   if ($('xProd')) $('xProd').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarProductos(f); };
   if ($('xPlant')) $('xPlant').onclick = () => exportarFilas('Plantilla productos', ['Código', 'Código de barras', 'Descripción', 'Marca', 'Categoría', 'Unidad', 'Costo', 'PVP', 'IVA', 'Stock', 'Mínimo'], [['11103', '7861234567890', 'KALIPEGA 500 CC PLASTIGAMA', 'PLASTIGAMA', 'Plomería', 'UND', 8.5, 11.95, 'SI', 10, 2]]);
   $('xCli').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importarTerceros(f, 'cli'); };
@@ -3507,6 +3511,8 @@ function pgExcel(){
   $('xTodo').onclick = exportarTodo;
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
+  if ($('xPub')) $('xPub').onclick = publicarCatalogo;
+  if ($('xTok')) $('xTok').onclick = async () => { await llaveGitHub(); render(); };
   if ($('xBId')) {
     const vacios = () => vivos('prod').filter((p) => !String(p.b || '').trim());
     $('xBIdInfo').textContent = numf(vacios().length) + ' productos sin código de barras';
@@ -3579,6 +3585,180 @@ async function exportarCatalogo(){
   toast('catalogo.json descargado' + (fotos.length ? ' (con ' + fotos.length + ' fotos)' : '') + '. Súbelo a tu repositorio catalogo-mass.');
 }
 
+/* =====================================================================
+   FOTOS RÁPIDAS y PUBLICAR EN EL CATÁLOGO MASS (todo desde el POS)
+   ===================================================================== */
+const GH_REPO = 'MassFrancel-RGB/catalogo-mass';
+/** Copias de 800 px de las fotos subidas en ESTE equipo (para el catálogo). En la nube va la versión liviana. */
+const fotoHQ = {
+  db: null,
+  abrir(){ if (this.db) return Promise.resolve(this.db); return new Promise((res, rej) => { const r = indexedDB.open('posmass-fotoshq', 1); r.onupgradeneeded = () => r.result.createObjectStore('f'); r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error); }); },
+  async op(modo, fn){ const db = await this.abrir(); return new Promise((res, rej) => { const tx = db.transaction('f', modo); const q = fn(tx.objectStore('f')); tx.oncomplete = () => res(q ? q.result : undefined); tx.onerror = () => rej(tx.error); }); },
+  put(id, blob){ return this.op('readwrite', (s) => s.put(blob, String(id))); },
+  get(id){ return this.op('readonly', (s) => s.get(String(id))); },
+  del(id){ return this.op('readwrite', (s) => s.delete(String(id))); }
+};
+/** Foto de 800 px (igual que el Catálogo MASS) */
+function fotoGrande(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 800 / Math.max(img.width, img.height)); const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); c.toBlob((b) => (b ? res(b) : rej(new Error('No se pudo preparar la foto.'))), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen.')); };
+    img.src = url;
+  });
+}
+/** Guarda la foto de un producto: liviana en la nube (todos los equipos) + grande en este equipo + pendiente de publicar */
+async function guardarFotoProducto(id, file){
+  const d = await comprimirFoto(file);
+  let hq = null; try { hq = await fotoGrande(file); } catch (e) {}
+  await put('foto', { id, d });
+  if (hq) { try { await fotoHQ.put(id, hq); } catch (e) {} }
+  const pend = new Set(ls.get('fotosPub', [])); pend.add(String(id)); ls.set('fotosPub', Array.from(pend));
+}
+const tieneFoto = (id) => FOTOS.has(String(id)) || !!fotoPropia(id);
+
+/** Fotos rápidas: recorre los productos sin foto; pegas la imagen (Ctrl + V) y pasa al siguiente */
+function fotosRapidas(){
+  const salt = new Set(ls.get('frSalt', []));
+  let cat = ls.get('frCat', ''), conSalt = false, i = 0, lista = [], ocupado = false;
+  const cats = Array.from(new Set(vivos('prod').map((p) => p.c || '').filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const armar = () => {
+    lista = vivos('prod').filter((p) => !esFilaBasura(p.id, p.n) && !tieneFoto(p.id) && (!cat || (p.c || '') === cat) && (conSalt || !salt.has(p.id)))
+      .sort((a, b) => a.n.localeCompare(b.n));
+    if (i >= lista.length) i = Math.max(0, lista.length - 1);
+  };
+  const pegar = (e) => { const it = Array.from((e.clipboardData && e.clipboardData.items) || []).find((x) => x.type && x.type.startsWith('image/')); if (it) { e.preventDefault(); usar(it.getAsFile()); } };
+  document.addEventListener('paste', pegar);
+  const m = modal({ title: 'Fotos rápidas', wide: true, sticky: true, body: '<div id="frB"></div>', onClose: () => { document.removeEventListener('paste', pegar); if (RUTA === 'inv') render(); } });
+  const usar = async (file) => {
+    const p = lista[i]; if (!p || !file || ocupado) return;
+    ocupado = true; const z = m.q('#frZona'); if (z) z.innerHTML = '<b>Guardando foto…</b>';
+    try { await guardarFotoProducto(p.id, file); salt.delete(p.id); ls.set('frSalt', Array.from(salt)); toast('✓ Foto guardada: ' + p.n); armar(); pintar(); }
+    catch (e) { toast(e.message || 'No se pudo guardar la foto', true); pintar(); }
+    finally { ocupado = false; }
+  };
+  const pintar = () => {
+    const p = lista[i];
+    const pend = ls.get('fotosPub', []).length;
+    m.q('#frB').innerHTML =
+      '<div class="row" style="flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px">' +
+        '<span class="badge gold">' + (lista.length ? (i + 1) + ' de ' + lista.length : '0 sin foto') + '</span>' +
+        '<select class="in" id="frCat" style="max-width:260px"><option value="">Todas las categorías</option>' + cats.map((c) => '<option' + (c === cat ? ' selected' : '') + '>' + h(c) + '</option>').join('') + '</select>' +
+        '<label class="chk"><input type="checkbox" id="frSal"' + (conSalt ? ' checked' : '') + '> Incluir los que salté (' + salt.size + ')</label>' +
+        (pend ? '<span class="badge info">' + pend + ' fotos por publicar en el catálogo</span>' : '') +
+      '</div>' +
+      (p ? '<div class="card" style="margin:0 0 10px;padding:12px 14px;background:var(--gold-soft,#f6ecd2)"><div class="small"><b>' + h((p.m || '').toUpperCase()) + '</b> · Cód. ' + h(p.id) + (p.c ? ' · ' + h(p.c) : '') + '</div><div style="font-size:19px;font-weight:800;margin-top:4px">' + h(p.n) + '</div></div>' +
+        '<div class="row" style="gap:8px;margin-bottom:10px"><button class="btn c3d cv grow" id="frG">' + ic('search') + 'Buscar en Google Imágenes</button><button class="btn" id="frCp">' + ic('copy') + 'Copiar nombre</button></div>' +
+        '<div id="frZona" style="border:2.5px dashed #c99a2e;border-radius:14px;min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:16px;background:#fbf6e9">' +
+          '<b style="font-size:19px">Pega aquí la imagen (Ctrl + V)</b><span class="small muted" style="margin-top:6px">En Google: clic derecho sobre la imagen → <b>Copiar imagen</b>. Vuelve aquí y presiona Ctrl + V.<br>También puedes arrastrar un archivo.</span></div>' +
+        '<div class="row" style="gap:8px;margin-top:10px"><button class="btn" id="frAnt"' + (i ? '' : ' disabled') + '>‹ Anterior</button><label class="btn grow" style="justify-content:center">' + ic('upload') + 'Elegir archivo<input type="file" id="frFile" accept="image/*" hidden></label><button class="btn pri" id="frSig">Saltar ›</button></div>' +
+        '<p class="small muted" style="margin:10px 0 0">La foto se guarda en el POS (todos los equipos y Compra Proveedores). Para que la vean los clientes usa <b>Excel → Publicar en el Catálogo MASS</b>.</p>'
+      : '<div class="note ok">' + (cat ? 'No quedan productos sin foto en esta categoría.' : '¡Todos los productos tienen foto!') + '</div>');
+    m.q('#frCat').onchange = (e) => { cat = e.target.value; ls.set('frCat', cat); i = 0; armar(); pintar(); };
+    m.q('#frSal').onchange = (e) => { conSalt = e.target.checked; i = 0; armar(); pintar(); };
+    if (!p) return;
+    m.q('#frG').onclick = () => window.open('https://www.google.com/search?tbm=isch&q=' + encodeURIComponent((p.n + ' ' + (p.m || '')).trim()), '_blank', 'noopener');
+    m.q('#frCp').onclick = async () => { try { await navigator.clipboard.writeText(p.n); toast('Nombre copiado'); } catch (e) { toast('No se pudo copiar', true); } };
+    m.q('#frFile').onchange = (e) => usar(e.target.files[0]);
+    m.q('#frAnt').onclick = () => { if (i > 0) { i--; pintar(); } };
+    m.q('#frSig').onclick = () => { salt.add(p.id); ls.set('frSalt', Array.from(salt)); if (conSalt) i = Math.min(i + 1, lista.length - 1); armar(); pintar(); };
+    const z = m.q('#frZona');
+    z.ondragover = (e) => { e.preventDefault(); z.style.background = '#f3e3b5'; };
+    z.ondragleave = () => { z.style.background = '#fbf6e9'; };
+    z.ondrop = (e) => { e.preventDefault(); z.style.background = '#fbf6e9'; const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) usar(f); };
+  };
+  armar(); pintar();
+}
+
+/* ---------- Publicar en el Catálogo MASS (GitHub → Vercel) ---------- */
+async function gh(ruta, opt){
+  const tok = ls.get('ghToken', '');
+  if (!tok) throw new Error('Falta la llave de GitHub.');
+  opt = opt || {};
+  const r = await fetch('https://api.github.com/repos/' + GH_REPO + ruta, Object.assign({}, opt, {
+    headers: Object.assign({ Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' }, opt.headers || {}) }));
+  if (r.status === 401) throw new Error('La llave de GitHub no es válida o ya venció. Crea una nueva.');
+  if (r.status === 403 || r.status === 404) throw new Error('La llave no tiene permiso de escritura en el repositorio catalogo-mass.');
+  if (!r.ok) throw new Error('GitHub respondió con error ' + r.status + '.');
+  return r;
+}
+async function llaveGitHub(){
+  const v = await pedirTexto('Llave de GitHub', 'Pega aquí la llave (token) que creaste para el repositorio catalogo-mass. Se guarda solo en este equipo.', ls.get('ghToken', ''));
+  if (v == null) return false;
+  const t = v.trim();
+  if (!t) { ls.del('ghToken'); toast('Llave quitada de este equipo.'); return false; }
+  ls.set('ghToken', t);
+  try { await gh(''); toast('✓ Llave correcta. Ya puedes publicar en el Catálogo MASS.'); return true; }
+  catch (e) { toast(e.message, true); return false; }
+}
+const aBase64 = (blob) => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); });
+
+async function publicarCatalogo(){
+  if (!ls.get('ghToken', '') && !(await llaveGitHub())) return;
+  const m = modal({ title: 'Publicar en el Catálogo MASS', wide: true, sticky: true, body: '<div id="pcB"><p>Revisando el catálogo publicado…</p></div>' });
+  const msg = (t) => { m.q('#pcB').innerHTML = t; };
+  try {
+    const repo = await (await gh('')).json(); const rama = repo.default_branch || 'main';
+    const ref = await (await gh('/git/ref/heads/' + rama)).json(); const base = ref.object.sha;
+    const com = await (await gh('/git/commits/' + base)).json();
+    const actual = await (await gh('/contents/catalogo.json?ref=' + encodeURIComponent(rama), { headers: { Accept: 'application/vnd.github.raw' } })).json();
+    const viejo = {}; (actual.p || []).forEach((x) => { viejo[String(x[0])] = x; });
+    const catViejas = actual.c || [];
+    const ps = vivos('prod').filter((p) => !esFilaBasura(p.id, p.n)).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+    const ids = new Set(ps.map((p) => String(p.id)));
+    const cats = Array.from(new Set(ps.map((p) => p.c || 'Otros'))).sort((a, b) => a.localeCompare(b, 'es'));
+    const prods = ps.map((x) => { const v = viejo[String(x.id)]; return [String(x.id), x.n, x.m || '', r2(Number(x.pv) || 0), cats.indexOf(x.c || 'Otros'), v && v[5] === 1 ? 1 : 0, Math.max(0, r2(stockDe(x.id)))]; });
+    const nuevos = ps.filter((x) => !viejo[String(x.id)]).length;
+    const quitados = Object.keys(viejo).filter((c) => !ids.has(c));
+    const cambiaPrecio = ps.filter((x) => viejo[String(x.id)] && r2(Number(viejo[String(x.id)][3]) || 0) !== r2(Number(x.pv) || 0)).length;
+    const cambiaCat = ps.filter((x) => { const v = viejo[String(x.id)]; return v && (catViejas[v[4]] || 'Otros') !== (x.c || 'Otros'); }).length;
+    const conFotoCat = new Set((actual.f || []).map(String));
+    const pend = new Set(ls.get('fotosPub', []).map(String));
+    const subir = ps.map((x) => String(x.id)).filter((id) => !/[\/\\?#]/.test(id) && fotoPropia(id) && (pend.has(id) || !conFotoCat.has(id)));
+    const fotos = Array.from(new Set([...Array.from(conFotoCat).filter((c) => ids.has(c)), ...subir])).sort();
+    const filtra = (o) => { const r = {}; Object.keys(o || {}).forEach((k) => { if (ids.has(k)) r[k] = o[k]; }); return r; };
+    msg('<div class="stack">' +
+      '<div class="note"><b>' + ps.length + '</b> productos en el POS · el catálogo publicado tiene <b>' + Object.keys(viejo).length + '</b>.</div>' +
+      '<ul style="margin:0;padding-left:20px;line-height:1.7">' +
+        '<li><b>' + nuevos + '</b> productos nuevos</li>' +
+        '<li><b>' + cambiaPrecio + '</b> cambian de precio · <b>' + cambiaCat + '</b> cambian de categoría</li>' +
+        '<li><b>' + subir.length + '</b> fotos nuevas o cambiadas para subir</li>' +
+        '<li><b>' + quitados.length + '</b> productos salen del catálogo (ya no están en el POS)' + (quitados.length ? ': <span class="small">' + h(quitados.slice(0, 12).map((c) => viejo[c][1]).join(' · ')) + (quitados.length > 12 ? ' …' : '') + '</span>' : '') + '</li>' +
+      '</ul>' +
+      '<p class="small muted" style="margin:0">Se conservan las descripciones, especificaciones, cuentas para transferir y textos de la empresa del catálogo. El stock que ven los clientes sigue saliendo en vivo del POS.</p>' +
+      '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-x>Cancelar</button><button class="btn pri" id="pcOk">' + ic('upload') + 'Publicar ahora</button></div></div>');
+    await new Promise((res) => { m.q('#pcOk').onclick = res; });
+    const tree = []; let k = 0;
+    for (const id of subir) {
+      msg('<p>Subiendo fotos… <b>' + (++k) + '</b> de ' + subir.length + '</p>');
+      let blob = null; try { blob = await fotoHQ.get(id); } catch (e) {}
+      const b64 = blob ? await aBase64(blob) : String(fotoPropia(id) || '').split(',')[1];
+      if (!b64) continue;
+      const bl = await (await gh('/git/blobs', { method: 'POST', body: JSON.stringify({ content: b64, encoding: 'base64' }) })).json();
+      tree.push({ path: 'fotos/' + id + '.jpg', mode: '100644', type: 'blob', sha: bl.sha });
+    }
+    msg('<p>Publicando el catálogo…</p>');
+    const nuevo = Object.assign({}, actual, { c: cats, p: prods, d: filtra(actual.d), x: filtra(actual.x), f: fotos, fecha: hoyISO(), ts: Date.now(), pub: 'POS MASS MF' });
+    tree.push({ path: 'catalogo.json', mode: '100644', type: 'blob', content: JSON.stringify(nuevo) });
+    const t = await (await gh('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: com.tree.sha, tree }) })).json();
+    const c = await (await gh('/git/commits', { method: 'POST', body: JSON.stringify({ message: 'Publicado desde POS MASS MF: ' + ps.length + ' productos' + (subir.length ? ', ' + subir.length + ' fotos' : ''), tree: t.sha, parents: [base] }) })).json();
+    await gh('/git/refs/heads/' + rama, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
+    ls.set('fotosPub', Array.from(pend).filter((id) => !subir.includes(id)));
+    usarListaFotos(nuevo, 'publicado desde el POS');
+    ls.set('ultPubCat', Date.now());
+    msg('<div class="note ok"><b>✓ Catálogo publicado.</b> ' + ps.length + ' productos' + (subir.length ? ' y ' + subir.length + ' fotos' : '') + '. En 1 o 2 minutos el Catálogo MASS se actualiza solo.</div>' +
+      '<div class="row" style="justify-content:flex-end"><button class="btn pri" data-x>Listo</button></div>');
+  } catch (e) {
+    msg('<div class="note warn"><b>No se pudo publicar.</b> ' + h(e.message || 'Error de conexión') + '</div><div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="pcLl">Cambiar la llave de GitHub</button><button class="btn pri" data-x>Cerrar</button></div>');
+    const b = m.q('#pcLl'); if (b) b.onclick = () => { m.close(); llaveGitHub(); };
+  }
+}
+
 /* ---------- filas que no son productos (totales "Suman …" de Anfibus) ---------- */
 function esFilaBasura(id, n){ return /^suman\b/i.test(String(id).trim()) || !/[a-zñáéíóú]/i.test(String(n)); }
 async function limpiarBasura(){
@@ -3607,7 +3787,8 @@ async function importarProductos(file){
       '<label class="chk"><input type="checkbox" id="ipDat" checked> Actualizar nombre, marca, categoría y código de barras</label>' +
       '<label class="chk"><input type="checkbox" id="ipPre" checked> Actualizar PVP y costo</label>' +
       '<label class="chk"><input type="checkbox" id="ipConIva" checked> El PVP del archivo ya incluye IVA</label>' +
-      '<label class="chk"><input type="checkbox" id="ipSt"> Poner el stock igual a la cantidad del archivo (crea ajustes de inventario)</label></div>' +
+      '<label class="chk"><input type="checkbox" id="ipSt"> Poner el stock igual a la cantidad del archivo (crea ajustes de inventario)</label>' +
+      '<label class="chk"><input type="checkbox" id="ipQuitar"> Quitar los productos que ya no están en el archivo <span id="ipQn" class="small muted"></span></label></div>' +
       '<div class="note" id="ipPrev" style="margin-top:12px"></div>';
     if (m.q('#ipHoja')) { m.q('#ipHoja').value = hi; m.q('#ipHoja').onchange = (e) => { hi = +e.target.value; det = null; pintar(); }; }
     qsa('[data-k]', m.el).forEach((s) => { s.value = det.map[s.dataset.k] == null ? '' : String(det.map[s.dataset.k]); });
@@ -3631,6 +3812,8 @@ async function importarProductos(file){
   const previa = () => {
     if (det.map.id == null || det.map.n == null) { m.q('#ipPrev').className = 'note warn'; m.q('#ipPrev').textContent = 'Elige las columnas de Código y Nombre.'; return; }
     const l = filasMap(); const nuevos = l.filter((x) => !S.prod.has(x.id) || S.prod.get(x.id)._d).length;
+    const enArch = new Set(l.map((x) => x.id)); const sobran = vivos('prod').filter((p) => !enArch.has(p.id)).length;
+    if (m.q('#ipQn')) m.q('#ipQn').textContent = '(' + sobran + ' productos del POS no vienen en este archivo)';
     m.q('#ipPrev').className = 'note'; m.q('#ipPrev').innerHTML = '<b>' + l.length + '</b> productos en el archivo · <b>' + nuevos + '</b> nuevos · <b>' + (l.length - nuevos) + '</b> ya existen.' +
       (det.map.c == null && l.some((x) => x.c) ? '<br>Categorías tomadas de los títulos del archivo: <b>' + new Set(l.map((x) => x.c).filter(Boolean)).size + '</b>.' : '') +
       (!isNaN(l[0] && l[0].st) ? '<br>Para cargar las existencias marca <b>“Poner el stock igual a la cantidad del archivo”</b>.' : '') +
@@ -3640,7 +3823,18 @@ async function importarProductos(file){
   m.q('#ipOk').onclick = async () => {
     if (det.map.id == null || det.map.n == null) return toast('Elige las columnas de Código y Nombre.', true);
     const l = filasMap(); if (!l.length) return toast('No hay filas para importar.', true);
-    const o = { nw: m.q('#ipNew').checked, dat: m.q('#ipDat').checked, pre: m.q('#ipPre').checked, conIva: m.q('#ipConIva').checked, st: m.q('#ipSt').checked };
+    const o = { nw: m.q('#ipNew').checked, dat: m.q('#ipDat').checked, pre: m.q('#ipPre').checked, conIva: m.q('#ipConIva').checked, st: m.q('#ipSt').checked, quitar: m.q('#ipQuitar').checked };
+    const enArch = new Set(l.map((x) => x.id));
+    const sobran = o.quitar ? vivos('prod').filter((p) => !enArch.has(p.id)).sort((a, b) => a.n.localeCompare(b.n)) : [];
+    if (sobran.length) {
+      const ok = await new Promise((res) => {
+        const q = modal({ title: 'Quitar ' + sobran.length + ' productos', wide: true, body: '<p style="margin-top:0">Estos productos están en el POS pero <b>no vienen en el archivo de Anfibus</b>. Se quitarán del POS, de Compra Proveedores y, al publicar, del Catálogo MASS. Sus ventas y compras anteriores no se borran.</p>' +
+          '<div style="max-height:46vh;overflow:auto;border:1px solid var(--line,#ddd);border-radius:10px;padding:6px 10px">' + sobran.map((p) => '<div class="small" style="padding:3px 0;border-bottom:1px solid #eee"><b>' + h(p.id) + '</b> · ' + h(p.n) + ' · stock ' + numf(stockDe(p.id)) + '</div>').join('') + '</div>',
+          foot: '<button class="btn" data-x>No quitar</button><button class="btn danger" id="qOk">Quitar ' + sobran.length + ' productos</button>', onClose: () => res(false) });
+        q.q('#qOk').onclick = () => { q.el.remove(); res(true); };
+      });
+      if (!ok) o.quitar = false;
+    }
     m.q('#ipOk').disabled = true; m.q('#ipOk').textContent = 'Importando…';
     const ivaDef = cfg().iva; const recs = []; const movs = []; let nuevos = 0, act = 0;
     const ivaDe = (v, prev) => { if (v === undefined || v === '') return prev == null ? ivaDef : prev; const s = norm(v); if (/^(no|n|0|0%|exento|false)$/.test(s)) return 0; if (/^(si|s|x|true)$/.test(s)) return ivaDef; let n = parseFloat(s); if (isNaN(n)) return ivaDef; if (n > 0 && n < 1) n = r2(n * 100); return n <= 0 ? 0 : (TASAS_IVA().includes(n) ? n : ivaDef); };
@@ -3657,7 +3851,9 @@ async function importarProductos(file){
     });
     if (recs.length) await putMuchos('prod', recs);
     if (movs.length) await putMuchos('mov', movs);
-    m.close(); toast(nuevos + ' nuevos, ' + act + ' actualizados' + (movs.length ? ', ' + movs.length + ' ajustes de stock' : '') + '.'); render();
+    const quitar = o.quitar ? sobran.map((p) => Object.assign({}, p, { _d: 1 })) : [];
+    if (quitar.length) await putMuchos('prod', quitar);
+    m.close(); toast(nuevos + ' nuevos, ' + act + ' actualizados' + (movs.length ? ', ' + movs.length + ' ajustes de stock' : '') + (quitar.length ? ', ' + quitar.length + ' quitados' : '') + '. Recuerda: Excel → Publicar en el Catálogo MASS.'); render();
   };
 }
 
