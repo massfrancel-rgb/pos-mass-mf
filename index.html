@@ -568,6 +568,14 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .pbmarc small{font-weight:600;text-transform:none;font-size:11px;color:var(--muted)}
 .pbmarc.on{border-color:#E08A32;background:#FFF1E0}.pbmarc.on b{color:#C2560C}
 .pedbar .pbsel .grow{flex:1 1 200px}
+.pbhead{display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;justify-content:center;flex-wrap:nowrap}
+.pbhead .btn{min-height:40px;white-space:nowrap;font-size:13.5px;padding:0 12px}.pbhead select{width:auto;flex:0 1 230px;min-width:170px;min-height:40px;font-size:14px}
+.pbhead .btn:disabled,.pbkpi .btn:disabled,.pbkpi select:disabled,.pbhead select:disabled{opacity:.5;filter:grayscale(.4)}
+.pbkrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.pbkrow .kpis{margin-bottom:0 !important;flex:0 1 auto;grid-template-columns:repeat(2,minmax(160px,190px))}
+.pbkpi{display:flex;align-items:center;gap:10px;flex:1 1 420px;flex-wrap:wrap}.pbkpi select{flex:1 1 280px;max-width:420px;min-height:44px}.pbkpi .btn{min-height:44px}
+.pbordrow .pbmarc{margin:0}
+@media (max-width:1100px){.pbhead{flex-wrap:wrap}}
+@media (max-width:760px){.pbhead{flex-basis:100%;justify-content:stretch}.pbhead > *{flex:1 1 100%;max-width:none}.pbkrow .kpis{flex-basis:100%;grid-template-columns:1fr 1fr}.pbkpi > *{flex:1 1 100%;max-width:none}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -626,7 +634,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23d';
+const APP_VER = '2026-11-23e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4870,13 +4878,21 @@ Object.assign(REP, {
           toast(n ? '✓ ' + n + (n === 1 ? ' producto marcado' : ' productos marcados') : 'Ya estaban marcados.'); render();
         };
         bar.innerHTML = '<div class="pedrow pbtop"><div class="pbsearch">' + ic('search') + '<input class="in" id="pbBus" type="search" autocomplete="off" placeholder="Buscar producto por código o nombre…" value="' + h(SBQ) + '"><button type="button" class="btn sm ghost icon" id="pbBusX" title="Borrar búsqueda">' + ic('x') + '</button></div>' +
-          '</div><div id="pbDyn"></div>';
+          '</div>';
         // recuadro con el número de ítems encontrados, junto a "Ordenar por"
         const cajaN = document.createElement('div'); cajaN.className = 'pbcount'; cajaN.id = 'pbCount';
         const ob = qs('.ordbar', out), tw = qs('.tblwrap', out);
-        if (ob) { const fila = document.createElement('div'); fila.className = 'pbordrow noprint'; ob.parentNode.insertBefore(fila, ob); fila.appendChild(cajaN); fila.appendChild(ob); }
-        else if (tw) tw.parentNode.insertBefore(cajaN, tw);
-        const dyn = qs('#pbDyn', bar), inpB = qs('#pbBus', bar);
+        const cajaM = document.createElement('div'); cajaM.className = 'pbmarc'; cajaM.id = 'pbMarc';
+        { const fila = document.createElement('div'); fila.className = 'pbordrow noprint'; fila.appendChild(cajaN); fila.appendChild(cajaM);
+          if (ob) { ob.parentNode.insertBefore(fila, ob); fila.appendChild(ob); } else if (tw) tw.parentNode.insertBefore(fila, tw); }
+        // arriba, junto a Excel / Imprimir: visto bueno rápido y Crear pedido
+        const ph = qs('.pagehead', $('view')); const viejo = $('pbHead'); if (viejo) viejo.remove();
+        const head = document.createElement('div'); head.id = 'pbHead'; head.className = 'pbhead noprint';
+        if (ph) ph.insertBefore(head, ph.children[1] || null); else bar.appendChild(head);
+        // junto a los recuadros Agotados / Bajo el mínimo: acciones sobre lo marcado
+        const kp = qs('.kpis', out); const kpi = document.createElement('div'); kpi.className = 'pbkpi noprint';
+        if (kp) { const fk = document.createElement('div'); fk.className = 'pbkrow'; kp.parentNode.insertBefore(fk, kp); fk.appendChild(kp); fk.appendChild(kpi); } else bar.appendChild(kpi);
+        const inpB = qs('#pbBus', bar);
         const filtrar = () => {
           const ok = new Set(visibles().map((x) => x.p.id)); let nv = 0;
           qsa('tbody tr', out).forEach((tr) => { const c = tr.querySelector('[data-ck]'); if (!c) return; const v = ok.has(c.dataset.ck); tr.style.display = v ? '' : 'none'; if (v) nv++; });
@@ -4898,20 +4914,19 @@ Object.assign(REP, {
           const provs = new Set(Array.from(SELPED.values()).map((s) => s.pr).filter(Boolean));
           const vis = visibles(); const conProv = vis.filter((x) => x.pr).length;
           const cuenta = new Map(); vis.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
-          dyn.innerHTML = '<div class="pedrow pbsel"><div class="pbmarc' + (n ? ' on' : '') + '"><b>' + n + '</b><span>' + (n === 1 ? 'marcado' : 'marcados') + '<small>' + (n ? provs.size + ' proveedor(es)' + (sinProv ? ' · ' + sinProv + ' sin proveedor' : '') : 'marca las casillas') + '</small></span></div>' +
-            (n ? '<select class="in" id="pbProv"><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
-              '<button class="btn sm" id="pbLimp">' + ic('x') + 'Desmarcar todo</button>' : '<span class="small muted grow">Marca la casilla de cada producto, o usa el visto bueno rápido de abajo.</span>') +
-            '<span class="spacer"></span><button class="btn c3d co pbcrear" id="pbCrear"' + (n ? '' : ' disabled') + '>' + ic('clip') + 'Crear pedido' + (n ? ' (' + n + ')' : '') + '</button></div>' +
-            (conProv ? '<div class="pedrow pbvb"><span class="small" style="font-weight:700">' + ic('check') + 'Visto bueno rápido' + (SBQ.trim() ? ' (en la búsqueda)' : '') + ':</span>' +
-              '<button class="btn sm c3d cv" id="pbTodos">Marcar todos los que tienen proveedor (' + conProv + ')</button>' +
-              '<select class="in" id="pbUno"><option value="">Marcar solo los de un proveedor…</option>' +
-              Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select></div>' : '');
-          qs('#pbCrear', dyn).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
-          if (qs('#pbTodos', dyn)) qs('#pbTodos', dyn).onclick = () => marcar('*');
-          if (qs('#pbUno', dyn)) qs('#pbUno', dyn).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
-          if (!n) return;
-          qs('#pbProv', dyn).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
-          qs('#pbLimp', dyn).onclick = () => { SELPED.clear(); render(); };
+          cajaM.className = 'pbmarc' + (n ? ' on' : '');
+          cajaM.innerHTML = '<b>' + n + '</b><span>' + (n === 1 ? 'marcado' : 'marcados') + '<small>' + (n ? provs.size + ' proveedor(es)' + (sinProv ? ' · ' + sinProv + ' sin proveedor' : '') : 'marca las casillas') + '</small></span>';
+          head.innerHTML = '<button class="btn c3d cv" id="pbTodos"' + (conProv ? '' : ' disabled') + ' title="Visto bueno rápido: marca todos los productos que ya tienen proveedor' + (SBQ.trim() ? ' (solo los de la búsqueda)' : '') + '">' + ic('check') + 'Marcar todos con proveedor (' + conProv + ')</button>' +
+            '<select class="in" id="pbUno"' + (conProv ? '' : ' disabled') + ' title="Visto bueno rápido por proveedor"><option value="">✓ Marcar solo los de un proveedor…</option>' +
+            Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select>' +
+            '<button class="btn c3d co" id="pbCrear"' + (n ? '' : ' disabled') + '>' + ic('clip') + 'Crear pedido' + (n ? ' (' + n + ')' : '') + '</button>';
+          kpi.innerHTML = '<select class="in" id="pbProv"' + (n ? '' : ' disabled') + '><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
+            '<button class="btn" id="pbLimp"' + (n ? '' : ' disabled') + '>' + ic('x') + 'Desmarcar todo</button>';
+          qs('#pbCrear', head).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
+          qs('#pbTodos', head).onclick = () => marcar('*');
+          qs('#pbUno', head).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
+          qs('#pbProv', kpi).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
+          qs('#pbLimp', kpi).onclick = () => { SELPED.clear(); render(); };
         };
         // tocar el proveedor de una fila sin marcar: aparece la lista para elegirlo
         out.onclick = (e) => { const b = e.target.closest('[data-elp]'); if (!b) return; e.stopPropagation(); const id = b.dataset.elp; const x = lista.find((y) => y.p.id === id);
