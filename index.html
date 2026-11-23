@@ -3710,13 +3710,17 @@ async function publicarCatalogo(){
     const viejo = {}; (actual.p || []).forEach((x) => { viejo[String(x[0])] = x; });
     const catViejas = actual.c || [];
     const ps = vivos('prod').filter((p) => !esFilaBasura(p.id, p.n)).sort((a, b) => a.n.localeCompare(b.n, 'es'));
+    // categoría a publicar: si el POS no tiene una real ("Sin categoria", vacío, "Otros…"), se conserva la del catálogo
+    const sinCat = (c) => !c || /^(sin\s*categor|otros?\b)/i.test(norm(c));
+    const catDe = (x) => { const v = viejo[String(x.id)]; const vc = v ? catViejas[v[4]] : ''; return sinCat(x.c) ? (vc || 'Otros') : x.c; };
     const ids = new Set(ps.map((p) => String(p.id)));
-    const cats = Array.from(new Set(ps.map((p) => p.c || 'Otros'))).sort((a, b) => a.localeCompare(b, 'es'));
-    const prods = ps.map((x) => { const v = viejo[String(x.id)]; return [String(x.id), x.n, x.m || '', r2(Number(x.pv) || 0), cats.indexOf(x.c || 'Otros'), v && v[5] === 1 ? 1 : 0, Math.max(0, r2(stockDe(x.id)))]; });
+    const cats = Array.from(new Set(ps.map(catDe))).sort((a, b) => a.localeCompare(b, 'es'));
+    const prods = ps.map((x) => { const v = viejo[String(x.id)]; return [String(x.id), x.n, x.m || '', r2(Number(x.pv) || 0), cats.indexOf(catDe(x)), v && v[5] === 1 ? 1 : 0, Math.max(0, r2(stockDe(x.id)))]; });
     const nuevos = ps.filter((x) => !viejo[String(x.id)]).length;
     const quitados = Object.keys(viejo).filter((c) => !ids.has(c));
+    const nomQ = (c) => String(viejo[c][1] || '').trim() || '(fila vacía, cód. ' + c + ')';
     const cambiaPrecio = ps.filter((x) => viejo[String(x.id)] && r2(Number(viejo[String(x.id)][3]) || 0) !== r2(Number(x.pv) || 0)).length;
-    const cambiaCat = ps.filter((x) => { const v = viejo[String(x.id)]; return v && (catViejas[v[4]] || 'Otros') !== (x.c || 'Otros'); }).length;
+    const cambiaCat = ps.filter((x) => { const v = viejo[String(x.id)]; return v && (catViejas[v[4]] || 'Otros') !== catDe(x); }).length;
     const conFotoCat = new Set((actual.f || []).map(String));
     const pend = new Set(ls.get('fotosPub', []).map(String));
     const subir = ps.map((x) => String(x.id)).filter((id) => !/[\/\\?#]/.test(id) && fotoPropia(id) && (pend.has(id) || !conFotoCat.has(id)));
@@ -3726,9 +3730,9 @@ async function publicarCatalogo(){
       '<div class="note"><b>' + ps.length + '</b> productos en el POS · el catálogo publicado tiene <b>' + Object.keys(viejo).length + '</b>.</div>' +
       '<ul style="margin:0;padding-left:20px;line-height:1.7">' +
         '<li><b>' + nuevos + '</b> productos nuevos</li>' +
-        '<li><b>' + cambiaPrecio + '</b> cambian de precio · <b>' + cambiaCat + '</b> cambian de categoría</li>' +
+        '<li><b>' + cambiaPrecio + '</b> cambian de precio · <b>' + cambiaCat + '</b> cambian de categoría' + (cambiaCat ? ' <span class="small">(ej.: ' + h(ps.filter((x) => { const v = viejo[String(x.id)]; return v && (catViejas[v[4]] || 'Otros') !== catDe(x); }).slice(0, 4).map((x) => x.n.slice(0, 28) + ': ' + (catViejas[viejo[String(x.id)][4]] || 'Otros') + ' → ' + catDe(x)).join(' · ')) + ')</span>' : '') + '</li>' +
         '<li><b>' + subir.length + '</b> fotos nuevas o cambiadas para subir</li>' +
-        '<li><b>' + quitados.length + '</b> productos salen del catálogo (ya no están en el POS)' + (quitados.length ? ': <span class="small">' + h(quitados.slice(0, 12).map((c) => viejo[c][1]).join(' · ')) + (quitados.length > 12 ? ' …' : '') + '</span>' : '') + '</li>' +
+        '<li><b>' + quitados.length + '</b> productos salen del catálogo (ya no están en el POS)' + (quitados.length ? ': <span class="small">' + h(quitados.slice(0, 12).map(nomQ).join(' · ')) + (quitados.length > 12 ? ' …' : '') + '</span>' : '') + '</li>' +
       '</ul>' +
       '<p class="small muted" style="margin:0">Se conservan las descripciones, especificaciones, cuentas para transferir y textos de la empresa del catálogo. El stock que ven los clientes sigue saliendo en vivo del POS.</p>' +
       '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-x>Cancelar</button><button class="btn pri" id="pcOk">' + ic('upload') + 'Publicar ahora</button></div></div>');
