@@ -521,6 +521,24 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
   .pedtbl td.pc-prod{grid-column:1/-1}.pedtbl td.pc-acc::before{content:''}
   .acrow{grid-template-columns:auto 1fr auto;}.acrow .ac-pv{display:none}
 }
+.pedpie{margin-top:10px;padding:12px;border:1.5px solid #1F9D55;border-radius:14px;background:var(--surface)}
+.pcasillas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.pcas{flex:0 1 160px;min-width:140px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:7px 11px;display:flex;flex-direction:column}
+.pcas span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.pcas b{font-size:17px;font-variant-numeric:tabular-nums;margin-top:2px}
+.pcas.iva b{color:#C2410C}.pcas.neg b{color:#B42318}
+.pcas.tot{background:#1F9D55;border-color:#1F9D55;color:#fff}.pcas.tot span{color:#E3F6E9}.pcas.tot b{font-size:20px}
+.pedpagot{margin:14px 0 6px;font-weight:800;text-transform:uppercase;font-size:13px;letter-spacing:.03em}
+.pedpago{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ppag{border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;background:var(--surface)}
+.ppag span{font-size:12px;font-weight:800;text-transform:uppercase}.ppag b{font-size:19px;font-variant-numeric:tabular-nums}.ppag small{font-size:11.5px;color:var(--muted)}
+.ppag.p0{border-color:#1F9D55}.ppag.p30{border-color:#2F6FED}.ppag.p60{border-color:#D97706}.ppag.p90{border-color:#7C3AED}
+.pedobs{margin-top:12px}
+.pedbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.pedbtns.b2{grid-template-columns:1fr 1fr;margin-top:10px}
+.pedbtns .btn{min-height:48px;justify-content:center;font-weight:800;text-transform:uppercase}
+.cr{--c1:#EF5350;--c2:#C62828;--c3:#7F1414}.cy{--c1:#F7D774;--c2:#E0A820;--c3:#9A6E00}
+.btn.c3d.cy{color:#3B2A00 !important;text-shadow:none}
+@media (max-width:760px){.pedpago{grid-template-columns:1fr 1fr}.pedbtns{grid-template-columns:1fr}.pcas{flex:1 1 140px}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -579,7 +597,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23a';
+const APP_VER = '2026-11-23b';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4984,20 +5002,34 @@ function verPedido(p0){
       (bloqueado ? '' : '<label class="pedivd">IVA por defecto %<input class="mini pct" id="ppIvaD" inputmode="decimal" value="' + numf(ls.get('pedIvaD', cfg().iva)) + '"></label><button class="btn sm" id="ppIvaT" type="button">Aplicar a todos</button>') + '</div>' +
     '<div class="cart" id="ppBody" style="margin-top:0"></div>' +
     (bloqueado ? '' : '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button type="button" class="btn c3d cv" id="ppFila">' + ic('plus') + 'Agregar producto</button><button type="button" class="btn sm" id="ppAdd">' + ic('plus') + 'Producto que no está en el inventario</button></div>') +
-    '<div class="peddesc"><b>Descuento del pedido</b><div class="small muted">En % o en $ sobre el subtotal sin IVA. El IVA y el total se calculan con el descuento.</div>' +
+    '<div class="pedpie">' +
+    '<div class="peddesc" style="margin-top:0"><b>Descuento del pedido</b><div class="small muted">En % o en $ sobre el subtotal sin IVA. El IVA y el total se calculan con el descuento.</div>' +
       '<div class="grid2" style="margin-top:6px"><label class="f">Descuento %<input class="in" id="ppDp" inputmode="decimal" placeholder="0"' + (bloqueado ? ' disabled' : '') + '></label><label class="f">Descuento $<input class="in" id="ppDv" inputmode="decimal" placeholder="0.00"' + (bloqueado ? ' disabled' : '') + '></label></div></div>' +
-    '<div id="ppFoot" style="margin-top:8px"></div>' +
-    '<label class="f" style="margin-top:8px">Nota para el proveedor<input class="in" id="ppN" value="' + h(P.nota || '') + '" placeholder="Ej.: entregar el lunes, confirmar precios"></label>',
-    foot: '<button class="btn" id="ppX">' + (nuevo ? 'Cancelar' : 'Cerrar') + '</button>' + (!nuevo ? '<button class="btn danger" id="ppDel">' + ic('trash') + 'Eliminar</button>' : '') +
-      '<button class="btn c3d cb" id="ppPdf">' + ic('pdf') + 'PDF</button><button class="btn c3d cv" id="ppWa">' + ic('wa') + 'Enviar por WhatsApp</button>' +
-      (!bloqueado ? '<button class="btn c3d cp" id="ppCo">' + ic('truck') + 'Convertir en compra</button>' : '') + '<button class="btn c3d co" id="ppOk">' + ic('check') + 'Guardar</button>' });
-  m.q('#ppE').value = P.est;
+    '<div id="ppFoot"></div></div>' +
+    '<label class="f pedobs">Observación<input class="in" id="ppN" value="' + h(P.nota || '') + '" placeholder="Ej.: entregar el lunes, confirmar precios"></label>' +
+    '<div class="pedbtns">' +
+      '<button class="btn c3d cb" id="ppPdf">' + ic('pdf') + 'Ver PDF</button><button class="btn c3d cv" id="ppWa">' + ic('wa') + 'Enviar PDF por WhatsApp</button>' +
+      (!bloqueado ? '<button class="btn c3d cp" id="ppCo">' + ic('truck') + 'Convertir en compra</button>' : '<button class="btn" id="ppX">Cerrar</button>') +
+    '</div><div class="pedbtns b2">' +
+      (!nuevo ? '<button class="btn c3d cr" id="ppDel">' + ic('trash') + 'Eliminar</button>' : '<button class="btn" id="ppX2">Cancelar</button>') +
+      '<button class="btn c3d cy" id="ppOk">' + ic('check') + 'Guardar pedido</button></div>' });
   const leer = () => { P.pr = m.q('#ppPr').value; P.f = m.q('#ppF').value || hoyISO(); P.est = m.q('#ppE').value; P.nota = m.q('#ppN').value.trim(); };
   const pintarPie = () => {
     const u = P.it.reduce((t, x) => t + (Number(x.q) || 0), 0); const T = totPed(P.it, P.dp);
-    m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div>' +
-      (T.desc ? '<div class="tcas"><span>Descuento</span><b>−' + money(T.desc) + '</b></div>' : '') +
-      '<div class="tcas"><span>Subtotal sin IVA</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>Total IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total con IVA</span><b>' + money(T.tot) + '</b></div></div>';
+    const f = 1 - Math.min(100, Math.max(0, Number(P.dp) || 0)) / 100; const bases = {};
+    P.it.forEach((x) => { const k = calcPed(x); const t = Number(k.iva) || 0; bases[t] = (bases[t] || 0) + k.sub * f; });
+    const tasas = Object.keys(bases).map(Number).sort((x, y) => y - x); if (!tasas.length) tasas.push(Number(ls.get('pedIvaD', cfg().iva)) || 0);
+    const cas = (l, v, c) => '<div class="pcas' + (c ? ' ' + c : '') + '"><span>' + l + '</span><b>' + v + '</b></div>';
+    let html = '<div class="pcasillas">' + cas('Productos · unidades', P.it.length + ' · ' + numf(u)) + (T.desc ? cas('Descuento', '−' + money(T.desc), 'neg') : '') + cas('Subtotal sin IVA', money(T.sub));
+    tasas.forEach((t) => { html += cas('Subtotal IVA ' + numf(t) + '%', money(r2(bases[t] || 0))); });
+    tasas.filter((t) => t > 0).forEach((t) => { html += cas('IVA ' + numf(t) + '%', money(r2((bases[t] || 0) * t / 100)), 'iva'); });
+    html += cas('Total IVA (incluido)', money(T.iva)) + cas('Total con IVA', money(T.tot), 'tot') + '</div>';
+    const cuotas = (n) => { const c = Math.floor(T.tot / n * 100) / 100; const ult = r2(T.tot - c * (n - 1)); return { c, ult }; };
+    const plan = [['Contado', 1, 'p0'], ['30 días', 1, 'p30'], ['60 días', 2, 'p60'], ['90 días', 3, 'p90']];
+    html += '<div class="pedpagot">Cómo quedaría el pago</div><div class="pedpago">' + plan.map(([l, n, c], j) => { const q = cuotas(n);
+      const det = j === 0 ? 'un solo pago' : n === 1 ? '1 cuota de ' + money(T.tot) : n + ' cuotas de ' + money(q.c) + (q.ult !== q.c ? ' (última ' + money(q.ult) + ')' : '');
+      return '<div class="ppag ' + c + '"><span>' + l + '</span><b>' + money(j === 0 || n === 1 ? T.tot : q.c) + '</b><small>' + det + '</small></div>'; }).join('') + '</div>';
+    m.q('#ppFoot').innerHTML = html;
     const dv = m.q('#ppDv'), dpi = m.q('#ppDp');
     if (dpi && document.activeElement !== dpi) dpi.value = P.dp ? numf(r4(P.dp)) : '';
     if (dv && document.activeElement !== dv) dv.value = T.desc ? T.desc.toFixed(2) : '';
@@ -5103,7 +5135,7 @@ function verPedido(p0){
   };
   const guardar = async () => { leer(); if (!P.pr) { toast('Elige el proveedor.', true); return false; } if (!P.it.length) { toast('Agrega productos.', true); return false; }
     await put('ped', Object.assign({}, P)); return true; };
-  m.q('#ppX').onclick = () => m.close();
+  qsa('#ppX, #ppX2', m.el).forEach((b) => { b.onclick = () => m.close(); });
   m.q('#ppOk').onclick = async () => { if (await guardar()) { m.close(); toast('Pedido guardado'); if (RUTA === 'compras') render(); } };
   if (m.q('#ppDel')) m.q('#ppDel').onclick = async () => { if (await confirmar('¿Eliminar el pedido ' + P.num + '?', 'Eliminar', true)) { await borrar('ped', P.id); m.close(); if (RUTA === 'compras') render(); } };
   m.q('#ppPdf').onclick = async () => { if (!(await guardar())) return; const d = await pdfPedidoProv(P); descargar(d.output('blob'), 'Pedido-' + P.num + '.pdf'); };
