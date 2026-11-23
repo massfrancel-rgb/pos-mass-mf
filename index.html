@@ -576,6 +576,13 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .pbordrow .pbmarc{margin:0}
 @media (max-width:1100px){.pbhead{flex-wrap:wrap}}
 @media (max-width:760px){.pbhead{flex-basis:100%;justify-content:stretch}.pbhead > *{flex:1 1 100%;max-width:none}.pbkrow .kpis{flex-basis:100%;grid-template-columns:1fr 1fr}.pbkpi > *{flex:1 1 100%;max-width:none}}
+.pbkrow{display:flex;align-items:stretch !important}
+.pbkpi{display:grid !important;grid-template-columns:1.25fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;flex:1 1 560px;align-self:stretch}
+.pbkpi > *{width:100%;max-width:none !important;min-height:0 !important;height:100%;margin:0}
+.pbkpi .btn{font-size:13px;padding:0 10px;white-space:nowrap;justify-content:center;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pbkpi select{font-size:14px;min-width:0}
+.pbkpi #pbProv{grid-column:span 2}
+@media (max-width:760px){.pbkpi{grid-template-columns:1fr;grid-template-rows:none;grid-auto-rows:44px}.pbkpi #pbProv{grid-column:auto}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -634,7 +641,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23e';
+const APP_VER = '2026-11-23f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4885,10 +4892,6 @@ Object.assign(REP, {
         const cajaM = document.createElement('div'); cajaM.className = 'pbmarc'; cajaM.id = 'pbMarc';
         { const fila = document.createElement('div'); fila.className = 'pbordrow noprint'; fila.appendChild(cajaN); fila.appendChild(cajaM);
           if (ob) { ob.parentNode.insertBefore(fila, ob); fila.appendChild(ob); } else if (tw) tw.parentNode.insertBefore(fila, tw); }
-        // arriba, junto a Excel / Imprimir: visto bueno rápido y Crear pedido
-        const ph = qs('.pagehead', $('view')); const viejo = $('pbHead'); if (viejo) viejo.remove();
-        const head = document.createElement('div'); head.id = 'pbHead'; head.className = 'pbhead noprint';
-        if (ph) ph.insertBefore(head, ph.children[1] || null); else bar.appendChild(head);
         // junto a los recuadros Agotados / Bajo el mínimo: acciones sobre lo marcado
         const kp = qs('.kpis', out); const kpi = document.createElement('div'); kpi.className = 'pbkpi noprint';
         if (kp) { const fk = document.createElement('div'); fk.className = 'pbkrow'; kp.parentNode.insertBefore(fk, kp); fk.appendChild(kp); fk.appendChild(kpi); } else bar.appendChild(kpi);
@@ -4916,15 +4919,15 @@ Object.assign(REP, {
           const cuenta = new Map(); vis.forEach((x) => { if (x.pr) cuenta.set(x.pr, (cuenta.get(x.pr) || 0) + 1); });
           cajaM.className = 'pbmarc' + (n ? ' on' : '');
           cajaM.innerHTML = '<b>' + n + '</b><span>' + (n === 1 ? 'marcado' : 'marcados') + '<small>' + (n ? provs.size + ' proveedor(es)' + (sinProv ? ' · ' + sinProv + ' sin proveedor' : '') : 'marca las casillas') + '</small></span>';
-          head.innerHTML = '<button class="btn c3d cv" id="pbTodos"' + (conProv ? '' : ' disabled') + ' title="Visto bueno rápido: marca todos los productos que ya tienen proveedor' + (SBQ.trim() ? ' (solo los de la búsqueda)' : '') + '">' + ic('check') + 'Marcar todos con proveedor (' + conProv + ')</button>' +
+          kpi.innerHTML = '<button class="btn c3d cv" id="pbTodos"' + (conProv ? '' : ' disabled') + ' title="Visto bueno rápido: marca todos los productos que ya tienen proveedor' + (SBQ.trim() ? ' (solo los de la búsqueda)' : '') + '">' + ic('check') + 'Marcar todos con proveedor (' + conProv + ')</button>' +
             '<select class="in" id="pbUno"' + (conProv ? '' : ' disabled') + ' title="Visto bueno rápido por proveedor"><option value="">✓ Marcar solo los de un proveedor…</option>' +
             Array.from(cuenta.entries()).sort((a, b) => nomProv(a[0]).localeCompare(nomProv(b[0]))).map(([pr, c]) => '<option value="' + h(pr) + '">' + h(nomProv(pr)) + ' (' + c + ')</option>').join('') + '</select>' +
-            '<button class="btn c3d co" id="pbCrear"' + (n ? '' : ' disabled') + '>' + ic('clip') + 'Crear pedido' + (n ? ' (' + n + ')' : '') + '</button>';
-          kpi.innerHTML = '<select class="in" id="pbProv"' + (n ? '' : ' disabled') + '><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
+            '<button class="btn c3d co" id="pbCrear"' + (n ? '' : ' disabled') + '>' + ic('clip') + 'Crear pedido' + (n ? ' (' + n + ')' : '') + '</button>' +
+            '<select class="in" id="pbProv"' + (n ? '' : ' disabled') + '><option value="">Cambiar proveedor a todos los marcados…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
             '<button class="btn" id="pbLimp"' + (n ? '' : ' disabled') + '>' + ic('x') + 'Desmarcar todo</button>';
-          qs('#pbCrear', head).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
-          qs('#pbTodos', head).onclick = () => marcar('*');
-          qs('#pbUno', head).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
+          qs('#pbCrear', kpi).onclick = () => { if (!SELPED.size) return toast('Marca primero los productos que vas a pedir.', true); crearPedidosDesdeSeleccion(); };
+          qs('#pbTodos', kpi).onclick = () => marcar('*');
+          qs('#pbUno', kpi).onchange = (e) => { if (e.target.value) marcar(e.target.value); };
           qs('#pbProv', kpi).onchange = (e) => { if (!e.target.value) return; SELPED.forEach((s) => { s.pr = e.target.value; }); qsa('.selprov', out).forEach((s2) => { s2.value = e.target.value; }); pintaBar(); };
           qs('#pbLimp', kpi).onclick = () => { SELPED.clear(); render(); };
         };
