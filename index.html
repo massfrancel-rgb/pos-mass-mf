@@ -3526,6 +3526,12 @@ function pgExcel(){
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
   if ($('xPub')) $('xPub').onclick = publicarCatalogo;
+  if ($('anfFull')) $('anfFull').onclick = async () => {
+    if (!M.nube || !M.nube.url) return toast('Primero conecta la nube en Ajustes.', true);
+    const b = $('anfFull'); b.disabled = true;
+    try { const d = await llamarNube({ cat: 'anfibus', op: 'pedir', k: M.nube.clave }); ls.set('anfPide', d.pide || Date.now()); toast('Revisión completa pedida. El servidor de Anfibus la hará en menos de 5 minutos.'); render(); }
+    catch (e) { b.disabled = false; toast('No se pudo pedir: ' + e.message, true); }
+  };
   document.querySelectorAll('[data-fanf]').forEach((b) => { b.onclick = async () => { const v = S.vta.get(b.dataset.fanf); if (v && await marcarFacturadaAnf(v)) render(); }; });
   document.querySelectorAll('[data-vanf]').forEach((b) => { b.onclick = () => { const v = S.vta.get(b.dataset.vanf); if (v) verDocumento(v); }; });
   if ($('xTok')) $('xTok').onclick = async () => { await llaveGitHub(); render(); };
@@ -3788,6 +3794,10 @@ function tarjetaAnfibus(){
   return '<div class="card stack" style="border:2px solid ' + (ok ? '#1f9d55' : '#c0392b') + '"><h3>' + ic('rotate') + ' Sincronización automática con Anfibus</h3>' +
     '<div class="note ' + (ok ? 'ok' : 'warn') + '">' + (ok ? '✓ Funcionando.' : '⚠ Sin noticias del servidor de Anfibus hace ' + (min > 120 ? Math.round(min / 60) + ' horas' : min + ' minutos') + '. Revisa que el servidor esté encendido y con internet.') +
       ' Última actualización: <b>' + fechaTxt(fechaISO(new Date(Number(a.ult) || 0))) + ' ' + horaTxt(Number(a.ult) || 0) + '</b>' + (a.ultFull ? ' · revisión completa: ' + fechaTxt(fechaISO(new Date(Number(a.ultFull)))) : '') + '.</div>' +
+    (function(){ const pd = Number(ls.get('anfPide', 0)) || 0; const hecha = pd && (Number(a.ultFull) || 0) >= pd;
+      return '<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><button class="btn c3d cb" id="anfFull">' + ic('rotate') + 'Pedir revisión completa</button>' +
+        '<span class="small muted">' + (pd && !hecha ? '⏳ Pedida a las <b>' + horaTxt(pd) + '</b>. El servidor la hará en menos de 5 minutos; pulsa SINCRONIZAR para ver el resultado.' :
+          'Vuelve a enviar todo el inventario de Anfibus y corrige cualquier diferencia (se hace sola cada día después de las 3:00 a. m.).') + '</span></div>'; })() +
     '<p class="small muted" style="margin:0">El stock del POS = stock de Anfibus − pedidos del Catálogo pendientes − ventas del POS que aún no se facturan en Anfibus. Al facturar en Anfibus una venta del POS, márcala aquí con su N° de factura.</p>' +
     '<h4 style="margin:6px 0 0">Ventas del POS por facturar en Anfibus (' + pend.length + ')</h4>' +
     (pend.length ? '<div class="tblwrap" style="max-height:320px;overflow:auto"><table class="tbl"><thead><tr><th>Documento</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
