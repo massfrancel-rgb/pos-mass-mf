@@ -1055,14 +1055,14 @@ function pantallaLogin(){
     L.innerHTML = '<div class="box">' + head +
       '<div class="card stack"><h3>Bienvenido</h3><p class="small" style="margin:0;color:#CFC6B4">Si ya tienes la base en la nube, conéctate para traer vendedores, productos y ventas. Si es la primera vez, crea el usuario administrador.</p>' +
       '<label class="f">Dirección de la nube (URL del script de Google)<input class="in" id="lgUrl" placeholder="https://script.google.com/macros/s/…/exec" value="' + h(M.nube ? M.nube.url : '') + '"></label>' +
-      '<label class="f">Clave de la nube<input class="in" id="lgClave" value="' + h(M.nube ? M.nube.clave : '') + '"></label>' +
+      '<label class="f">Clave de la nube<input class="in" id="lgClave" type="password" autocomplete="new-password" placeholder="' + (M.nube && M.nube.clave ? '•••••••• guardada (déjala vacía para mantenerla)' : 'Escribe la clave') + '"></label>' +
       '<button class="btn pri" id="lgCon">' + ic('sync') + 'Conectar y traer datos</button></div>' +
       '<div class="card stack"><h3>Crear administrador</h3>' +
       '<label class="f">Nombre<input class="in" id="lgNom" value="Ernesto"></label>' +
       '<label class="f">PIN (4 a 6 números)<input class="in" id="lgPin" type="password" inputmode="numeric" maxlength="6"></label>' +
       '<button class="btn" id="lgCrear">' + ic('user') + 'Crear y entrar</button></div></div>';
     $('lgCon').onclick = async () => {
-      const url = $('lgUrl').value.trim(), clave = $('lgClave').value.trim();
+      const url = $('lgUrl').value.trim(), clave = $('lgClave').value.trim() || (M.nube && M.nube.url === url ? M.nube.clave : '');
       if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('Pega la URL del script (empieza con https://script.google.com/).', true);
       M.nube = { url, clave }; await metaSet('nube', M.nube);
       $('lgCon').disabled = true; $('lgCon').textContent = 'Conectando…';
@@ -3226,7 +3226,7 @@ function pgAjustes(){
     '<div class="card stack"><h3>Nube (Google)</h3>' +
     '<p class="small muted" style="margin:0">Con la nube conectada, todos los teléfonos y la PC comparten productos, stock, ventas y compras. Sin internet la app sigue funcionando y envía los datos al reconectarse.</p>' +
     '<div class="row"><span class="badge ' + (M.nube ? (syncError ? 'warn' : 'ok') : '') + '">' + (M.nube ? (syncError ? 'Error: ' + h(syncError) : 'Conectada') : 'No conectada') + '</span><span class="small muted">' + M.pend.size + ' cambios por enviar' + (ult ? ' · última sincronización ' + fechaTxt(fechaISO(new Date(ult))) + ' ' + horaTxt(ult) : '') + '</span></div>' +
-    (adm ? '<label class="f">URL del script de Google<input class="in" id="ajUrl" value="' + h(M.nube ? M.nube.url : '') + '" placeholder="https://script.google.com/macros/s/…/exec"></label><label class="f">Clave<input class="in" id="ajClave" value="' + h(M.nube ? M.nube.clave : '') + '"></label>' : '') +
+    (adm ? '<label class="f">URL del script de Google<input class="in" id="ajUrl" value="' + h(M.nube ? M.nube.url : '') + '" placeholder="https://script.google.com/macros/s/…/exec"></label><label class="f">Clave<input class="in" id="ajClave" type="password" autocomplete="new-password" placeholder="' + (M.nube && M.nube.clave ? '•••••••• guardada (déjala vacía para mantenerla)' : 'Escribe la clave') + '"></label>' : '') +
     '<div class="row">' + (adm ? '<button class="btn pri" id="ajCon">' + ic('link') + 'Guardar y probar</button>' : '') + '<button class="btn" id="ajSync">' + ic('sync') + 'Sincronizar ahora</button>' +
     (adm && M.nube ? '<button class="btn wa" id="ajLink">' + ic('wa') + 'Enviar enlace a un vendedor</button><button class="btn" id="ajCopy">' + ic('copy') + 'Copiar enlace</button>' : '') + '</div>' +
     (adm && M.nube ? '<p class="small muted" style="margin:0">El enlace conecta el teléfono del vendedor a la nube con un toque. Compártelo solo con tus vendedores.</p>' : '') + '</div>' +
@@ -3248,7 +3248,7 @@ function pgAjustes(){
   $('ajWaF').onchange = () => { ls.set('waFmt', $('ajWaF').value); toast('Guardado en este equipo'); };
   $('ajSync').onclick = async () => { await sincronizar(true); render(); };
   if ($('ajCon')) $('ajCon').onclick = async () => {
-    const url = $('ajUrl').value.trim(), clave = $('ajClave').value.trim();
+    const url = $('ajUrl').value.trim(), clave = $('ajClave').value.trim() || (M.nube && M.nube.url === url ? M.nube.clave : '');
     if (!url) { M.nube = null; await metaSet('nube', null); toast('Nube desconectada en este equipo.'); return render(); }
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) return toast('La URL debe empezar con https://script.google.com/', true);
     M.nube = { url, clave }; await metaSet('nube', M.nube);
