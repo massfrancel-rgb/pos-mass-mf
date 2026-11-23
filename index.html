@@ -492,6 +492,35 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .respaviso{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:0;background:#1E4FD8;color:#fff;font:inherit;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;animation:latido 1.6s infinite}
 .respaviso svg{width:18px;height:18px}
 @media (max-width:760px){.respaviso{bottom:150px}}
+.sheet.pedfull{max-width:none}
+@media (min-width:761px){.modal .sheet.pedfull{width:min(1680px,98vw);height:96vh;max-height:96vh;border-radius:18px}}
+.pedtbl{width:100%;border-collapse:separate;border-spacing:0 6px}
+.pedtbl th{background:#1f2a44;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.3px;text-align:left;padding:9px 8px;white-space:nowrap}
+.pedtbl th:first-child{border-radius:10px 0 0 10px}.pedtbl th:last-child{border-radius:0 10px 10px 0}
+.pedtbl th.hs{color:#9DB3FF}.pedtbl th.ht{color:#8BD3A6}
+.pedtbl th.c-cod{width:130px}.pedtbl th.c-n{width:78px}.pedtbl th.c-iva{width:74px}.pedtbl th.c-p{width:112px}.pedtbl th.c-acc{width:88px}
+.pedtbl td{padding:0 4px;vertical-align:top;background:transparent}
+.pedtbl .in{min-height:42px;padding:8px 10px;font-size:15px}
+.pedtbl .pc-n{text-align:right;font-weight:700}
+.pedtbl .pc-iva{background:#FDEBD0;border-color:#E9B872;text-align:center}
+.pedtbl .pc-sub2{background:#E7EEFF;border-color:#9DB3FF;color:#1F3A93}
+.pedtbl .pc-tot{background:#E3F6EA;border-color:#8BD3A6;color:#18794E}
+.pedtbl .pc-nom{font-weight:700;text-transform:uppercase}
+.pedtbl .pc-sub{font-size:12px;color:var(--muted);padding:3px 4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pedtbl .pc-acc{white-space:nowrap;padding-top:4px}.pedtbl .pc-acc .btn{min-height:34px;width:36px;padding:0;margin-right:4px}
+.pedtbl tr.pc-new .in{border-style:dashed}.pedtbl tr.pc-new .pc-nom{text-transform:none;font-weight:500}
+.acbox{position:fixed;z-index:200;background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.25);overflow:auto;padding:4px}
+.acrow{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:10px;align-items:center;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13px}
+.acrow:nth-child(odd){background:rgba(0,0,0,.025)}.acrow.on,.acrow:hover{background:#FFF1D6}
+.acrow .ac-cod{font-weight:800;color:#B07A12;min-width:58px}.acrow .ac-n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acrow .ac-co{font-weight:800;color:#1F3A93}.acrow .ac-pv{color:var(--muted);font-size:12px}
+@media (max-width:760px){
+  .pedtbl thead{display:none}.pedtbl,.pedtbl tbody{display:block}
+  .pedtbl tr{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+  .pedtbl td{display:block;padding:0}.pedtbl td::before{content:attr(data-l);display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+  .pedtbl td.pc-prod{grid-column:1/-1}.pedtbl td.pc-acc::before{content:''}
+  .acrow{grid-template-columns:auto 1fr auto;}.acrow .ac-pv{display:none}
+}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -550,7 +579,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-15a';
+const APP_VER = '2026-11-23a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -4861,6 +4890,35 @@ function siguientePedidoProv(){
 const EST_PED = { pend: ['Por enviar', 'gold'], env: ['Enviado', 'info'], rec: ['Recibido', 'ok'] };
 
 /* ---------- Lista de pedidos agrupados por proveedor ---------- */
+/* Lista desplegable de productos bajo una casilla (código o nombre), con stock, costo y PVP */
+function autoProd(inp, onPick){
+  let box = null, lista = [], sel = 0;
+  const cerrar = () => { if (box) { box.remove(); box = null; } window.removeEventListener('scroll', cerrar, true); };
+  const elegir = (p) => { cerrar(); onPick(p); };
+  const pintar = () => {
+    if (!lista.length) { cerrar(); return; }
+    if (!box) { box = document.createElement('div'); box.className = 'acbox'; document.body.appendChild(box); window.addEventListener('scroll', (e) => { if (!box || !box.contains(e.target)) cerrar(); }, true);
+      box.addEventListener('mousedown', (e) => { const r = e.target.closest('[data-j]'); if (!r) return; e.preventDefault(); elegir(lista[+r.dataset.j]); }); }
+    const rc = inp.getBoundingClientRect(); const ancho = Math.min(window.innerWidth - 16, Math.max(rc.width, 640));
+    box.style.left = Math.max(8, Math.min(rc.left, window.innerWidth - ancho - 8)) + 'px'; box.style.width = ancho + 'px';
+    const abajo = window.innerHeight - rc.bottom; if (abajo < 260 && rc.top > abajo) { box.style.top = ''; box.style.bottom = (window.innerHeight - rc.top + 4) + 'px'; } else { box.style.bottom = ''; box.style.top = (rc.bottom + 4) + 'px'; }
+    box.style.maxHeight = Math.max(180, Math.min(380, (abajo < 260 && rc.top > abajo ? rc.top : abajo) - 16)) + 'px';
+    box.innerHTML = lista.map((p, j) => '<div class="acrow' + (j === sel ? ' on' : '') + '" data-j="' + j + '"><span class="ac-cod">' + h(p.id) + '</span><span class="ac-n">' + h(p.n) + '</span>' + chipStock(p) +
+      '<span class="ac-co" title="Costo sin IVA">' + (Number(p.co) ? money(p.co) : '—') + '</span><span class="ac-pv" title="PVP">PVP ' + money(p.pv || 0) + '</span></div>').join('');
+    const on = box.querySelector('.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  };
+  inp.addEventListener('input', () => { const q = inp.value.trim(); if (!q) { lista = []; cerrar(); return; } lista = buscarProductos(q, 25); sel = 0; pintar(); });
+  inp.addEventListener('focus', () => { inp.select && inp.select(); });
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); if (box && lista[sel]) return elegir(lista[sel]); const ex = porCodigo(inp.value); if (ex) return elegir(ex); if (inp.value.trim()) { lista = buscarProductos(inp.value.trim(), 25); sel = 0; pintar(); } return; }
+    if (!box) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(lista.length - 1, sel + 1); pintar(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); pintar(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cerrar(); }
+  });
+  inp.addEventListener('blur', () => setTimeout(cerrar, 150));
+}
+
 function verPedidos(){
   const l = vivos('ped');
   const grupos = new Map(); l.forEach((p) => { const k = nomProv(p.pr); if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(p); });
@@ -4917,7 +4975,7 @@ function verPedido(p0){
   const P = nuevo ? { id: uid('pp'), num: siguientePedidoProv(), pr: '', f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' } : JSON.parse(JSON.stringify(p0));
   delete P._u; delete P._d;
   const bloqueado = P.est === 'rec';
-  const m = modal({ title: 'Pedido a proveedor ' + P.num, wide: true, sticky: true, body:
+  const m = modal({ title: 'Pedido a proveedor ' + P.num, wide: true, cls: 'pedfull', sticky: true, body:
     '<div class="grid3"><label class="f">Proveedor<select class="in" id="ppPr"' + (bloqueado ? ' disabled' : '') + '>' + opcionesProv(P.pr) + '</select></label>' +
     '<label class="f">Fecha<input class="in" type="date" id="ppF" value="' + h(P.f) + '"' + (bloqueado ? ' disabled' : '') + '></label>' +
     '<label class="f">Estado<select class="in" id="ppE"><option value="pend">Por enviar</option><option value="env">Enviado</option><option value="rec">Recibido</option></select></label></div>' +
@@ -4925,7 +4983,7 @@ function verPedido(p0){
     '<div class="pedhead"><b>' + ic('box') + 'Productos del pedido</b><span class="spacer"></span>' +
       (bloqueado ? '' : '<label class="pedivd">IVA por defecto %<input class="mini pct" id="ppIvaD" inputmode="decimal" value="' + numf(ls.get('pedIvaD', cfg().iva)) + '"></label><button class="btn sm" id="ppIvaT" type="button">Aplicar a todos</button>') + '</div>' +
     '<div class="cart" id="ppBody" style="margin-top:0"></div>' +
-    (bloqueado ? '' : '<button type="button" class="btn c3d cv" id="ppAdd" style="margin-top:8px">' + ic('plus') + 'Agregar producto</button>') +
+    (bloqueado ? '' : '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button type="button" class="btn c3d cv" id="ppFila">' + ic('plus') + 'Agregar producto</button><button type="button" class="btn sm" id="ppAdd">' + ic('plus') + 'Producto que no está en el inventario</button></div>') +
     '<div class="peddesc"><b>Descuento del pedido</b><div class="small muted">En % o en $ sobre el subtotal sin IVA. El IVA y el total se calculan con el descuento.</div>' +
       '<div class="grid2" style="margin-top:6px"><label class="f">Descuento %<input class="in" id="ppDp" inputmode="decimal" placeholder="0"' + (bloqueado ? ' disabled' : '') + '></label><label class="f">Descuento $<input class="in" id="ppDv" inputmode="decimal" placeholder="0.00"' + (bloqueado ? ' disabled' : '') + '></label></div></div>' +
     '<div id="ppFoot" style="margin-top:8px"></div>' +
@@ -4944,21 +5002,45 @@ function verPedido(p0){
     if (dpi && document.activeElement !== dpi) dpi.value = P.dp ? numf(r4(P.dp)) : '';
     if (dv && document.activeElement !== dv) dv.value = T.desc ? T.desc.toFixed(2) : '';
   };
+  let enfocar = null;   // índice de fila cuya cantidad se enfoca después de pintar
   const pintar = () => {
     const dis = bloqueado ? ' disabled' : '';
-    m.q('#ppBody').innerHTML = P.it.length ? P.it.map((x, i) => { const k = calcPed(x);
-      return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</div></div></div>' +
-      '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm" data-mov title="Mandar este producto al pedido de otro proveedor">' + ic('truck') + 'Otro proveedor</button><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
-      '<div class="ctrl np pedctrl"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></label>' +
-      '<label class="minilbl">IVA %<input class="mini pct ivain" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></label>' +
-      '<label class="minilbl">P. sin IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></label>' +
-      '<label class="minilbl">P. con IVA<input class="mini" data-k="ci" inputmode="decimal" value="' + (x.co ? r2(x.co * (1 + k.iva / 100)).toFixed(2) : '') + '"' + dis + '></label>' +
-      '<label class="minilbl lsub">Subtotal<input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></label>' +
-      '<label class="minilbl ltot">Total<input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></label></div></div>'; }).join('') :
-      '<div class="empty card">Agrega los productos que vas a pedir</div>';
+    const fila = (x, i) => { const k = calcPed(x); const pr = S.prod.get(x.p);
+      return '<tr data-i="' + i + '"><td data-l="Código"><input class="in pc-cod" data-ac="cod" value="' + h(x.p) + '"' + dis + '></td>' +
+        '<td data-l="Producto" class="pc-prod"><input class="in pc-nom" data-ac="nom" value="' + h(x.n) + '"' + dis + ' title="' + h(x.n) + '"><div class="pc-sub">' + (x.nuevo && !pr ? '<span class="badge info">Nuevo</span> ' : '') + 'Stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + (pr && pr.pv ? ' · PVP ' + money(pr.pv) : '') + '</div></td>' +
+        '<td data-l="Cant."><input class="in pc-n" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></td>' +
+        '<td data-l="IVA %"><input class="in pc-n pc-iva" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></td>' +
+        '<td data-l="P. sin IVA"><input class="in pc-n" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></td>' +
+        '<td data-l="P. con IVA"><input class="in pc-n" data-k="ci" inputmode="decimal" value="' + (x.co ? r2(x.co * (1 + k.iva / 100)).toFixed(2) : '') + '"' + dis + '></td>' +
+        '<td data-l="Subtotal"><input class="in pc-n pc-sub2" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></td>' +
+        '<td data-l="Total"><input class="in pc-n pc-tot" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></td>' +
+        '<td class="pc-acc">' + (bloqueado ? '' : '<button class="btn sm icon" data-mov title="Mandar este producto al pedido de otro proveedor">' + ic('truck') + '</button><button class="btn sm icon danger" data-del title="Quitar">' + ic('x') + '</button>') + '</td></tr>'; };
+    const nueva = bloqueado ? '' : '<tr data-i="new" class="pc-new"><td data-l="Código"><input class="in pc-cod" data-ac="cod" placeholder="Código"></td>' +
+      '<td data-l="Producto" class="pc-prod"><input class="in pc-nom" data-ac="nom" placeholder="Escribe el nombre o código y elige de la lista…"></td>' +
+      '<td data-l="Cant."><input class="in pc-n" value="1" disabled></td><td data-l="IVA %"><input class="in pc-n pc-iva" value="' + numf(ls.get('pedIvaD', cfg().iva)) + '" disabled></td>' +
+      '<td data-l="P. sin IVA"><input class="in pc-n" placeholder="Sin IVA" disabled></td><td data-l="P. con IVA"><input class="in pc-n" placeholder="Con IVA" disabled></td>' +
+      '<td data-l="Subtotal"><input class="in pc-n pc-sub2" value="0.00" disabled></td><td data-l="Total"><input class="in pc-n pc-tot" value="0.00" disabled></td><td class="pc-acc"></td></tr>';
+    m.q('#ppBody').innerHTML = '<table class="pedtbl"><thead><tr><th class="c-cod">Código</th><th>Producto</th><th class="c-n">Cant.</th><th class="c-iva">IVA %</th><th class="c-p">P. sin IVA</th><th class="c-p">P. con IVA</th><th class="c-p hs">Subtotal</th><th class="c-p ht">Total</th><th class="c-acc"></th></tr></thead><tbody>' +
+      P.it.map(fila).join('') + nueva + '</tbody></table>';
+    qsa('[data-ac]', m.q('#ppBody')).forEach((inp) => autoProd(inp, (p) => elegirEnFila(inp.closest('tr').dataset.i, p)));
     pintarPie();
+    if (enfocar != null) { const el = m.q('#ppBody tr[data-i="' + enfocar + '"] [data-k="q"]'); enfocar = null; if (el) { el.focus(); el.select(); } }
   };
-  if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else P.it.unshift({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' });
+  // elegir un producto de la lista en una fila (la vacía agrega; una existente se cambia)
+  const elegirEnFila = (fi, p) => {
+    const nuevoIt = (q) => ({ p: p.id, n: p.n, q: q || 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' });
+    const ya = P.it.findIndex((x) => x.p === p.id);
+    if (fi === 'new') {
+      if (ya >= 0) { P.it[ya].q = r2((Number(P.it[ya].q) || 0) + 1); enfocar = ya; toast(p.n + ': ya estaba en el pedido, ahora ' + numf(P.it[ya].q)); }
+      else { P.it.push(nuevoIt(1)); enfocar = P.it.length - 1; }
+    } else {
+      const i = +fi; if (ya >= 0 && ya !== i) { P.it[ya].q = r2((Number(P.it[ya].q) || 0) + (Number(P.it[i].q) || 0)); P.it.splice(i, 1); enfocar = ya > i ? ya - 1 : ya; }
+      else { P.it[i] = nuevoIt(P.it[i].q); enfocar = i; }
+    }
+    if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; }
+    pintar();
+  };
+  if (m.q('#ppBus')) montarBuscador(m.q('#ppBus'), (p) => { const ex = P.it.find((x) => x.p === p.id); if (ex) ex.q = r2(ex.q + 1); else { P.it.push({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' }); enfocar = P.it.length - 1; }
     if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; } pintar(); }, { ph: 'Agregar producto al pedido…' });
   if (m.q('#ppIvaD')) {
     m.q('#ppIvaD').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); ls.set('pedIvaD', v); };
@@ -4967,7 +5049,8 @@ function verPedido(p0){
   m.q('#ppDp').onchange = (e) => { P.dp = Math.min(100, Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0)); pintarPie(); };
   m.q('#ppDv').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const b = totPed(P.it, 0).bruto; P.dp = b ? Math.min(100, v / b * 100) : 0; pintarPie(); };
   if (m.q('#ppAdd')) m.q('#ppAdd').onclick = () => agregarAlPedido(P, () => { pintar(); });
-  m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = P.it[+tr.dataset.i];
+  if (m.q('#ppFila')) m.q('#ppFila').onclick = () => { const el = m.q('#ppBody tr[data-i="new"] .pc-nom'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } };
+  m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k || tr.dataset.i === 'new') return; const x = P.it[+tr.dataset.i];
     const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const iv = calcPed(x).iva;
     if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v; else if (k === 'ci') x.co = r4(v / (1 + iv / 100));
     else if (k === 'sub') x.co = x.q ? r4(v / x.q) : 0; else if (k === 'tot') x.co = x.q ? r4(v / x.q / (1 + iv / 100)) : 0;
