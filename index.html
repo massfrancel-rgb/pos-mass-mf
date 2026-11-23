@@ -455,7 +455,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#0f6b55;color:#fff;border-radius:12px 12px 0 0;padding:8px 12px;margin-top:6px}
 .pedhead b{display:flex;align-items:center;gap:6px;text-transform:uppercase;font-size:13px;letter-spacing:.3px}.pedhead b svg{width:18px;height:18px}
 .pedhead .pedivd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}.pedhead .mini{width:64px;color:#1a1814;background:#fff}
-.pedhead + .cart{border:1px solid #0f6b55;border-top:0;border-radius:0 0 12px 12px;padding:8px}
+.pedhead + .pedbody,.pedhead + .cart{border:1px solid #0f6b55;border-top:0;border-radius:0 0 12px 12px;padding:8px}
 .peddesc{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(201,154,46,.10);border:1px solid rgba(201,154,46,.35)}
 .peddesc > b{color:#0f6b55;text-transform:uppercase;font-size:13px}
 .ci .pedctrl .ivain{background:#FDEBD0}
@@ -583,6 +583,14 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .pbkpi select{font-size:14px;min-width:0}
 .pbkpi #pbProv{grid-column:span 2}
 @media (max-width:760px){.pbkpi{grid-template-columns:1fr;grid-template-rows:none;grid-auto-rows:44px}.pbkpi #pbProv{grid-column:auto}}
+.ecgrid{display:grid;grid-template-columns:1.4fr 1fr .8fr 1fr;gap:10px}
+.pedtbl th.c-pr{width:170px}.pedtbl th.c-x{width:46px}.pedtbl th.hp{color:#F7C873}
+.pedtbl .pc-pvp{background:#FFF6E0;border-color:#E9C46A}
+.pedtbl .pc-pr{min-height:42px;font-size:13px;padding:6px 8px}.pedtbl .pc-pr.otro{background:#F1E8FF;border-color:#9663E6;color:#5A2DB0;font-weight:700}
+.ectbl .pc-acc .btn{margin-right:0}
+.pedbtns .btn{min-width:0}
+@media (max-width:900px){.ecgrid{grid-template-columns:1fr 1fr}}
+@media (max-width:760px){.ecgrid{grid-template-columns:1fr}}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -641,7 +649,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23f';
+const APP_VER = '2026-11-23g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2957,17 +2965,22 @@ function editarCompra(c, borr){
   const guardarD = () => { if (!nueva) return; clearTimeout(tGuardar); tGuardar = setTimeout(() => { if (D.pr || D.it.length || D.num) put('bor', Object.assign({}, D)); }, 600); };
   const guardarYa = async () => { clearTimeout(tGuardar); if (nueva && (D.pr || D.it.length || D.num)) await put('bor', Object.assign({}, D)); };
   const provs = () => vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre));
-  const m = modal({ title: nueva ? (borr ? 'Compra en borrador' : 'Nueva compra') : 'Editar compra ' + (c.num || ''), wide: true, sticky: true, body:
-    '<div class="grid2"><label class="f">Proveedor<div class="row" style="flex-wrap:nowrap"><select class="in grow" id="ecPr"></select><button class="btn icon" id="ecPrN" type="button" aria-label="Nuevo proveedor">' + ic('plus') + '</button></div></label>' +
+  const m = modal({ title: nueva ? (borr ? 'Compra en borrador' : 'Nueva compra') : 'Editar compra ' + (c.num || ''), wide: true, cls: 'pedfull', sticky: true, body:
+    '<div class="ecgrid"><label class="f">Proveedor<div class="row" style="flex-wrap:nowrap"><select class="in grow" id="ecPr"></select><button class="btn icon" id="ecPrN" type="button" aria-label="Nuevo proveedor">' + ic('plus') + '</button></div></label>' +
     '<label class="f">N° factura del proveedor<input class="in" id="ecNum" value="' + h(D.num) + '" placeholder="001-001-000012345"></label>' +
     '<label class="f">Fecha<input class="in" id="ecF" type="date" value="' + h(D.f) + '"></label>' +
     '<label class="f">Pago<div class="row" style="flex-wrap:nowrap"><select class="in" id="ecFp"><option value="co">Contado</option><option value="cr">Crédito</option></select><select class="in" id="ecPl">' + [15, 30, 45, 60, 90, 120].map((d) => '<option value="' + d + '">' + d + ' días</option>').join('') + '</select></div></label></div>' +
     '<div id="ecPedAv"></div><div class="factfoto" id="ecFoto"></div>' +
     '<div style="margin:10px 0" id="ecBus"></div>' + (nueva ? '<div class="note" id="ecRepNote" style="margin:0 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><span class="grow small">En cada producto puedes elegir <b>“Pedir a”</b> otro proveedor. Al tocar <b>Guardar borrador y salir</b> se crea <b>un pedido por cada proveedor</b>.</span><button type="button" class="btn sm" id="ecHab">' + ic('truck') + 'Proveedor habitual a todos</button></div>' : '') +
-    '<div class="cart" id="ecBody" style="margin-top:0"></div><div id="ecFoot" style="margin-top:10px"></div>' +
-    '<label class="chk" style="margin-top:8px"><input type="checkbox" id="ecAct"> Actualizar costo y PVP de los productos con estos valores</label>' +
-    '<label class="f" style="margin-top:6px">Nota<input class="in" id="ecNota" value="' + h(D.nota || '') + '"></label>',
-    foot: '<button class="btn" id="ecCan">' + (nueva ? 'Guardar borrador y salir' : 'Cancelar') + '</button>' + (nueva ? '<button class="btn danger" id="ecBor">Borrar todo</button>' : '') + '<button class="btn c3d cv" id="ecOk">' + ic('check') + 'Guardar compra</button>' });
+    '<div class="pedhead"><b>' + ic('box') + 'Productos de la compra</b></div>' +
+    '<div id="ecBody" class="pedbody"></div>' +
+    '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button type="button" class="btn c3d cv" id="ecFila">' + ic('plus') + 'Agregar producto</button></div>' +
+    '<div class="pedpie"><div id="ecFoot"></div>' +
+    '<label class="chk" style="margin-top:12px"><input type="checkbox" id="ecAct"> Actualizar costo y PVP de los productos con estos valores</label></div>' +
+    '<label class="f pedobs">Observación<input class="in" id="ecNota" value="' + h(D.nota || '') + '" placeholder="Ej.: entregado completo, revisar precios"></label>' +
+    '<div class="pedbtns">' + (nueva ? '<button class="btn c3d cb" id="ecCan">' + ic('clip') + 'Guardar borrador y salir</button><button class="btn c3d cr" id="ecBor">' + ic('trash') + 'Borrar todo</button>'
+      : '<button class="btn" id="ecCan">Cancelar</button><span></span>') +
+      '<button class="btn c3d cy" id="ecOk">' + ic('check') + 'Guardar compra</button></div>' });
   const pintaProv = () => { m.q('#ecPr').innerHTML = '<option value="">— Elige proveedor —</option>' + provs().map((p) => '<option value="' + h(p.id) + '">' + h(p.nombre) + '</option>').join(''); m.q('#ecPr').value = D.pr || ''; };
   pintaProv();
   m.q('#ecFp').value = D.fp; m.q('#ecPl').value = String(D.pl || 30); m.q('#ecAct').checked = D.act;
@@ -3005,29 +3018,69 @@ function editarCompra(c, borr){
   const nuevaLinea = (p) => ({ p: p.id, n: p.n, q: 1, co: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), pvN: Number(p.pv) || 0, pvA: Number(p.pv) || 0 });
   montarBuscador(m.q('#ecBus'), (p) => {
     const ex = D.it.find((x) => x.p === p.id);
-    if (ex) ex.q = r2(ex.q + 1); else D.it.unshift(nuevaLinea(p));
+    if (ex) { ex.q = r2(ex.q + 1); enfocar = D.it.indexOf(ex); } else { D.it.push(nuevaLinea(p)); enfocar = D.it.length - 1; }
     guardarD(); pintar();
-  }, { ph: 'Agrega productos: busca o escanea…', onUnknown: (code) => codigoDesconocido(code, (p) => { if (p) { D.it.unshift(nuevaLinea(p)); guardarD(); pintar(); } }) });
+  }, { ph: 'Agrega productos: busca o escanea…', onUnknown: (code) => codigoDesconocido(code, (p) => { if (p) { D.it.push(nuevaLinea(p)); enfocar = D.it.length - 1; guardarD(); pintar(); } }) });
   const conIva = (x) => Math.round((Number(x.co) || 0) * (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000;
+  let enfocar = null;
   const pintar = () => {
-    m.q('#ecBody').innerHTML = D.it.length ? D.it.map((x, i) => '<div class="ci" data-i="' + i + '"><div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + (x.pvA ? ' · PVP actual ' + money(x.pvA) : '') + '</div></div>' +
-      '<div class="tot">' + money(x.co * x.q) + '<div class="small muted" style="font-weight:400">c/IVA ' + money(conIva(x) * x.q) + '</div></div><div class="ctrl">' +
-      '<label class="minilbl">Cantidad<input class="mini pct" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"></label>' +
-      '<label class="minilbl">Costo s/IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co || '') + '"></label>' +
-      '<label class="minilbl">IVA' + campoIva('mini pct', 'data-k="iva"', x.iva) + '</label>' +
-      '<label class="minilbl cciva">Costo c/IVA<input class="mini" data-k="coi" inputmode="decimal" value="' + (x.co ? conIva(x) : '') + '"></label>' +
-      '<label class="minilbl">PVP nuevo<input class="mini" data-k="pvN" inputmode="decimal" value="' + (x.pvN || '') + '"></label>' +
-      (nueva ? '<label class="minilbl pedira' + (x.prx && x.prx !== D.pr ? ' otro' : '') + '">Pedir a<select class="mini" data-k="prx"><option value="">Esta compra' + (D.pr ? ' (' + h(nomProv(D.pr)) + ')' : '') + '</option>' +
-        vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).filter((v) => v.id !== D.pr).map((v) => '<option value="' + h(v.id) + '"' + (x.prx === v.id ? ' selected' : '') + '>' + h(v.nombre) + '</option>').join('') + '</select></label>' : '') +
-      '<span class="spacer"></span><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button></div></div>').join('') :
-      '<div class="empty card">Agrega los productos de la factura del proveedor</div>';
-    m.q('#ecFoot').innerHTML = casillasCompra(D.it);
+    const provL = nueva ? vivos('prov').sort((a, b) => a.nombre.localeCompare(b.nombre)).filter((v) => v.id !== D.pr) : [];
+    const selPr = (x) => '<select class="in pc-pr' + (x.prx && x.prx !== D.pr ? ' otro' : '') + '" data-k="prx" title="Pedir a otro proveedor"><option value="">Esta compra</option>' +
+      provL.map((v) => '<option value="' + h(v.id) + '"' + (x.prx === v.id ? ' selected' : '') + '>' + h(v.nombre) + '</option>').join('') + '</select>';
+    const fila = (x, i) => { const sub = r2((Number(x.co) || 0) * (Number(x.q) || 0)); const tot = r2(conIva(x) * (Number(x.q) || 0));
+      return '<tr data-i="' + i + '"><td data-l="Código"><input class="in pc-cod" data-ac="cod" value="' + h(x.p) + '"></td>' +
+        '<td data-l="Producto" class="pc-prod"><input class="in pc-nom" data-ac="nom" value="' + h(x.n) + '" title="' + h(x.n) + '"><div class="pc-sub">Stock ' + numf(stockDe(x.p)) + (x.pvA ? ' · PVP actual ' + money(x.pvA) : '') + '</div></td>' +
+        '<td data-l="Cant."><input class="in pc-n" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"></td>' +
+        '<td data-l="IVA %"><input class="in pc-n pc-iva" data-k="iva" inputmode="decimal" value="' + numf(Number(x.iva) || 0) + '"></td>' +
+        '<td data-l="P. sin IVA"><input class="in pc-n" data-k="co" inputmode="decimal" value="' + (x.co || '') + '"></td>' +
+        '<td data-l="P. con IVA"><input class="in pc-n" data-k="coi" inputmode="decimal" value="' + (x.co ? conIva(x) : '') + '"></td>' +
+        '<td data-l="PVP nuevo"><input class="in pc-n pc-pvp" data-k="pvN" inputmode="decimal" value="' + (x.pvN || '') + '"></td>' +
+        (nueva ? '<td data-l="Pedir a">' + selPr(x) + '</td>' : '') +
+        '<td data-l="Subtotal"><input class="in pc-n pc-sub2" data-k="sub" inputmode="decimal" value="' + sub.toFixed(2) + '"></td>' +
+        '<td data-l="Total"><input class="in pc-n pc-tot" data-k="tot" inputmode="decimal" value="' + tot.toFixed(2) + '"></td>' +
+        '<td class="pc-acc"><button class="btn sm icon danger" data-del title="Quitar">' + ic('x') + '</button></td></tr>'; };
+    const vacia = '<tr data-i="new" class="pc-new"><td data-l="Código"><input class="in pc-cod" data-ac="cod" placeholder="Código"></td>' +
+      '<td data-l="Producto" class="pc-prod"><input class="in pc-nom" data-ac="nom" placeholder="Escribe el nombre o código y elige de la lista…"></td>' +
+      '<td data-l="Cant."><input class="in pc-n" value="1" disabled></td><td data-l="IVA %"><input class="in pc-n pc-iva" value="' + numf(cfg().iva) + '" disabled></td>' +
+      '<td data-l="P. sin IVA"><input class="in pc-n" placeholder="Sin IVA" disabled></td><td data-l="P. con IVA"><input class="in pc-n" placeholder="Con IVA" disabled></td>' +
+      '<td data-l="PVP nuevo"><input class="in pc-n pc-pvp" placeholder="PVP" disabled></td>' + (nueva ? '<td data-l="Pedir a"><input class="in" placeholder="Esta compra" disabled></td>' : '') +
+      '<td data-l="Subtotal"><input class="in pc-n pc-sub2" value="0.00" disabled></td><td data-l="Total"><input class="in pc-n pc-tot" value="0.00" disabled></td><td class="pc-acc"></td></tr>';
+    m.q('#ecBody').innerHTML = '<table class="pedtbl ectbl"><thead><tr><th class="c-cod">Código</th><th>Producto</th><th class="c-n">Cant.</th><th class="c-iva">IVA %</th><th class="c-p">P. sin IVA</th><th class="c-p">P. con IVA</th><th class="c-p hp">PVP nuevo</th>' +
+      (nueva ? '<th class="c-pr">Pedir a</th>' : '') + '<th class="c-p hs">Subtotal</th><th class="c-p ht">Total</th><th class="c-x"></th></tr></thead><tbody>' + D.it.map(fila).join('') + vacia + '</tbody></table>';
+    qsa('[data-ac]', m.q('#ecBody')).forEach((inp) => autoProd(inp, (p) => elegir(inp.closest('tr').dataset.i, p)));
+    pintarPieC();
+    if (enfocar != null) { const el = m.q('#ecBody tr[data-i="' + enfocar + '"] [data-k="q"]'); enfocar = null; if (el) { el.focus(); el.select(); } }
   };
+  const elegir = (fi, p) => {
+    const ya = D.it.findIndex((x) => x.p === p.id);
+    if (fi === 'new') { if (ya >= 0) { D.it[ya].q = r2((Number(D.it[ya].q) || 0) + 1); enfocar = ya; toast(p.n + ': ya estaba en la compra, ahora ' + numf(D.it[ya].q)); } else { D.it.push(nuevaLinea(p)); enfocar = D.it.length - 1; } }
+    else { const i = +fi; if (ya >= 0 && ya !== i) { D.it[ya].q = r2((Number(D.it[ya].q) || 0) + (Number(D.it[i].q) || 0)); D.it.splice(i, 1); enfocar = ya > i ? ya - 1 : ya; }
+      else { const q = D.it[i].q, prx = D.it[i].prx; D.it[i] = Object.assign(nuevaLinea(p), { q, prx }); enfocar = i; } }
+    guardarD(); pintar();
+  };
+  const pintarPieC = () => {
+    const T = totCompra(D.it); const tasas = Object.keys(T.tasas).map(Number).sort((x, y) => y - x); if (!tasas.length) tasas.push(Number(cfg().iva) || 0);
+    const cas = (l, v, cl) => '<div class="pcas' + (cl ? ' ' + cl : '') + '"><span>' + l + '</span><b>' + v + '</b></div>';
+    let html = '<div class="pcasillas" style="margin-top:0">' + cas('Productos · unidades', D.it.length + ' · ' + numf(T.unid)) + cas('Subtotal sin IVA', money(r2(T.sub12 + T.sub0)));
+    tasas.forEach((t) => { html += cas('Subtotal IVA ' + numf(t) + '%', money((T.tasas[t] || {}).b || 0)); });
+    tasas.filter((t) => t > 0).forEach((t) => { html += cas('IVA ' + numf(t) + '%', money((T.tasas[t] || {}).i || 0), 'iva'); });
+    html += cas('Total IVA (incluido)', money(T.iva)) + cas('Total con IVA', money(T.tot), 'tot') + '</div>';
+    const cuotas = (n) => { const cc = Math.floor(T.tot / n * 100) / 100; return { c: cc, ult: r2(T.tot - cc * (n - 1)) }; };
+    const plan = [['Contado', 1, 'p0'], ['30 días', 1, 'p30'], ['60 días', 2, 'p60'], ['90 días', 3, 'p90']];
+    html += '<div class="pedpagot">Cómo quedaría el pago</div><div class="pedpago">' + plan.map(([l, n, cl], j) => { const q = cuotas(n);
+      const det = j === 0 ? 'un solo pago' : n === 1 ? '1 cuota de ' + money(T.tot) : n + ' cuotas de ' + money(q.c) + (q.ult !== q.c ? ' (última ' + money(q.ult) + ')' : '');
+      return '<div class="ppag ' + cl + '"><span>' + l + '</span><b>' + money(j === 0 || n === 1 ? T.tot : q.c) + '</b><small>' + det + '</small></div>'; }).join('') + '</div>';
+    m.q('#ecFoot').innerHTML = html;
+  };
+  m.q('#ecFila').onclick = () => { const el = m.q('#ecBody tr[data-i="new"] .pc-nom'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } };
   avisoPed();
-  m.q('#ecBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = D.it[+tr.dataset.i];
+  m.q('#ecBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k || tr.dataset.i === 'new') return; const x = D.it[+tr.dataset.i];
     if (k === 'prx') { x.prx = e.target.value || ''; if (x.prx === D.pr) x.prx = ''; guardarD(); pintar(); return; }
-    const v = parseFloat(String(e.target.value).replace(',', '.')) || 0;
-    if (k === 'coi') x.co = Math.round(v / (1 + (Number(x.iva) || 0) / 100) * 10000) / 10000; else x[k] = v;
+    const v = parseFloat(String(e.target.value).replace(',', '.')) || 0; const q = Number(x.q) || 0; const f = 1 + (Number(x.iva) || 0) / 100;
+    if (k === 'coi') x.co = Math.round(v / f * 10000) / 10000;
+    else if (k === 'sub') { if (q) x.co = Math.round(v / q * 10000) / 10000; }
+    else if (k === 'tot') { if (q) x.co = Math.round(v / f / q * 10000) / 10000; }
+    else x[k] = v;
     guardarD(); pintar(); };
   m.q('#ecBody').onclick = (e) => { if (e.target.closest('[data-del]')) { D.it.splice(+e.target.closest('[data-i]').dataset.i, 1); guardarD(); pintar(); } };
   if (m.q('#ecHab')) m.q('#ecHab').onclick = () => { let n = 0; D.it.forEach((x) => { const pr = provHabitual(x.p); if (pr && pr !== D.pr) { x.prx = pr; n++; } }); guardarD(); pintar(); toast(n ? n + ' producto(s) con su proveedor habitual' : 'Ningún producto tiene otro proveedor habitual.'); };
