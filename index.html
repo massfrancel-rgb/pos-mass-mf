@@ -550,7 +550,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23d';
+const APP_VER = '2026-11-23e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2138,6 +2138,20 @@ async function compartirWA(v, f, modo){
 
 /* ---------- Imprimir o guardar ---------- */
 const tasasDe = (v) => v.tasas || totales(v.it || []).tasas || {};
+/** PC: imprime el ticket como imagen en blanco y negro puro (sin grises): sale más negro y nítido en impresoras térmicas */
+function imprimirTicketImagen(v, f){
+  const t58 = f === 't58' || (f !== 'tk' && tkCfg().ancho !== 80);
+  const puntos = t58 ? 384 : 576, anchoMm = t58 ? 48 : 72;
+  const src = canvasTicket(v, puntos);
+  const cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+  const g = cv.getContext('2d'); g.drawImage(src, 0, 0);
+  const im = g.getImageData(0, 0, cv.width, cv.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const negro = d[i + 3] > 40 && (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) < 200; d[i] = d[i + 1] = d[i + 2] = negro ? 0 : 255; d[i + 3] = 255; }
+  g.putImageData(im, 0, 0);
+  imprimirHTML('<!doctype html><html><head><meta charset="utf-8"><title>' + h(DOC[v.tp] + ' ' + v.num) + '</title><style>@page{margin:0}html,body{margin:0;padding:0;background:#fff}' +
+    'img{display:block;width:' + anchoMm + 'mm;margin:0 auto;image-rendering:pixelated;image-rendering:crisp-edges;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head>' +
+    '<body><img src="' + cv.toDataURL('image/png') + '"></body></html>');
+}
 async function imprimirPDF(doc){
   const url = URL.createObjectURL(doc.output('blob'));
   const fr = document.createElement('iframe'); fr.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0'; fr.src = url;
@@ -2168,6 +2182,7 @@ function opcionesImpresion(v){
       if (a.dataset.a === 'wa') { m.close(); return compartirWA(v, f); }
       if (a.dataset.a === 'mail') { m.close(); return enviarCorreo(v, f); }
       if (a.dataset.a === 'bt') { m.close(); imprimirTicketBT(v, f); toast('Enviando a RawBT…'); return; }
+      if (a.dataset.a === 'imp' && f !== 'a4') { m.close(); imprimirTicketImagen(v, f); toast('Abriendo la impresión…'); return; }
       const d = await pdfFormato(v, f);
       if (a.dataset.a === 'imp') { imprimirPDF(d); toast('Abriendo la impresión…'); }
       else { descargar(d.output('blob'), nombreArchivo(v) + sufijoFmt(f) + '.pdf'); toast('PDF guardado en Descargas'); }
@@ -5654,7 +5669,7 @@ function canvasFila(prods, C){
 function bitsCanvas(cv){
   const w = cv.width, hgt = cv.height, bpr = w / 8, px = cv.getContext('2d').getImageData(0, 0, w, hgt).data;
   const out = new Uint8Array(bpr * hgt);
-  for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11 < 150) out[y * bpr + (x >> 3)] |= 0x80 >> (x & 7); }
+  for (let y = 0; y < hgt; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11 < 200) out[y * bpr + (x >> 3)] |= 0x80 >> (x & 7); }
   return { bpr, h: hgt, bits: out };
 }
 /** Centra la imagen en el ancho real del rollo de la impresora de tickets (58 mm = 384 puntos, 80 mm = 576) */
