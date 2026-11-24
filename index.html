@@ -1840,7 +1840,7 @@ function verDocumento(v0, recien){
   const v = vistaDoc(v0); const t = v; const s = saldo(v0);
   const ncs = vivos('vta').filter((n) => n.tp === 'C' && n.vref === v0.id && !n.an);
   const vref = v0.vref && S.vta.get(v0.vref);
-  const filas = (v.it || []).map((x) => { const k = calcItem(x); return '<tr><td class="n">' + numf(x.q) + '</td><td>' + h(x.n) + '<div class="small muted">' + h(x.p) + (x.d ? ' · desc. ' + x.d + '%' : '') + (x.iva ? '' : ' · IVA 0%') + '</div></td><td class="n">' + money(x.pu) + '</td><td class="n">' + money(k.neto) + '</td></tr>'; }).join('');
+  const filas = (v.it || []).map((x) => { const k = calcItem(x); return '<tr><td><button class="btn sm" data-cpy="' + h(x.p) + '" title="Copiar código" style="font-family:ui-monospace,Consolas,monospace;font-size:15px;font-weight:800;padding:2px 10px;min-width:64px">' + h(x.p) + '</button></td><td class="n"><b>' + numf(x.q) + '</b></td><td>' + h(x.n) + ((x.d || !x.iva) ? '<div class="small muted">' + [x.d ? 'desc. ' + x.d + '%' : '', x.iva ? '' : 'IVA 0%'].filter(Boolean).join(' · ') + '</div>' : '') + '</td><td class="n">' + money(x.pu) + '</td><td class="n">' + money(k.neto) + '</td></tr>'; }).join('');
   const ab = (v.ab || []).map((a) => '<div class="row small"><span>' + fechaTxt(a.f) + ' · ' + h(a.fp === 'nc' ? 'Nota de crédito ' + (a.ref || '') : (FPAGO[a.fp] || '')) + ' · ' + h(nomVend(a.v)) + '</span><span class="spacer"></span><b>' + money(a.m) + '</b></div>').join('');
   const puedeAnular = !v.an && (puede('anular') || (v.v === USR.id && v.f === hoyISO()));
   const m = modal({ title: DOC[v.tp] + ' ' + v.num, wide: true, body:
@@ -1854,7 +1854,7 @@ function verDocumento(v0, recien){
     (v0.anfAuto && v0.sri ? '<div class="note ok" style="margin-bottom:10px">✓ <b>Facturada en Anfibus:</b> ' + h(v0.sri) + ' (marcada automáticamente).</div>' : '') +
     (v.tp === 'C' ? '<div class="note warn" style="margin-bottom:10px">Modifica: <b>' + h(DOC[(vref || {}).tp] || 'Documento') + ' ' + h(v.vrefNum || '') + '</b>' + (vref ? ' del ' + fechaTxt(vref.f) : '') + ' · Motivo: <b>' + h(v.mot || '') + '</b></div>' : '') +
     (ncs.length ? '<div class="note" style="margin-bottom:10px">Notas de crédito emitidas: ' + ncs.map((n) => '<b>' + h(n.num) + '</b> (' + money(Math.abs(n.tot)) + ')').join(', ') + '</div>' : '') +
-    '<div class="tblwrap"><table class="tbl"><thead><tr><th class="n">Cant.</th><th>Descripción</th><th class="n">P. unit.</th><th class="n">Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
+    '<div class="tblwrap"><table class="tbl"><thead><tr><th>Código</th><th class="n">Cant.</th><th>Descripción</th><th class="n">P. unit.</th><th class="n">Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '<div class="grid2" style="margin-top:12px"><div>' + (v.nota ? '<p class="small"><b>Nota:</b> ' + h(v.nota) + '</p>' : '') +
       (v.fp === 'cr' && v.tp !== 'P' ? '<div class="card" style="padding:10px"><b>Abonos</b>' + (ab || '<div class="small muted">Sin abonos</div>') + '<div class="row" style="margin-top:6px"><span>Saldo</span><span class="spacer"></span><b>' + money(s) + '</b></div></div>' : '') + '</div>' +
     '<div class="card">' + desgloseHTML(t) + '</div></div>',
@@ -1876,6 +1876,7 @@ function verDocumento(v0, recien){
   if (m.q('#dvEd')) m.q('#dvEd').onclick = () => { m.close(); cargarEnVenta(v0, 'editar'); };
   if (m.q('#dvDup')) m.q('#dvDup').onclick = () => { m.close(); cargarEnVenta(v0, 'duplicar'); };
   if (m.q('#dvAb')) m.q('#dvAb').onclick = () => { m.close(); registrarAbono(v0); };
+  m.qa('[data-cpy]').forEach((b) => { b.onclick = async () => { const c = b.dataset.cpy; try { await navigator.clipboard.writeText(c); toast('Código ' + c + ' copiado. Pégalo en Anfibus con Ctrl + V.'); } catch (e) { toast('Código: ' + c); } }; });
   if (m.q('#dvFa')) m.q('#dvFa').onclick = async () => { if (await marcarFacturadaAnf(v0)) { m.close(); verDocumento(v0); } };
   if (m.q('#dvAn')) m.q('#dvAn').onclick = async () => {
     const mot = await pedirTexto('Anular ' + DOC[v.tp] + ' ' + v.num, 'Motivo de la anulación', '');
