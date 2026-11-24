@@ -845,14 +845,21 @@ function verPorFacturarAnf(){
   const m = modal({ title: 'Ventas del POS por facturar en Anfibus', wide: true, body: '<div id="paBody"></div>', foot: '<button class="btn" data-x>Cerrar</button>' });
   const pintar = () => {
     const l = pendAnfLista(); const a = anfCfg() || {};
-    m.q('#paBody').innerHTML = '<p class="small muted" style="margin-top:0">Cuando el cajero factura en Anfibus una de estas ventas <b>con los mismos productos y cantidades</b>, se marca sola en 1 o 2 minutos. Si en caja cambiaron algo, pulsa <b>FACTURADA</b> y escribe el N° de factura.</p>' +
+    m.q('#paBody').innerHTML = '<p class="small muted" style="margin-top:0">Cuando el cajero factura en Anfibus una de estas ventas <b>con los mismos productos y cantidades</b>, se marca sola en 1 o 2 minutos. Si en caja cambiaron algo, pulsa <b>FACTURADA</b> y escribe el N° de factura. <b>Toca un código para copiarlo</b> y pégalo en Anfibus con Ctrl + V.</p>' +
       (a.faDia === hoyISO() && Number(a.faN) ? '<div class="small" style="color:#1f9d55;margin-bottom:8px">✓ Hoy se marcaron solas <b>' + Number(a.faN) + '</b> ventas.</div>' : '') +
-      (l.length ? '<div class="tblwrap" style="max-height:60vh;overflow:auto"><table class="tbl"><thead><tr><th>Documento</th><th>Hora</th><th>Cliente</th><th>Productos</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
+      (l.length ? '<div class="tblwrap" style="max-height:60vh;overflow:auto"><table class="tbl"><thead><tr><th>Documento</th><th>Hora</th><th>Cliente</th><th>Productos (código · cantidad)</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
         l.slice(0, 300).map((v) => '<tr><td><a href="#" data-pav="' + h(v.id) + '" onclick="return false"><b>' + h(DOC[v.tp] + ' ' + v.num) + '</b></a><div class="small muted">' + h(nomVend(v.v)) + '</div></td><td>' + (v.f === hoyISO() ? '' : fechaTxt(v.f) + ' ') + horaTxt(v.ts) + '</td><td>' + h(nomCli(v)) + '</td>' +
-          '<td class="small">' + (v.it || []).slice(0, 4).map((x) => numf(x.q) + ' × ' + h(x.n || x.p)).join('<br>') + ((v.it || []).length > 4 ? '<br>…' : '') + '</td><td class="n">' + money(v.tot) + '</td>' +
+          '<td>' + (v.it || []).map((x) => '<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;border-bottom:1px dashed #ddd">' +
+            '<button class="btn sm" data-cpy="' + h(x.p) + '" title="Copiar código" style="font-family:ui-monospace,Consolas,monospace;font-size:16px;font-weight:800;padding:2px 10px;min-width:70px">' + h(x.p) + '</button>' +
+            '<b style="font-size:16px;white-space:nowrap">× ' + numf(x.q) + '</b><span class="small">' + h(x.n || (S.prod.get(x.p) || {}).n || '') + '</span></div>').join('') + '</td><td class="n">' + money(v.tot) + '</td>' +
           '<td><button class="btn sm c3d cv" data-paf="' + h(v.id) + '">Facturada</button></td></tr>').join('') + '</tbody></table></div>'
         : '<div class="card empty"><b>No hay ventas pendientes ✓</b>Todas las ventas del POS ya están facturadas en Anfibus.</div>');
     m.q('#paBody').querySelectorAll('[data-paf]').forEach((b) => { b.onclick = async () => { const v = S.vta.get(b.dataset.paf); if (v && await marcarFacturadaAnf(v)) { pintar(); pintarBtnAnfV(); } }; });
+    m.q('#paBody').querySelectorAll('[data-cpy]').forEach((b) => { b.onclick = async () => {
+      const c = b.dataset.cpy;
+      try { await navigator.clipboard.writeText(c); toast('Código ' + c + ' copiado. Pégalo en Anfibus con Ctrl + V.'); }
+      catch (e) { toast('Código: ' + c); }
+    }; });
     m.q('#paBody').querySelectorAll('[data-pav]').forEach((b) => { b.onclick = () => { const v = S.vta.get(b.dataset.pav); if (v) verDocumento(v); }; });
   };
   pintar();
