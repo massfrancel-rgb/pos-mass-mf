@@ -2023,7 +2023,8 @@ async function pdfTicket(v, ancho){
   (v.it || []).forEach((x) => {
     const k = calcItem(x); doc.setFont('helvetica', 'normal'); fs(7.8);
     doc.splitTextToSize(x.n, W - 2 * Mg).slice(0, 2).forEach((ln) => { doc.text(ln, Mg, y); y += 3.4 * z; });
-    doc.text(numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), Mg + 2, y); doc.text(money(k.neto), W - Mg, y, { align: 'right' }); y += 4.4 * z;
+    doc.setFont('helvetica', 'bold'); doc.text(String(x.p), Mg, y); const wc = doc.getTextWidth(String(x.p)); doc.setFont('helvetica', 'normal');
+    doc.text(numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), Mg + wc + 3, y); doc.text(money(k.neto), W - Mg, y, { align: 'right' }); y += 4.4 * z;
   });
   doc.line(Mg, y - 1.5, W - Mg, y - 1.5); y += 2.5;
   const l = (kk, val, b) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); fs(b ? 11 : 8); doc.text(kk, Mg, y); doc.text(val, W - Mg, y, { align: 'right' }); y += (b ? 5.5 : 3.8) * z; };
@@ -2063,7 +2064,7 @@ function canvasTicket(v, puntos){
     y += 4; const cli = v.cli || CONSUMIDOR;
     izq('Cliente: ' + cli.nombre, 21, false, 3); izq('CI/RUC: ' + (cli.ruc || ''), 21);
     linea();
-    (v.it || []).forEach((x) => { const k = calcItem(x); izq(x.n, 22, true, 3); par('  ' + numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), money(k.neto), 22); y += 4; });
+    (v.it || []).forEach((x) => { const k = calcItem(x); izq(x.n, 22, true, 3); par('Cod ' + x.p + '   ' + numf(x.q) + ' x ' + money(x.pu) + (x.d ? ' -' + x.d + '%' : ''), money(k.neto), 22); y += 4; });
     linea();
     if (v.anf) { par('Subtotal', money(r2((v.sub12 || 0) + (v.sub0 || 0))), 22); par('IVA', money(v.iva || 0), 22); }
     else {
@@ -2112,7 +2113,7 @@ const sufijoFmt = (f) => f === 'a4' ? '' : f === 't58' ? '-ticket58' : '-ticket8
 /* Texto del documento para enviarlo directo al chat del cliente (sin archivo) */
 function textoWA(v){
   v = vistaDoc(v); const C = cfg();
-  const it = (v.it || []).map((x) => '• ' + numf(x.q) + ' x ' + x.n + ' = ' + money(calcItem(x).neto)).join('\n');
+  const it = (v.it || []).map((x) => '• [' + x.p + '] ' + numf(x.q) + ' x ' + x.n + ' = ' + money(calcItem(x).neto)).join('\n');
   return '*' + C.nombre + '*\n' + DOC[v.tp] + ' *' + v.num + '* · ' + fechaTxt(v.f) + '\nCliente: ' + nomCli(v) + '\n\n' + (it ? it + '\n\n' : '') +
     '*TOTAL: ' + money(v.tot) + '*\nPago: ' + (nomFp(v) || '') + '\n\n' + (C.pie || '¡Gracias por su compra!');
 }
