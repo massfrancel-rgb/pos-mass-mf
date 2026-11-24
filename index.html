@@ -550,7 +550,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23e';
+const APP_VER = '2026-11-23f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2567,6 +2567,25 @@ const money4 = (n) => { const v = Number(n) || 0; return '$' + (Math.abs(v) < 1 
 const SELETQ = new Map((() => { try { return ls.get('selEtq', []) || []; } catch (e) { return []; } })());
 function conteoActual(){ return ls.get('conteo', null); }
 /** Excel del conteo en formato tabla con colores (si no se puede cargar ExcelJS, sale el Excel simple) */
+/** Archivo para INV → Toma Física → Importar de Anfibus: Hoja1 con Codigo | Descripcion | Cantidad Física (mismo formato que exporta Anfibus) */
+async function tomaFisicaAnfibus(C){
+  if (!C || !C.ord || !C.ord.length) return toast('No hay productos contados.', true);
+  const filas = C.ord.map((id) => {
+    const p = S.prod.get(id) || { n: id, m: '' };
+    const cod = /^[1-9]\d{0,14}$/.test(String(id)) ? Number(id) : String(id);   // Anfibus guarda como número los códigos solo con dígitos
+    return [cod, (String(p.n || '') + (p.m ? ' ' + p.m : '')).trim(), Number(C.it[id]) || 0];
+  });
+  const X = await libXLSX(); const ws = X.utils.aoa_to_sheet([['Codigo', 'Descripcion', 'Cantidad Física']].concat(filas));
+  ws['!cols'] = [{ wch: 14 }, { wch: 60 }, { wch: 16 }];
+  const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Hoja1');
+  const out = X.write(wb, { bookType: 'xlsx', type: 'array' });
+  const archivo = 'TOMA_FISICA ' + String(C.nom || 'conteo').replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_').slice(0, 60) + ' ' + hoyISO() + '.xlsx';
+  descargar(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), archivo);
+  modal({ title: 'Toma Física para Anfibus', body: '<p style="margin-top:0">Se descargó <b>' + h(archivo) + '</b> con <b>' + filas.length + '</b> productos contados.</p>' +
+    '<ol style="margin:0;padding-left:20px;line-height:1.7"><li>En Anfibus: <b>INV → Toma Física</b>, almacén <b>Matriz</b>.</li><li>Pulsa <b>Importar</b> y elige este archivo (está en <b>Descargas</b>).</li><li>Revisa las diferencias y pulsa <b>Guardar</b> en Anfibus.</li>' +
+    '<li>En 1 o 2 minutos el stock del POS se actualiza solo con el de Anfibus.</li></ol>' +
+    '<p class="small muted">No pulses “Aplicar ajustes” en el POS: el stock lo manda Anfibus.</p>', foot: '<button class="btn pri" data-x>Entendido</button>' });
+}
 async function exportarConteoXL(nombre, cab, filas){
   try { await exportarTablaXL({ nombre, cab, filas, tabla: true, texto: [0], color: colorStockXL, anchos: { 1: 48 } }); }
   catch (e) { exportarFilas(nombre, cab, filas); }
@@ -2645,7 +2664,7 @@ function invConteo(){
   b.innerHTML = '<div class="stack"><div class="card"><div class="row"><div class="grow"><b>' + h(C.nom) + '</b><div class="small muted">Iniciado ' + fechaTxt(fechaISO(new Date(C.ini))) + ' ' + horaTxt(C.ini) + ' · <span id="ctN"></span> · <span id="ctEst"></span></div></div>' +
     '<div class="seg" id="ctModo"><button data-v="suma">Cada lectura +1</button><button data-v="pide">Preguntar cantidad</button></div></div></div>' +
     '<div id="ctBus"></div><div class="tblwrap"><table class="tbl"><thead id="ctHead"></thead><tbody id="ctBody"></tbody></table></div>' +
-    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn" id="ctAnf">' + ic('upload') + 'Excel para Anfibius</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
+    '<div class="row"><button class="btn c3d cb" id="ctSave">' + ic('download') + 'Guardar conteo</button><button class="btn" id="ctLista2">' + ic('list') + 'Conteos guardados</button><button class="btn" id="ctSaveX">' + ic('check') + 'Guardar y seguir después</button><button class="btn danger" id="ctDesc">' + ic('trash') + 'Descartar conteo</button><button class="btn" id="ctX">' + ic('sheet') + 'Exportar</button><button class="btn" id="ctAnf">' + ic('upload') + 'Excel para Anfibius</button><button class="btn c3d co" id="ctTF">' + ic('upload') + 'Toma Física Anfibus</button><button class="btn c3d ca" id="ctEtq">' + ic('barcode') + 'Etiquetas</button><span class="spacer"></span><button class="btn pri" id="ctApl">' + ic('check') + 'Aplicar ajustes</button></div></div>';
   const estado = () => { const e = $('ctEst'); if (!e) return; e.innerHTML = C.cambios ? '<b style="color:var(--warn-fg)">● cambios sin guardar</b>' : (C.sv ? '<span style="color:var(--ok-fg)">✓ guardado ' + horaTxt(C.sv) + '</span>' : 'sin guardar todavía'); };
   const guardar = () => { C.cambios = 1; ls.set('conteo', C); estado(); };
   const guardarNube = async (silencioso) => {
@@ -2713,7 +2732,9 @@ function invConteo(){
   $('ctX').onclick = () => exportarConteoXL(C.nom, ['Código', 'Producto', 'Stock sistema', 'Stock contado', 'Diferencia', 'Resultado', 'Costo anterior', 'Costo nuevo', 'IVA %', 'PVP anterior (c/IVA)', 'PVP nuevo (c/IVA)', 'PVP nuevo (s/IVA)'], C.ord.map((id) => { const p = S.prod.get(id) || { n: id }; const s = stockDe(id); const d = r2(C.it[id] - s);
     return [id, p.n, s, C.it[id], d, d > 0 ? 'Aumenta' : d < 0 ? 'Disminuye' : 'Igual', Number(p.co) || 0, C.co && C.co[id] != null ? C.co[id] : Number(p.co) || 0, ivaDe(p), Number(p.pv) || 0, C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0, r2((C.pv && C.pv[id] != null ? C.pv[id] : Number(p.pv) || 0) / (1 + ivaDe(p) / 100))]; }));
   $('ctAnf').onclick = () => exportarAnfibius({ ids: C.ord.slice(), titulo: C.nom, costos: C.co || {}, pvps: C.pv || {}, stock: Object.assign({}, C.it), sistema: Object.fromEntries(C.ord.map((id) => [id, stockDe(id)])) });
+  $('ctTF').onclick = () => tomaFisicaAnfibus(C);
   $('ctApl').onclick = async () => {
+    if (anfCfg() && !(await confirmar('⚠ La sincronización con Anfibus está activa: si aplicas los ajustes aquí, en 1 minuto el stock del POS vuelve al de Anfibus y el conteo se pierde. Lo correcto es pulsar TOMA FÍSICA ANFIBUS e importar el archivo en Anfibus. ¿Aplicar de todos modos en el POS?', 'Aplicar igual', true))) return;
     const difs = C.ord.map((id) => ({ id, d: r2((C.it[id] || 0) - stockDe(id) - separadoCat(id)) })).filter((x) => x.d);
     if (!C.ord.length) return toast('No hay productos contados.', true);
     const cos = Object.keys(C.co || {}).filter((id) => S.prod.get(id)); const pvs = Object.keys(C.pv || {}).filter((id) => S.prod.get(id));
