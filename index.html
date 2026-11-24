@@ -834,6 +834,31 @@ function pintarBtnAnf(){
   const b = $('iAnf'); if (!b) return;
   b.innerHTML = ic('rotate') + (anfPedidaPend() ? 'Revisión pedida ' + horaTxt(Number(ls.get('anfPide', 0))) + '…' : 'Pedir revisión completa');
 }
+/* ---- Botón "Por facturar en Anfibus" (pantalla Vender) ---- */
+const pendAnfLista = () => vivos('vta').filter(pendAnfibus).sort((x, y) => (y.ts || 0) - (x.ts || 0));
+function pintarBtnAnfV(){
+  const b = $('vAnf'); if (!b) return;
+  const n = pendAnfLista().length;
+  b.innerHTML = ic('receipt') + 'Por facturar en Anfibus <b style="background:#fff;color:#9C5410;border-radius:10px;padding:0 7px;margin-left:6px">' + n + '</b>';
+}
+function verPorFacturarAnf(){
+  const m = modal({ title: 'Ventas del POS por facturar en Anfibus', wide: true, body: '<div id="paBody"></div>', foot: '<button class="btn" data-x>Cerrar</button>' });
+  const pintar = () => {
+    const l = pendAnfLista(); const a = anfCfg() || {};
+    m.q('#paBody').innerHTML = '<p class="small muted" style="margin-top:0">Cuando el cajero factura en Anfibus una de estas ventas <b>con los mismos productos y cantidades</b>, se marca sola en 1 o 2 minutos. Si en caja cambiaron algo, pulsa <b>FACTURADA</b> y escribe el N° de factura.</p>' +
+      (a.faDia === hoyISO() && Number(a.faN) ? '<div class="small" style="color:#1f9d55;margin-bottom:8px">✓ Hoy se marcaron solas <b>' + Number(a.faN) + '</b> ventas.</div>' : '') +
+      (l.length ? '<div class="tblwrap" style="max-height:60vh;overflow:auto"><table class="tbl"><thead><tr><th>Documento</th><th>Hora</th><th>Cliente</th><th>Productos</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
+        l.slice(0, 300).map((v) => '<tr><td><a href="#" data-pav="' + h(v.id) + '" onclick="return false"><b>' + h(DOC[v.tp] + ' ' + v.num) + '</b></a><div class="small muted">' + h(nomVend(v.v)) + '</div></td><td>' + (v.f === hoyISO() ? '' : fechaTxt(v.f) + ' ') + horaTxt(v.ts) + '</td><td>' + h(nomCli(v)) + '</td>' +
+          '<td class="small">' + (v.it || []).slice(0, 4).map((x) => numf(x.q) + ' × ' + h(x.n || x.p)).join('<br>') + ((v.it || []).length > 4 ? '<br>…' : '') + '</td><td class="n">' + money(v.tot) + '</td>' +
+          '<td><button class="btn sm c3d cv" data-paf="' + h(v.id) + '">Facturada</button></td></tr>').join('') + '</tbody></table></div>'
+        : '<div class="card empty"><b>No hay ventas pendientes ✓</b>Todas las ventas del POS ya están facturadas en Anfibus.</div>');
+    m.q('#paBody').querySelectorAll('[data-paf]').forEach((b) => { b.onclick = async () => { const v = S.vta.get(b.dataset.paf); if (v && await marcarFacturadaAnf(v)) { pintar(); pintarBtnAnfV(); } }; });
+    m.q('#paBody').querySelectorAll('[data-pav]').forEach((b) => { b.onclick = () => { const v = S.vta.get(b.dataset.pav); if (v) verDocumento(v); }; });
+  };
+  pintar();
+  const alLlegar = () => { if (document.body.contains(m.q('#paBody'))) { pintar(); } else document.removeEventListener('datos-nube', alLlegar); };
+  document.addEventListener('datos-nube', alLlegar);
+}
 async function marcarFacturadaAnf(v){
   const n = await pedirTexto('Facturada en Anfibus', 'N° de la factura de Anfibus (ej. 001-001-000012345). Desde ahora el stock lo descuenta Anfibus.', v.sri || '');
   if (n == null || !n.trim()) return false;
@@ -1448,6 +1473,7 @@ function pgVender(){
   const v = $('view');
   const titulo = CART.editId ? 'Editando pedido' : (CART.pedId ? 'Pedido → venta' : 'Nueva venta');
   v.innerHTML = '<div class="pagehead"><h2>' + titulo + '</h2>' +
+    (anfCfg() ? '<button class="btn sm c3d co" id="vAnf"></button>' : '') +
     '<button class="btn sm c3d cb" id="vPed">' + ic('clip') + 'Pedidos pendientes</button>' +
     '<button class="btn sm c3d cr" id="vVaciar">' + ic('trash') + 'Vaciar</button></div>' +
     '<div class="kpis hoyk" id="vHoy"></div><div id="vBus"></div><div class="cart" id="vCart"></div>';
@@ -1456,6 +1482,7 @@ function pgVender(){
     { onUnknown: (code) => toast('El código ' + code + ' no está registrado. Asígnalo en Inventario.', true) });
   $('vVaciar').onclick = async () => { if (!CART.it.length && !CART.pedId && !CART.editId) return; if (await confirmar('¿Vaciar la venta actual?', 'Vaciar', true)) { CART = cartNuevo(); guardarCart(); render(); } };
   $('vPed').onclick = () => { location.hash = 'docs?tp=P&est=pend'; };
+  if ($('vAnf')) { pintarBtnAnfV(); $('vAnf').onclick = verPorFacturarAnf; }
   const bar = document.createElement('div'); bar.className = 'paybar';
   bar.innerHTML = '<div class="pb-items"><div class="lbl" id="pbLbl">0 artículos</div></div><div class="pb-tot" id="pbTot"></div><button class="btn c3d cv" id="pbBtn">' + ic('cash') + 'Cobrar</button>';
   document.body.appendChild(bar);
@@ -5902,6 +5929,7 @@ document.addEventListener('datos-nube', () => {
   pintarSync();
   if (!USR) { if ($('login') && !qs('#pinDots')) pantallaLogin(); return; }
   const fresh = S.vend.get(USR.id); if (fresh) { if (fresh._d || fresh.act === false) return cerrarSesion(); USR = fresh; }
+  pintarBtnAnfV();
   // Inventario: se actualiza la lista sin borrar lo que escribiste en el buscador
   if (RUTA === 'inv' && INV_REFRESCAR && $('pBody')) {
     const ae = document.activeElement;
