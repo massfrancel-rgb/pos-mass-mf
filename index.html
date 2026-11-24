@@ -807,6 +807,7 @@ const cfg = () => Object.assign({ id: 'emp', nombre: 'MASS FERRETERÍA', ruc: ''
 
 /* ---------- Stock: compras − ventas ± ajustes ---------- */
 let STOCK = new Map();
+let INV_REFRESCAR = null;   // vuelve a pintar la lista del Inventario (con la misma búsqueda y filtros)
 function stockDe(id){ if (dirtyStock) calcStock(); return STOCK.get(id) || 0; }
 /** Unidades separadas por pedidos del Catálogo MASS pendientes (siguen físicamente en la tienda y en Anfibus) */
 function separadoCat(id){ let t = 0; S.vta.forEach((v) => { if (!v._d && !v.an && v.tp === 'P' && v.cat && !v.cv) (v.it || []).forEach((x) => { if (x.p === id) t += Number(x.q) || 0; }); }); return r2(t); }
@@ -815,6 +816,24 @@ const anfCfg = () => { const a = S.cfg.get('anf'); return a && !a._d ? a : null;
 /** Venta del POS que todavía no está facturada en Anfibus (sin N° de factura SRI), desde que se activó la sincronización */
 function pendAnfibus(v){ const a = anfCfg(); return !!a && !v._d && !v.an && v.tp !== 'P' && !v.anf && !String(v.sri || '').trim() && (v.it || []).length > 0 && (Number(v.ts) || 0) >= (Number(a.desde) || 0); }
 function pendAnfDe(id){ let t = 0; if (!anfCfg()) return 0; S.vta.forEach((v) => { if (pendAnfibus(v)) (v.it || []).forEach((x) => { if (x.p === id) t += Number(x.q) || 0; }); }); return t; }
+/** Pide al servidor de Anfibus que vuelva a enviar todo el inventario (lo hace en su siguiente vuelta, cada minuto) */
+const anfPedidaPend = () => { const a = anfCfg(), pd = Number(ls.get('anfPide', 0)) || 0; return !!a && pd > 0 && (Number(a.ultFull) || 0) < pd && Date.now() - pd < 30 * 60000; };
+async function pedirRevisionAnf(b){
+  if (!M.nube || !M.nube.url) return toast('Primero conecta la nube en Ajustes.', true);
+  if (b) b.disabled = true;
+  try {
+    const d = await llamarNube({ cat: 'anfibus', op: 'pedir', k: M.nube.clave }); ls.set('anfPide', d.pide || Date.now());
+    toast('Revisión completa pedida. En 1 o 2 minutos el inventario se pone igual que Anfibus (se actualiza solo).');
+    if (RUTA === 'inv') pintarBtnAnf(); else render();
+    // en 2 minutos trae los cambios aunque el equipo no esté sincronizando solo
+    setTimeout(() => sincronizar(), 75000); setTimeout(() => sincronizar(), 130000);
+  } catch (e) { toast('No se pudo pedir: ' + e.message, true); }
+  finally { if (b) b.disabled = false; }
+}
+function pintarBtnAnf(){
+  const b = $('iAnf'); if (!b) return;
+  b.innerHTML = ic('rotate') + (anfPedidaPend() ? 'Revisión pedida ' + horaTxt(Number(ls.get('anfPide', 0))) + '…' : 'Pedir revisión completa');
+}
 async function marcarFacturadaAnf(v){
   const n = await pedirTexto('Facturada en Anfibus', 'N° de la factura de Anfibus (ej. 001-001-000012345). Desde ahora el stock lo descuenta Anfibus.', v.sri || '');
   if (n == null || !n.trim()) return false;
@@ -1040,7 +1059,10 @@ function pintarNav(){
 }
 $('syncBtn').onclick = () => { if (M.nube && M.nube.url) sincronizar(true); else irA('ajustes'); };
 $('syncNow').onclick = async () => { if (!(M.nube && M.nube.url)) { toast('Primero conecta la nube en Ajustes.', true); return irA('ajustes'); }
-  const ok = await sincronizar(true); if (ok && USR && !$('modals').children.length) render(); };
+  for (let i = 0; i < 300 && syncEnCurso; i++) await new Promise((r) => setTimeout(r, 200));
+  const ok = await sincronizar(true); if (!ok || !USR || $('modals').children.length) return;
+  if (RUTA === 'inv' && INV_REFRESCAR && INV_REFRESCAR()) return;
+  render(); };
 $('userBtn').onclick = () => {
   const m = modal({ title: USR.nombre, body: '<p class="muted" style="margin-top:0">' + (esAdmin() ? 'Administrador' : 'Vendedor') + ' · Punto ' + h(USR.pto || '001') + '</p>' +
     '<div class="stack"><button class="btn block" id="uTema">' + ic('gear') + 'Cambiar tema claro / oscuro</button>' +
@@ -2244,10 +2266,11 @@ function pgInventario(){
   let tab = prm.get('t') || ls.get('invTab', 'prod');
   if (tab === 'conteo' && !puede('inv')) tab = 'prod';
   const v = $('view');
-  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + '<button class="btn sm c3d ca" id="iEtq">' + ic('barcode') + 'Etiquetas</button>' + (puede('prod') ? '<button class="btn sm c3d cb" id="iFr">⚡ Fotos rápidas</button>' : '') + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + '</div>' +
+  v.innerHTML = '<div class="pagehead"><h2>Inventario</h2>' + '<button class="btn sm c3d ca" id="iEtq">' + ic('barcode') + 'Etiquetas</button>' + (puede('prod') ? '<button class="btn sm c3d cb" id="iFr">⚡ Fotos rápidas</button>' : '') + (puede('prod') ? '<button class="btn sm c3d cv" id="iNuevo">' + ic('plus') + 'Producto</button>' : '') + (esAdmin() && anfCfg() ? '<button class="btn sm c3d cp" id="iAnf" title="Pone el stock, precios y productos igual que Anfibus en 1 o 2 minutos"></button>' : '') + '</div>' +
     '<div class="tabs" id="iTabs"><button data-t="prod">Productos y stock</button>' + (puede('inv') ? '<button data-t="conteo">Conteo con escáner</button><button data-t="mov">Ajustes de stock</button>' : '') + '</div><div id="iBody"></div>';
   if ($('iNuevo')) $('iNuevo').onclick = () => editarProducto(null);
   if ($('iFr')) $('iFr').onclick = fotosRapidas;
+  if ($('iAnf')) { pintarBtnAnf(); $('iAnf').onclick = () => pedirRevisionAnf($('iAnf')); }
   $('iEtq').onclick = () => imprimirEtiquetas([]);
   const go = (t) => { tab = t; ls.set('invTab', t); qsa('#iTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
     if (t === 'prod') invProductos(); else if (t === 'conteo') invConteo(); else invMovs(); };
@@ -2318,6 +2341,7 @@ function invProductos(){
   $('pSeg').onclick = (e) => { const x = e.target.closest('button'); if (!x) return; $('pFil').value = x.dataset.v; ls.set('invFil', x.dataset.v); lim = 150; filtrar(); };
   $('pFil').value = ls.get('invFil', '');
   $('pMas').onclick = () => { lim += 300; filtrar(); };
+  INV_REFRESCAR = () => { if (!$('pBody')) return false; filtrar(); pintarBtnAnf(); return true; };
   $('pHead').onclick = (e) => { const t2 = e.target.closest('[data-is]'); if (!t2) return; const k = t2.dataset.is; const so = ls.get('invSort', { k: 'nom', d: false });
     ls.set('invSort', so.k === k ? { k, d: !so.d } : { k, d: false }); lim = 150; filtrar(); };
   $('pBody').onclick = (e) => { if (e.target.closest('[data-noab]')) return; const r = e.target.closest('[data-id]'); if (r) editarProducto(S.prod.get(r.dataset.id)); };
@@ -3526,12 +3550,7 @@ function pgExcel(){
   $('xStock').onclick = () => { const [c, f] = hojaProductos(); exportarFilas('Productos y stock', c, f); };
   if ($('xCat')) $('xCat').onclick = exportarCatalogo;
   if ($('xPub')) $('xPub').onclick = publicarCatalogo;
-  if ($('anfFull')) $('anfFull').onclick = async () => {
-    if (!M.nube || !M.nube.url) return toast('Primero conecta la nube en Ajustes.', true);
-    const b = $('anfFull'); b.disabled = true;
-    try { const d = await llamarNube({ cat: 'anfibus', op: 'pedir', k: M.nube.clave }); ls.set('anfPide', d.pide || Date.now()); toast('Revisión completa pedida. El servidor de Anfibus la hará en menos de 5 minutos.'); render(); }
-    catch (e) { b.disabled = false; toast('No se pudo pedir: ' + e.message, true); }
-  };
+  if ($('anfFull')) $('anfFull').onclick = () => pedirRevisionAnf($('anfFull'));
   document.querySelectorAll('[data-fanf]').forEach((b) => { b.onclick = async () => { const v = S.vta.get(b.dataset.fanf); if (v && await marcarFacturadaAnf(v)) render(); }; });
   document.querySelectorAll('[data-vanf]').forEach((b) => { b.onclick = () => { const v = S.vta.get(b.dataset.vanf); if (v) verDocumento(v); }; });
   if ($('xTok')) $('xTok').onclick = async () => { await llaveGitHub(); render(); };
@@ -3796,7 +3815,7 @@ function tarjetaAnfibus(){
       ' Última actualización: <b>' + fechaTxt(fechaISO(new Date(Number(a.ult) || 0))) + ' ' + horaTxt(Number(a.ult) || 0) + '</b>' + (a.ultFull ? ' · revisión completa: ' + fechaTxt(fechaISO(new Date(Number(a.ultFull)))) : '') + '.</div>' +
     (function(){ const pd = Number(ls.get('anfPide', 0)) || 0; const hecha = pd && (Number(a.ultFull) || 0) >= pd;
       return '<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><button class="btn c3d cb" id="anfFull">' + ic('rotate') + 'Pedir revisión completa</button>' +
-        '<span class="small muted">' + (pd && !hecha ? '⏳ Pedida a las <b>' + horaTxt(pd) + '</b>. El servidor la hará en menos de 5 minutos; pulsa SINCRONIZAR para ver el resultado.' :
+        '<span class="small muted">' + (pd && !hecha ? '⏳ Pedida a las <b>' + horaTxt(pd) + '</b>. El servidor la hará en 1 o 2 minutos; pulsa SINCRONIZAR para ver el resultado.' :
           'Vuelve a enviar todo el inventario de Anfibus y corrige cualquier diferencia (se hace sola cada día después de las 3:00 a. m.).') + '</span></div>'; })() +
     '<p class="small muted" style="margin:0">El stock del POS = stock de Anfibus − pedidos del Catálogo pendientes − ventas del POS que aún no se facturan en Anfibus. Al facturar en Anfibus una venta del POS, márcala aquí con su N° de factura.</p>' +
     '<h4 style="margin:6px 0 0">Ventas del POS por facturar en Anfibus (' + pend.length + ')</h4>' +
@@ -5881,6 +5900,12 @@ document.addEventListener('datos-nube', () => {
   pintarSync();
   if (!USR) { if ($('login') && !qs('#pinDots')) pantallaLogin(); return; }
   const fresh = S.vend.get(USR.id); if (fresh) { if (fresh._d || fresh.act === false) return cerrarSesion(); USR = fresh; }
+  // Inventario: se actualiza la lista sin borrar lo que escribiste en el buscador
+  if (RUTA === 'inv' && INV_REFRESCAR && $('pBody')) {
+    const ae = document.activeElement;
+    if (!$('modals').children.length && !(ae && $('pBody').contains(ae))) INV_REFRESCAR();
+    return;
+  }
   const ocupado = $('modals').children.length || (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName));
   if (!ocupado && RUTA !== 'vender') render();
 });
