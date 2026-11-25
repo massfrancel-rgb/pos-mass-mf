@@ -467,6 +467,10 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedac .op .n{flex:1;font-weight:700;text-transform:uppercase}.pedac .op .st{border-radius:10px;padding:0 8px;font-weight:800;font-size:12.5px;background:#E3F6E9;color:#14653A}.pedac .op .st.z{background:#FBE3DE;color:#B12A18}
 .pedac .op .pr{font-weight:800;color:#1F3A93;white-space:nowrap}.pedac .vacio{padding:10px;color:var(--muted);font-size:13.5px}
 .pedtbl td.cod .in,.pedtbl td.nom .in{min-height:40px;font-weight:700}.pedtbl td.cod .in{width:110px;font-family:ui-monospace,Consolas,monospace}
+.pmini{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.pmini div{border:1.5px solid var(--line);border-radius:10px;padding:3px 10px;background:var(--surface);line-height:1.15;min-width:92px}
+.pmini span{display:block;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.pmini b{font-size:15px;font-variant-numeric:tabular-nums}.pmini small{display:block;font-size:10.5px;color:var(--muted)}
+.pmini .t{border-color:#1F9D55;background:#E3F6E9}.pmini .t span{color:#14653A}.pmini .d30{border-color:#2563eb}.pmini .d30 span{color:#1F3A93}.pmini .d60{border-color:#C07A10}.pmini .d60 span{color:#8A5A06}.pmini .d90{border-color:#7C3AED}.pmini .d90 span{color:#5A2DB0}
 .plancred{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:6px}
 .plancred div{border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;background:var(--surface)}
 .plancred span{display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
@@ -571,7 +575,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25e';
+const APP_VER = '2026-11-25f';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3048,12 +3052,15 @@ function pintarPedidosPendientes(cont){
   const l = vivos('ped').filter((p) => p.est !== 'rec').sort((a, b) => (b.ts || 0) - (a.ts || 0));
   if (!l.length) { cont.innerHTML = ''; return; }
   const sel = new Set();
-  cont.innerHTML = '<div class="card pedpend"><div class="row" style="margin-bottom:6px;flex-wrap:wrap;gap:8px"><b>' + ic('clip') + ' Pedidos a proveedores por recibir (' + l.length + ')</b><span class="spacer"></span>' +
+  const totTodos = l.reduce((t, p) => t + totPed(p.it || [], p.dp).tot, 0);
+  cont.innerHTML = '<div class="card pedpend"><div class="row" style="margin-bottom:6px;flex-wrap:wrap;gap:8px"><b>' + ic('clip') + ' Pedidos a proveedores por recibir (' + l.length + ')</b>' +
+      (l.length > 1 ? '<span class="badge" style="background:#E3F6E9;color:#14653A;font-size:13px">Total de todos: ' + money(totTodos) + '</span>' : '') + '<span class="spacer"></span>' +
       '<label class="chk small" style="margin:0"><input type="checkbox" id="ppAll"> Todos</label>' +
       '<button class="btn sm danger" id="ppDel" disabled>' + ic('trash') + 'Eliminar (<span id="ppN">0</span>)</button><button class="btn sm" id="ppTodos">Ver todos</button></div><div class="list">' +
     l.map((p) => { const u = (p.it || []).reduce((t, x) => t + (Number(x.q) || 0), 0);
       return '<div class="li" data-ped="' + h(p.id) + '"><label class="pedck" data-noab="1"><input type="checkbox" data-pk="' + h(p.id) + '"></label><div class="grow"><div class="t">' + h(nomProv(p.pr)) + ' · ' + h(p.num) + ' <span class="badge ' + EST_PED[p.est][1] + '">' + EST_PED[p.est][0] + '</span></div>' +
         '<div class="s">' + fechaTxt(p.f) + ' · ' + (p.it || []).length + ' productos · ' + numf(u) + ' u. · ' + h(nomVend(p.v)) + '</div></div>' +
+        planCreditoMini(totPed(p.it || [], p.dp).tot) +
         '<button class="btn sm c3d cp" data-rec="' + h(p.id) + '">' + ic('truck') + 'Llegó: registrar compra</button></div>'; }).join('') + '</div></div>';
   const act = () => { cont.querySelector('#ppN').textContent = sel.size; cont.querySelector('#ppDel').disabled = !sel.size; cont.querySelector('#ppAll').checked = sel.size === l.length; };
   cont.onchange = (e) => {
@@ -5400,6 +5407,14 @@ function verPedido(p0){
   pintar();
 }
 
+/** Versión compacta: Total + 30 / 60 / 90 días (para la lista de pedidos por recibir) */
+function planCreditoMini(tot){
+  tot = r2(tot); const c = (n) => Math.floor(tot / n * 100) / 100;
+  return '<div class="pmini"><div class="t"><span>Total</span><b>' + money(tot) + '</b><small>contado</small></div>' +
+    '<div class="d30"><span>30 días</span><b>' + money(tot) + '</b><small>1 pago</small></div>' +
+    '<div class="d60"><span>60 días</span><b>' + money(c(2)) + '</b><small>2 pagos</small></div>' +
+    '<div class="d90"><span>90 días</span><b>' + money(c(3)) + '</b><small>3 pagos</small></div></div>';
+}
 /** Cómo quedaría el pago: contado, 30 días (1 cuota), 60 días (2 cuotas), 90 días (3 cuotas; la última ajusta los centavos) */
 function planCredito(tot){
   tot = r2(tot);
