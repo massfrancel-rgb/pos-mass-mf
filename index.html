@@ -448,6 +448,7 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
   body{background:#fff;color:#000}
 }
 .pedbar .pedrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%}
+.pedbar .pedrow b svg{width:18px;height:18px;vertical-align:-4px;margin-right:2px;display:inline-block}
 .pedbar .pedrow + .pedrow{border-top:1px dashed rgba(120,90,20,.35);padding-top:8px}
 .pedbar .pedrow > span svg,.pedpend > .row > b svg,#ecPedAv .note > svg{width:18px;height:18px;vertical-align:-4px;margin-right:4px;display:inline-block}
 .pedpend{padding:10px 12px;border-left:4px solid #8A3FD1}
@@ -575,7 +576,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25f';
+const APP_VER = '2026-11-25g';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -2479,7 +2480,14 @@ function invProductos(){
         (sinProv ? ' · <span style="color:var(--warn-fg);font-weight:700">' + sinProv + ' sin proveedor</span>' : '') + '</span><span class="spacer"></span>' +
         (sinProv ? '<select class="in" id="ppSin" style="width:auto;min-height:36px"><option value="">Proveedor para los que no tienen…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' : '') +
         '<select class="in" id="ppTodos" style="width:auto;min-height:36px"><option value="">Cambiar proveedor a todos…</option>' + opcionesProv('').replace('<option value="">— Proveedor —</option>', '') + '</select>' +
-        '<button class="btn sm" id="ppLimp" type="button">' + ic('x') + 'Desmarcar</button><button class="btn sm c3d co" id="ppCrear" type="button">' + ic('clip') + 'Crear pedido</button></div>';
+        '<button class="btn sm" id="ppLimp" type="button">' + ic('x') + 'Desmarcar</button><button class="btn sm c3d co" id="ppCrear" type="button">' + ic('clip') + 'Crear pedido</button></div>' +
+        // por cada proveedor: monto del pedido y cómo quedaría a 30 / 60 / 90 días
+        (() => { const g = new Map(); SELPED.forEach((x, id) => { const k = x.pr || ''; const p = S.prod.get(id) || {}; if (!g.has(k)) g.set(k, []);
+            g.get(k).push({ p: id, n: p.n, q: Number(x.q) || 0, co: Number(p.co) || 0, iva: ivaP(p) }); });
+          return Array.from(g.entries()).sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1)).map(([pr, its]) => { const T = totPed(its, 0); const sinCo = its.filter((y) => !y.co).length;
+            return '<div class="pedrow" style="gap:12px">' +
+              '<div style="min-width:200px"><b style="font-size:15px' + (pr ? '' : ';color:var(--warn-fg)') + '">' + ic('truck') + ' ' + h(pr ? nomProvI(pr) : 'Sin proveedor') + '</b>' +
+              '<div class="small muted">' + its.length + ' productos · ' + numf(its.reduce((t, y) => t + y.q, 0)) + ' u.' + (sinCo ? ' · ' + sinCo + ' sin costo' : '') + '</div></div>' + planCreditoMini(T.tot) + '</div>'; }).join(''); })();
     if ($('ppSin')) $('ppSin').onchange = (e) => { if (!e.target.value) return; SELPED.forEach((x) => { if (!x.pr) x.pr = e.target.value; }); filtrar(); };
     $('ppTodos').onchange = (e) => { if (!e.target.value) return; SELPED.forEach((x) => { x.pr = e.target.value; }); filtrar(); };
     $('ppLimp').onclick = () => { SELPED.clear(); filtrar(); };
