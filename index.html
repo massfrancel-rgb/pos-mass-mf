@@ -452,6 +452,21 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedbar .pedrow > span svg,.pedpend > .row > b svg,#ecPedAv .note > svg{width:18px;height:18px;vertical-align:-4px;margin-right:4px;display:inline-block}
 .pedpend{padding:10px 12px;border-left:4px solid #8A3FD1}
 .ci .ctrl.pedctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.ci .pedctrl .minilbl{flex:1 1 92px;min-width:84px}.ci .pedctrl .mini,.ci .pedctrl .mini.pct{width:100%}.mini.strong{font-weight:800}
+.sheet.full{max-width:none;width:calc(100vw - 24px);height:calc(100vh - 24px);max-height:none}
+@media (max-width:759px){.sheet.full{width:100%;height:96vh}}
+.pedtbl{width:100%;border-collapse:collapse;font-size:14.5px}
+.pedtbl th{background:#1A1814;color:#F2EEE5;text-align:left;padding:8px 6px;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;position:sticky;top:0;z-index:1}
+.pedtbl th.n{text-align:right}.pedtbl td{padding:5px 4px;border-top:1px solid var(--line);vertical-align:middle;background:var(--surface)}
+.pedtbl .mini{width:100%;min-width:64px;text-align:right}.pedtbl td.cod{font-family:ui-monospace,Consolas,monospace;font-weight:800;font-size:15px;white-space:nowrap}
+.pedtbl td.nom{min-width:240px}.pedtbl td.nom b{display:block;font-size:14.5px}.pedtbl td.nom small{color:var(--muted)}
+.pedtbl td.acc{white-space:nowrap;text-align:right}.pedtbl td.acc .btn{min-height:34px}
+.pedtbl .lsub .mini{background:#E6F0FB;border-color:#8DB3E2;color:#12316E}.pedtbl .ltot .mini{background:#E3F6E9;border-color:#7CC79A;color:#14653A;font-weight:800}
+.plancred{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:6px}
+.plancred div{border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;background:var(--surface)}
+.plancred span{display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.plancred b{display:block;font-family:var(--font-display);font-size:22px;font-variant-numeric:tabular-nums}
+.plancred small{color:var(--muted)}
+.plancred .p0{border-color:#1F9D55}.plancred .p30{border-color:#2563eb}.plancred .p60{border-color:#C07A10}.plancred .p90{border-color:#7C3AED}
 .pedhead{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:#0f6b55;color:#fff;border-radius:12px 12px 0 0;padding:8px 12px;margin-top:6px}
 .pedhead b{display:flex;align-items:center;gap:6px;text-transform:uppercase;font-size:13px;letter-spacing:.3px}.pedhead b svg{width:18px;height:18px}
 .pedhead .pedivd{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700}.pedhead .mini{width:64px;color:#1a1814;background:#fff}
@@ -550,7 +565,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25b';
+const APP_VER = '2026-11-25c';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5195,7 +5210,7 @@ function verPedido(p0){
   const P = nuevo ? { id: uid('pp'), num: siguientePedidoProv(), pr: '', f: hoyISO(), ts: Date.now(), v: USR.id, it: [], est: 'pend', nota: '' } : JSON.parse(JSON.stringify(p0));
   delete P._u; delete P._d;
   const bloqueado = P.est === 'rec';
-  const m = modal({ title: 'Pedido a proveedor ' + P.num, wide: true, sticky: true, body:
+  const m = modal({ title: 'Pedido a proveedor ' + P.num, wide: true, cls: 'full', sticky: true, body:
     '<div class="grid3"><label class="f">Proveedor<select class="in" id="ppPr"' + (bloqueado ? ' disabled' : '') + '>' + opcionesProv(P.pr) + '</select></label>' +
     '<label class="f">Fecha<input class="in" type="date" id="ppF" value="' + h(P.f) + '"' + (bloqueado ? ' disabled' : '') + '></label>' +
     '<label class="f">Estado<select class="in" id="ppE"><option value="pend">Por enviar</option><option value="env">Enviado</option><option value="rec">Recibido</option></select></label></div>' +
@@ -5217,22 +5232,25 @@ function verPedido(p0){
     const u = P.it.reduce((t, x) => t + (Number(x.q) || 0), 0); const T = totPed(P.it, P.dp);
     m.q('#ppFoot').innerHTML = '<div class="tcasillas"><div class="tcas"><span>Productos</span><b>' + P.it.length + '</b></div><div class="tcas"><span>Unidades</span><b>' + numf(u) + '</b></div>' +
       (T.desc ? '<div class="tcas"><span>Descuento</span><b>−' + money(T.desc) + '</b></div>' : '') +
-      '<div class="tcas"><span>Subtotal sin IVA</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>Total IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total con IVA</span><b>' + money(T.tot) + '</b></div></div>';
+      '<div class="tcas"><span>Subtotal sin IVA</span><b>' + money(T.sub) + '</b></div><div class="tcas"><span>Total IVA</span><b>' + money(T.iva) + '</b></div><div class="tcas tot"><span>Total con IVA</span><b>' + money(T.tot) + '</b></div></div>' +
+      planCredito(T.tot);
     const dv = m.q('#ppDv'), dpi = m.q('#ppDp');
     if (dpi && document.activeElement !== dpi) dpi.value = P.dp ? numf(r4(P.dp)) : '';
     if (dv && document.activeElement !== dv) dv.value = T.desc ? T.desc.toFixed(2) : '';
   };
   const pintar = () => {
     const dis = bloqueado ? ' disabled' : '';
-    m.q('#ppBody').innerHTML = P.it.length ? P.it.map((x, i) => { const k = calcPed(x);
-      return '<div class="ci" data-i="' + i + '"><div class="pcell">' + thumb({ id: x.p }, 'sm') + '<div><div class="t">' + h(x.n) + '</div><div class="s">' + h(x.p) + ' · stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</div></div></div>' +
-      '<div class="totw">' + (bloqueado ? '' : '<button class="btn sm" data-mov title="Mandar este producto al pedido de otro proveedor">' + ic('truck') + 'Otro proveedor</button><button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</div>' +
-      '<div class="ctrl np pedctrl"><label class="minilbl">Cantidad<input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></label>' +
-      '<label class="minilbl">IVA %<input class="mini pct ivain" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></label>' +
-      '<label class="minilbl">P. sin IVA<input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></label>' +
-      '<label class="minilbl">P. con IVA<input class="mini" data-k="ci" inputmode="decimal" value="' + (x.co ? r2(x.co * (1 + k.iva / 100)).toFixed(2) : '') + '"' + dis + '></label>' +
-      '<label class="minilbl lsub">Subtotal<input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></label>' +
-      '<label class="minilbl ltot">Total<input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></label></div></div>'; }).join('') :
+    m.q('#ppBody').innerHTML = P.it.length ? '<div class="tblwrap" style="border:0;border-radius:0"><table class="pedtbl"><thead><tr><th>Código</th><th>Producto</th><th class="n">Cant.</th><th class="n">IVA %</th><th class="n">P. sin IVA</th><th class="n">P. con IVA</th><th class="n">Subtotal</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
+      P.it.map((x, i) => { const k = calcPed(x);
+      return '<tr data-i="' + i + '"><td class="cod">' + h(x.p) + '</td><td class="nom"><b>' + h(x.n) + '</b><small>stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</small></td>' +
+        '<td style="width:84px"><input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></td>' +
+        '<td style="width:74px"><input class="mini pct ivain" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></td>' +
+        '<td style="width:100px"><input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></td>' +
+        '<td style="width:100px"><input class="mini" data-k="ci" inputmode="decimal" value="' + (x.co ? r2(x.co * (1 + k.iva / 100)).toFixed(2) : '') + '"' + dis + '></td>' +
+        '<td style="width:104px" class="lsub"><input class="mini" data-k="sub" inputmode="decimal" value="' + k.sub.toFixed(2) + '"' + dis + '></td>' +
+        '<td style="width:104px" class="ltot"><input class="mini strong" data-k="tot" inputmode="decimal" value="' + k.tot.toFixed(2) + '"' + dis + '></td>' +
+        '<td class="acc">' + (bloqueado ? '' : '<button class="btn sm icon" data-mov title="Mandar este producto al pedido de otro proveedor" aria-label="Otro proveedor">' + ic('truck') + '</button> <button class="btn sm icon danger" data-del aria-label="Quitar">' + ic('trash') + '</button>') + '</td></tr>'; }).join('') +
+      '</tbody></table></div>' :
       '<div class="empty card">Agrega los productos que vas a pedir</div>';
     pintarPie();
   };
@@ -5317,6 +5335,18 @@ function verPedido(p0){
   };
   if (m.q('#ppCo')) m.q('#ppCo').onclick = async () => { if (!(await guardar())) return; m.close(); compraDesdePedido(S.ped.get(P.id) || P); };
   pintar();
+}
+
+/** Cómo quedaría el pago: contado, 30 días (1 cuota), 60 días (2 cuotas), 90 días (3 cuotas; la última ajusta los centavos) */
+function planCredito(tot){
+  tot = r2(tot);
+  const cuotas = (n) => { const c = Math.floor(tot / n * 100) / 100; const ult = r2(tot - c * (n - 1)); return { c, ult }; };
+  const c2 = cuotas(2), c3 = cuotas(3);
+  return '<div style="margin-top:12px"><b style="font-family:var(--font-display);text-transform:uppercase;font-size:14px">Cómo quedaría el pago</b><div class="plancred">' +
+    '<div class="p0"><span style="color:#14653A">Contado</span><b>' + money(tot) + '</b><small>un solo pago</small></div>' +
+    '<div class="p30"><span style="color:#1F3A93">30 días</span><b>' + money(tot) + '</b><small>1 cuota de ' + money(tot) + '</small></div>' +
+    '<div class="p60"><span style="color:#8A5A06">60 días</span><b>' + money(c2.c) + '</b><small>2 cuotas de ' + money(c2.c) + (c2.ult !== c2.c ? ' (última ' + money(c2.ult) + ')' : '') + '</small></div>' +
+    '<div class="p90"><span style="color:#5A2DB0">90 días</span><b>' + money(c3.c) + '</b><small>3 cuotas de ' + money(c3.c) + (c3.ult !== c3.c ? ' (última ' + money(c3.ult) + ')' : '') + '</small></div></div></div>';
 }
 
 /* ---------- PDF del pedido ---------- */
