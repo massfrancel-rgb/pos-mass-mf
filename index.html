@@ -550,7 +550,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-23g';
+const APP_VER = '2026-11-24a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -3808,7 +3808,10 @@ async function gh(ruta, opt){
     headers: Object.assign({ Authorization: 'Bearer ' + tok, Accept: 'application/vnd.github+json' }, opt.headers || {}) }));
   if (r.status === 401) throw new Error('La llave de GitHub no es válida o ya venció. Crea una nueva.');
   if (r.status === 403 || r.status === 404) throw new Error('La llave no tiene permiso de escritura en el repositorio catalogo-mass.');
-  if (!r.ok) throw new Error('GitHub respondió con error ' + r.status + '.');
+  if (!r.ok) {
+    let det = ''; try { det = (await r.json()).message || ''; } catch (e) {}
+    const err = new Error('GitHub respondió con error ' + r.status + (det ? ' (' + det + ')' : '') + '.'); err.status = r.status; err.det = det; throw err;
+  }
   return r;
 }
 async function llaveGitHub(){
@@ -3822,7 +3825,8 @@ async function llaveGitHub(){
 }
 const aBase64 = (blob) => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); });
 
-async function publicarCatalogo(){
+async function publicarCatalogo(intento){
+  intento = Number(intento) || 0;
   if (!ls.get('ghToken', '') && !(await llaveGitHub())) return;
   const m = modal({ title: 'Publicar en el Catálogo MASS', wide: true, sticky: true, body: '<div id="pcB"><p>Revisando el catálogo publicado…</p></div>' });
   const msg = (t) => { m.q('#pcB').innerHTML = t; };
@@ -3847,7 +3851,7 @@ async function publicarCatalogo(){
     const cambiaCat = ps.filter((x) => { const v = viejo[String(x.id)]; return v && (catViejas[v[4]] || 'Otros') !== catDe(x); }).length;
     const conFotoCat = new Set((actual.f || []).map(String));
     const pend = new Set(ls.get('fotosPub', []).map(String));
-    const subir = ps.map((x) => String(x.id)).filter((id) => !/[\/\\?#]/.test(id) && fotoPropia(id) && (pend.has(id) || !conFotoCat.has(id)));
+    const subir = ps.map((x) => String(x.id)).filter((id) => !/[\/\\?#]/.test(id) && id === id.trim() && !/^\.+$/.test(id) && fotoPropia(id) && (pend.has(id) || !conFotoCat.has(id)));
     const fotos = Array.from(new Set([...Array.from(conFotoCat).filter((c) => ids.has(c)), ...subir])).sort();
     const filtra = (o) => { const r = {}; Object.keys(o || {}).forEach((k) => { if (ids.has(k)) r[k] = o[k]; }); return r; };
     msg('<div class="stack">' +
@@ -3861,6 +3865,10 @@ async function publicarCatalogo(){
       '<p class="small muted" style="margin:0">Se conservan las descripciones, especificaciones, cuentas para transferir y textos de la empresa del catálogo. El stock que ven los clientes sigue saliendo en vivo del POS.</p>' +
       '<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-x>Cancelar</button><button class="btn pri" id="pcOk">' + ic('upload') + 'Publicar ahora</button></div></div>');
     await new Promise((res) => { m.q('#pcOk').onclick = res; });
+    // si el catálogo se publicó desde otro lado mientras revisabas (app Catálogo MASS u otra PC), se vuelve a revisar con lo más nuevo
+    const reRevisar = () => { m.close(); if (intento >= 2) { toast('El catálogo está cambiando en este momento. Espera un minuto y vuelve a publicar.', true); return; } toast('El catálogo se acaba de actualizar desde otro lado. Revisando de nuevo…'); return publicarCatalogo(intento + 1); };
+    const ref2 = await (await gh('/git/ref/heads/' + rama + '?t=' + Date.now())).json();
+    if (ref2.object.sha !== base) return reRevisar();
     const tree = []; let k = 0;
     for (const id of subir) {
       msg('<p>Subiendo fotos… <b>' + (++k) + '</b> de ' + subir.length + '</p>');
@@ -3875,7 +3883,8 @@ async function publicarCatalogo(){
     tree.push({ path: 'catalogo.json', mode: '100644', type: 'blob', content: JSON.stringify(nuevo) });
     const t = await (await gh('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: com.tree.sha, tree }) })).json();
     const c = await (await gh('/git/commits', { method: 'POST', body: JSON.stringify({ message: 'Publicado desde POS MASS MF: ' + ps.length + ' productos' + (subir.length ? ', ' + subir.length + ' fotos' : ''), tree: t.sha, parents: [base] }) })).json();
-    await gh('/git/refs/heads/' + rama, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) });
+    try { await gh('/git/refs/heads/' + rama, { method: 'PATCH', body: JSON.stringify({ sha: c.sha }) }); }
+    catch (e) { if (e.status === 422) return reRevisar(); throw e; }
     ls.set('fotosPub', Array.from(pend).filter((id) => !subir.includes(id)));
     usarListaFotos(nuevo, 'publicado desde el POS');
     ls.set('ultPubCat', Date.now());
