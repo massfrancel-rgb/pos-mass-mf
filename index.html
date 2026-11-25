@@ -565,7 +565,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25c';
+const APP_VER = '2026-11-25d';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5319,12 +5319,14 @@ function verPedido(p0){
   m.q('#ppX').onclick = () => m.close();
   m.q('#ppOk').onclick = async () => { if (await guardar()) { m.close(); toast('Pedido guardado'); if (RUTA === 'compras') render(); } };
   if (m.q('#ppDel')) m.q('#ppDel').onclick = async () => { if (await confirmar('¿Eliminar el pedido ' + P.num + '?', 'Eliminar', true)) { await borrar('ped', P.id); m.close(); if (RUTA === 'compras') render(); } };
-  m.q('#ppPdf').onclick = async () => { if (!(await guardar())) return; const d = await pdfPedidoProv(P); descargar(d.output('blob'), 'Pedido-' + P.num + '.pdf'); };
+  m.q('#ppPdf').onclick = async () => { if (!(await guardar())) return; const ver = await elegirVersionPedido(); if (!ver) return;
+    const d = await pdfPedidoProv(P, ver === 'full'); descargar(d.output('blob'), 'Pedido-' + P.num + (ver === 'full' ? '' : ' (vendedor)') + '.pdf'); };
   m.q('#ppWa').onclick = async () => {
     if (!(await guardar())) return;
+    const ver = await elegirVersionPedido(); if (!ver) return;
     const prov = S.prov.get(P.pr) || {};
     try {
-      const d = await pdfPedidoProv(P); const blob = d.output('blob'); const nom = 'Pedido-' + P.num + '.pdf';
+      const d = await pdfPedidoProv(P, ver === 'full'); const blob = d.output('blob'); const nom = 'Pedido-' + P.num + (ver === 'full' ? '' : ' (vendedor)') + '.pdf';
       const txt = 'Buen día' + (prov.cont ? ' ' + prov.cont : '') + ', le envío el pedido ' + P.num + ' de MASS FERRETERÍA (' + P.it.length + ' productos). Por favor confirmar disponibilidad y precios. Gracias.';
       const file = new File([blob], nom, { type: 'application/pdf' });
       let ok = false;
@@ -5349,8 +5351,19 @@ function planCredito(tot){
     '<div class="p90"><span style="color:#5A2DB0">90 días</span><b>' + money(c3.c) + '</b><small>3 cuotas de ' + money(c3.c) + (c3.ult !== c3.c ? ' (última ' + money(c3.ult) + ')' : '') + '</small></div></div></div>';
 }
 
+/** ¿Qué versión del pedido se envía? 'full' (con precios, IVA, totales y forma de pago) o 'vend' (sin precios) */
+function elegirVersionPedido(){
+  return new Promise((res) => {
+    const m = modal({ title: '¿Qué versión envías?', cls: 'narrow', onClose: () => res(null), body:
+      '<div class="stack" style="gap:10px"><button class="btn c3d cb block" data-v="full" style="justify-content:flex-start;text-align:left;min-height:58px">' + ic('doc') + '<span style="text-transform:none;letter-spacing:0">Completo<br><small style="font-family:var(--font-body);font-weight:600;opacity:.9">Con precios, IVA, totales y forma de pago</small></span></button>' +
+      '<button class="btn c3d cv block" data-v="vend" style="justify-content:flex-start;text-align:left;min-height:58px">' + ic('clip') + '<span style="text-transform:none;letter-spacing:0">Para el vendedor<br><small style="font-family:var(--font-body);font-weight:600;opacity:.9">Solo código, producto y cantidad · sin precios</small></span></button>' +
+      '<button class="btn block" data-x>Cancelar</button></div>' });
+    m.qa('[data-v]').forEach((b) => { b.onclick = () => { const v = b.dataset.v; res(v); m.close(); }; });
+  });
+}
+
 /* ---------- PDF del pedido ---------- */
-async function pdfPedidoProv(P){
+async function pdfPedidoProv(P, completo){
   const J = await libPDF(); const C = cfg(); const prov = S.prov.get(P.pr) || {};
   const doc = new J({ unit: 'mm', format: 'a4' });
   const W = 210, Mg = 15, oro = [201, 154, 46], osc = [26, 24, 20], gris = [94, 88, 76];
@@ -5370,23 +5383,48 @@ async function pdfPedidoProv(P){
   filas.forEach(([k, v], i) => { const x = Mg + 4 + (i % 2) * 90, yr = y + 6 + Math.floor(i / 2) * 5.5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...osc); doc.text(k + ':', x, yr); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(String(v), 58)[0], x + 26, yr); });
   y += alto + 6;
-  const col = { n: Mg, cant: Mg + 10, un: Mg + 28, cod: Mg + 44, desc: Mg + 66 };
+  const col = completo ? { n: Mg, cant: Mg + 8, un: Mg + 22, cod: Mg + 35, desc: Mg + 55, descW: 66, pu: W - Mg - 40, iva: W - Mg - 24, tot: W - Mg - 1.5 }
+    : { n: Mg, cant: Mg + 10, un: Mg + 28, cod: Mg + 44, desc: Mg + 66, descW: W - Mg - (Mg + 66) - 2 };
   const cab = () => { doc.setFillColor(...osc); doc.rect(Mg, y, W - 2 * Mg, 8, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(243, 233, 207);
-    doc.text('#', col.n + 2, y + 5.4); doc.text('CANT.', col.cant + 2, y + 5.4); doc.text('UNID.', col.un + 1, y + 5.4); doc.text('CÓDIGO', col.cod + 1, y + 5.4); doc.text('DESCRIPCIÓN', col.desc, y + 5.4); y += 8; };
+    doc.text('#', col.n + 2, y + 5.4); doc.text('CANT.', col.cant + 2, y + 5.4); doc.text('UNID.', col.un + 1, y + 5.4); doc.text('CÓDIGO', col.cod + 1, y + 5.4); doc.text('DESCRIPCIÓN', col.desc, y + 5.4);
+    if (completo) { doc.text('P. UNIT.', col.pu, y + 5.4, { align: 'right' }); doc.text('IVA', col.iva, y + 5.4, { align: 'right' }); doc.text('TOTAL', col.tot, y + 5.4, { align: 'right' }); }
+    y += 8; };
   cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
   P.it.filter((x) => x.q > 0).forEach((x, i) => {
-    const desc = doc.splitTextToSize(x.n, W - Mg - col.desc - 2); const hh = Math.max(7, desc.length * 4.4 + 2.6);
+    const desc = doc.splitTextToSize(x.n, col.descW); const hh = Math.max(7, desc.length * 4.4 + 2.6);
     if (y + hh > 268) { doc.addPage(); y = 15; cab(); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); }
     if (i % 2) { doc.setFillColor(251, 250, 246); doc.rect(Mg, y, W - 2 * Mg, hh, 'F'); }
     doc.setTextColor(...gris); doc.text(String(i + 1), col.n + 2, y + 4.8);
     doc.setTextColor(...osc); doc.setFont('helvetica', 'bold'); doc.text(numf(x.q), col.cant + 2, y + 4.8); doc.setFont('helvetica', 'normal');
     doc.setTextColor(...gris); doc.text(String(x.un || 'UND'), col.un + 1, y + 4.8); doc.text(String(x.p).slice(0, 12), col.cod + 1, y + 4.8);
     doc.setTextColor(...osc); doc.text(desc, col.desc, y + 4.8);
+    if (completo) { const k = calcPed(x); doc.text(money4(x.co), col.pu, y + 4.8, { align: 'right' }); doc.setTextColor(...gris); doc.text(numf(k.iva) + '%', col.iva, y + 4.8, { align: 'right' });
+      doc.setTextColor(...osc); doc.setFont('helvetica', 'bold'); doc.text(money(k.tot), col.tot, y + 4.8, { align: 'right' }); doc.setFont('helvetica', 'normal'); }
     y += hh; doc.setDrawColor(231, 226, 214); doc.setLineWidth(0.2); doc.line(Mg, y, W - Mg, y);
   });
   y += 7; if (y > 260) { doc.addPage(); y = 20; }
   doc.setFontSize(9.5); doc.setTextColor(...osc);
-  doc.text('Total: ' + P.it.filter((x) => x.q > 0).length + ' productos · ' + numf(P.it.reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' unidades', Mg, y); y += 7;
+  doc.text('Total: ' + P.it.filter((x) => x.q > 0).length + ' productos · ' + numf(P.it.reduce((s, x) => s + (Number(x.q) || 0), 0)) + ' unidades', Mg, y);
+  if (completo) {
+    const T = totPed(P.it, P.dp); const lin = [['Subtotal sin IVA', T.bruto]].concat(T.desc ? [['Descuento', -T.desc], ['Subtotal con descuento', T.sub]] : []).concat([['IVA', T.iva]]);
+    let yt = y + 1; doc.setFontSize(9.5);
+    lin.forEach(([k, v]) => { doc.setFont('helvetica', 'normal'); doc.setTextColor(...gris); doc.text(k, W - Mg - 55, yt); doc.setTextColor(...osc); doc.text((v < 0 ? '- ' : '') + money(Math.abs(v)), W - Mg - 1.5, yt, { align: 'right' }); yt += 5.2; });
+    doc.setFillColor(31, 157, 85); doc.roundedRect(W - Mg - 58, yt - 3.6, 58, 9, 1.5, 1.5, 'F'); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(255);
+    doc.text('TOTAL', W - Mg - 55, yt + 2.4); doc.text(money(T.tot), W - Mg - 2, yt + 2.4, { align: 'right' }); y = yt + 12;
+    // forma de pago
+    if (y > 250) { doc.addPage(); y = 20; }
+    const tot = r2(T.tot), cu = (n) => { const c = Math.floor(tot / n * 100) / 100; return [c, r2(tot - c * (n - 1))]; };
+    const [c2, u2] = cu(2), [c3, u3] = cu(3);
+    const op = [['CONTADO', money(tot), 'un solo pago', [31, 157, 85]], ['30 DÍAS', money(tot), '1 cuota de ' + money(tot), [37, 99, 235]],
+      ['60 DÍAS', money(c2), '2 cuotas de ' + money(c2) + (u2 !== c2 ? ' (últ. ' + money(u2) + ')' : ''), [192, 122, 16]], ['90 DÍAS', money(c3), '3 cuotas de ' + money(c3) + (u3 !== c3 ? ' (últ. ' + money(u3) + ')' : ''), [124, 58, 237]]];
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...osc); doc.text('FORMA DE PAGO', Mg, y); y += 3;
+    const bw = (W - 2 * Mg - 9) / 4;
+    op.forEach(([t, v, d, c], i) => { const x = Mg + i * (bw + 3); doc.setDrawColor(...c); doc.setLineWidth(0.5); doc.roundedRect(x, y, bw, 17, 2, 2);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...c); doc.text(t, x + 3, y + 5);
+      doc.setFontSize(12); doc.setTextColor(...osc); doc.text(v, x + 3, y + 10.8);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(...gris); doc.text(doc.splitTextToSize(d, bw - 5)[0], x + 3, y + 14.8); });
+    y += 24; doc.setFontSize(9.5); doc.setTextColor(...osc);
+  } else y += 7;
   if (P.nota) { doc.setFont('helvetica', 'bold'); doc.text('Nota:', Mg, y); doc.setFont('helvetica', 'normal'); doc.text(doc.splitTextToSize(P.nota, W - 2 * Mg - 14), Mg + 12, y); y += 8; }
   doc.setFontSize(8.5); doc.setTextColor(...gris);
   doc.text(doc.splitTextToSize('Por favor confirmar disponibilidad, precios y fecha de entrega. Este pedido no es una factura.', W - 2 * Mg), Mg, Math.min(y + 4, 285));
