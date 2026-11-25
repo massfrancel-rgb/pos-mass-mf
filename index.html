@@ -550,7 +550,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-24a';
+const APP_VER = '2026-11-25a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -807,7 +807,8 @@ const cfg = () => Object.assign({ id: 'emp', nombre: 'MASS FERRETERÍA', ruc: ''
 
 /* ---------- Stock: compras − ventas ± ajustes ---------- */
 let STOCK = new Map();
-let INV_REFRESCAR = null;   // vuelve a pintar la lista del Inventario (con la misma búsqueda y filtros)
+let INV_REFRESCAR = null;
+let ULT_INV = null;          // última lista del Inventario (con sus filtros) para exportar   // vuelve a pintar la lista del Inventario (con la misma búsqueda y filtros)
 function stockDe(id){ if (dirtyStock) calcStock(); return STOCK.get(id) || 0; }
 /** Unidades separadas por pedidos del Catálogo MASS pendientes (siguen físicamente en la tienda y en Anfibus) */
 function separadoCat(id){ let t = 0; S.vta.forEach((v) => { if (!v._d && !v.an && v.tp === 'P' && v.cat && !v.cv) (v.it || []).forEach((x) => { if (x.p === id) t += Number(x.q) || 0; }); }); return r2(t); }
@@ -2342,15 +2343,20 @@ function invProductos(){
   b.innerHTML = '<div class="stack"><div class="searchbar"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + IC.search + '</svg>' +
     '<input class="in grow" id="pQ" type="search" placeholder="Buscar nombre, código o código de barras"><button class="btn pri icon" id="pScan" aria-label="Escanear">' + ic('scan') + '</button></div>' +
     '<div class="row"><select class="in" id="pCat" style="flex:1 1 180px;width:auto"><option value="">Todas las categorías</option>' + cats.map((c) => '<option>' + h(c) + '</option>').join('') + '</select>' +
+    '<select class="in" id="pMar" style="flex:1 1 180px;width:auto" title="Filtrar por marca"></select>' +
     '<select class="in" id="pFil" style="flex:1 1 180px;width:auto"><option value="">Todos</option><option value="bajo">Stock bajo el mínimo</option><option value="cero">Stock 0 (sin stock)</option><option value="neg">Stock negativo</option><option value="con">Con stock</option><option value="sinb">Sin código de barras</option><option value="sinc">Sin costo</option></select></div>' +
     '<div class="seg stseg" id="pSeg"><button data-v="">Todos <b></b></button><button data-v="con">Con stock <b></b></button><button data-v="cero">Stock 0 <b></b></button><button data-v="bajo">Bajo el mínimo <b></b></button></div>' +
-    '<div class="pedbar etqbar" id="pEtqBar"></div><div class="small muted" id="pRes"></div><div class="tblwrap"><table class="tbl"><thead id="pHead"></thead><tbody id="pBody"></tbody></table></div>' +
+    '<div class="pedbar etqbar" id="pEtqBar"></div><div class="row" style="justify-content:space-between;align-items:center"><div class="small muted" id="pRes"></div>' +
+    '<div class="row" style="gap:8px"><button class="btn sm c3d cv" id="pXls" title="Exporta a Excel los productos de esta lista (con los filtros aplicados)">' + ic('sheet') + 'Excel</button>' +
+    '<button class="btn sm c3d cr" id="pPdf" title="Reporte en PDF de los productos de esta lista (con los filtros aplicados)">' + ic('pdf') + 'PDF</button></div></div><div class="tblwrap"><table class="tbl"><thead id="pHead"></thead><tbody id="pBody"></tbody></table></div>' +
     '<button class="btn hide" id="pMas">Ver más</button></div>';
   let lim = 150;
   const filtrar = () => {
-    const w = norm($('pQ').value).split(' ').filter(Boolean), cat = $('pCat').value, fil = $('pFil').value;
+    const w = norm($('pQ').value).split(' ').filter(Boolean), cat = $('pCat').value, fil = $('pFil').value, mar = $('pMar').value;
+    const okMar = (p) => !mar || (mar === '__sin' ? !String(p.m || '').trim() : String(p.m || '').trim() === mar);
     let l = vivos('prod').filter((p) => {
       if (cat && p.c !== cat) return false;
+      if (!okMar(p)) return false;
       if (w.length) { const hay = p._h || (p._h = norm(p.id + ' ' + (p.b || '') + ' ' + p.n + ' ' + (p.m || '') + ' ' + (p.c || ''))); if (!w.every((x) => hay.includes(x))) return false; }
       if (fil) { const s = stockDe(p.id);
         if (fil === 'bajo' && !(Number(p.mi) > 0 && s <= Number(p.mi))) return false;
@@ -2369,9 +2375,9 @@ function invProductos(){
     l.sort((a, b) => { const r = num ? val(a) - val(b) : cmpT(val(a), val(b)); return (so.d ? -r : r) || cmpT(nomK(a), nomK(b)); });
     const ex = $('pQ').value.trim() ? porCodigo($('pQ').value) : null;   // escaneado: el producto exacto va primero
     if (ex) { const i = l.indexOf(ex); if (i > 0) { l.splice(i, 1); l.unshift(ex); } else if (i < 0 && (!cat || ex.c === cat)) l.unshift(ex); }
-    $('pRes').textContent = l.length + ' productos';
+    $('pRes').textContent = l.length + ' productos'; ULT_INV = { l: l.slice(), cat, mar, fil, q: $('pQ').value.trim() };
     // botones rápidos con cantidades (según búsqueda y categoría)
-    const base = vivos('prod').filter((p) => { if (cat && p.c !== cat) return false; if (w.length) { const hay = p._h || (p._h = norm(p.id + ' ' + (p.b || '') + ' ' + p.n + ' ' + (p.m || '') + ' ' + (p.c || ''))); if (!w.every((x) => hay.includes(x))) return false; } return true; });
+    const base = vivos('prod').filter((p) => { if (cat && p.c !== cat) return false; if (!okMar(p)) return false; if (w.length) { const hay = p._h || (p._h = norm(p.id + ' ' + (p.b || '') + ' ' + p.n + ' ' + (p.m || '') + ' ' + (p.c || ''))); if (!w.every((x) => hay.includes(x))) return false; } return true; });
     let nCon = 0, nCero = 0, nBajo = 0; base.forEach((p) => { const s2 = stockDe(p.id); if (s2 > 0) nCon++; else nCero++; if (Number(p.mi) > 0 && s2 <= Number(p.mi)) nBajo++; });
     const cnt = { '': base.length, con: nCon, cero: nCero, bajo: nBajo };
     qsa('#pSeg button').forEach((x) => { x.classList.toggle('on', x.dataset.v === fil); x.querySelector('b').textContent = numf(cnt[x.dataset.v]); });
@@ -2389,7 +2395,19 @@ function invProductos(){
   $('pQ').addEventListener('keydown', (e) => { if (e.key !== 'Enter') return; e.preventDefault(); clearTimeout(t); lim = 150; filtrar();
     const ex = porCodigo($('pQ').value); if (ex) { beep(true); const tr = document.querySelector('#pBody tr[data-id="' + CSS.escape(ex.id) + '"]'); if (tr) { tr.classList.add('flash'); setTimeout(() => tr.classList.remove('flash'), 1500); } } else beep(false);
     $('pQ').select(); });
-  $('pCat').onchange = $('pFil').onchange = () => { lim = 150; ls.set('invFil', $('pFil').value); filtrar(); };
+  // marcas según la categoría elegida (con cuántos productos tiene cada una)
+  const pintarMarcas = () => {
+    const cat = $('pCat').value, ant = $('pMar').value, cnt = {}; let sin = 0;
+    vivos('prod').forEach((p) => { if (cat && p.c !== cat) return; const m = String(p.m || '').trim(); if (m) cnt[m] = (cnt[m] || 0) + 1; else sin++; });
+    const ms = Object.keys(cnt).sort((a, b) => a.localeCompare(b, 'es'));
+    $('pMar').innerHTML = '<option value="">Todas las marcas (' + ms.length + ')</option>' + ms.map((m) => '<option value="' + h(m) + '">' + h(m) + ' (' + cnt[m] + ')</option>').join('') + (sin ? '<option value="__sin">(Sin marca) (' + sin + ')</option>' : '');
+    $('pMar').value = (ant && (cnt[ant] || (ant === '__sin' && sin))) ? ant : '';
+  };
+  pintarMarcas();
+  $('pCat').onchange = () => { pintarMarcas(); lim = 150; filtrar(); };
+  $('pMar').onchange = $('pFil').onchange = () => { lim = 150; ls.set('invFil', $('pFil').value); filtrar(); };
+  $('pXls').onclick = () => exportarInventarioXL(ULT_INV);
+  $('pPdf').onclick = () => exportarInventarioPDF(ULT_INV).catch((e) => toast('No se pudo crear el PDF: ' + e.message, true));
   $('pSeg').onclick = (e) => { const x = e.target.closest('button'); if (!x) return; $('pFil').value = x.dataset.v; ls.set('invFil', x.dataset.v); lim = 150; filtrar(); };
   $('pFil').value = ls.get('invFil', '');
   $('pMas').onclick = () => { lim += 300; filtrar(); };
@@ -2585,6 +2603,76 @@ async function tomaFisicaAnfibus(C){
     '<ol style="margin:0;padding-left:20px;line-height:1.7"><li>En Anfibus: <b>INV → Toma Física</b>, almacén <b>Matriz</b>.</li><li>Pulsa <b>Importar</b> y elige este archivo (está en <b>Descargas</b>).</li><li>Revisa las diferencias y pulsa <b>Guardar</b> en Anfibus.</li>' +
     '<li>En 1 o 2 minutos el stock del POS se actualiza solo con el de Anfibus.</li></ol>' +
     '<p class="small muted">No pulses “Aplicar ajustes” en el POS: el stock lo manda Anfibus.</p>', foot: '<button class="btn pri" data-x>Entendido</button>' });
+}
+/* ---- Reporte de inventario (lista filtrada) a Excel y PDF ---- */
+const FIL_TXT = { bajo: 'Bajo el mínimo', cero: 'Stock 0', neg: 'Stock negativo', con: 'Con stock', sinb: 'Sin código de barras', sinc: 'Sin costo' };
+function tituloInv(o){
+  const t = [];
+  if (o.cat) t.push('Categoría: ' + o.cat);
+  if (o.mar) t.push('Marca: ' + (o.mar === '__sin' ? '(sin marca)' : o.mar));
+  if (o.fil) t.push(FIL_TXT[o.fil] || o.fil);
+  if (o.q) t.push('Búsqueda: "' + o.q + '"');
+  return t.join(' · ') || 'Todos los productos';
+}
+function totalesInv(l){
+  let und = 0, vCo = 0, vPv = 0;
+  l.forEach((p) => { const s = stockDe(p.id); if (s > 0) { und += s; vCo += s * (Number(p.co) || 0); vPv += s * (Number(p.pv) || 0); } });
+  return { n: l.length, und: r2(und), vCo: r2(vCo), vPv: r2(vPv) };
+}
+async function exportarInventarioXL(o){
+  if (!o || !o.l || !o.l.length) return toast('No hay productos en la lista.', true);
+  const adm = puede('prod');
+  const cab = ['Código', 'Código de barras', 'Producto', 'Marca', 'Categoría', 'Stock', 'Stock mínimo', 'PVP'].concat(adm ? ['Costo s/IVA', 'IVA %', 'Costo c/IVA', 'Valor a costo', 'Valor a PVP'] : []);
+  const filas = o.l.map((p) => { const s = stockDe(p.id), co = Number(p.co) || 0, iv = ivaP(p);
+    return [p.id, p.b || '', p.n, p.m || '', p.c || '', s, Number(p.mi) || 0, Number(p.pv) || 0].concat(adm ? [co, iv, r4(co * (1 + iv / 100)), r2(Math.max(0, s) * co), r2(Math.max(0, s) * (Number(p.pv) || 0))] : []); });
+  const nom = 'Inventario ' + tituloInv(o).replace(/Categoría: |Marca: |Búsqueda: /g, '').replace(/ · /g, ' - ').replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_').slice(0, 70);
+  await exportarTablaXL({ nombre: 'Inventario', hoja: 'Inventario', archivo: nom + ' ' + hoyISO() + '.xlsx', cab, filas, tabla: true, texto: [0, 1], anchos: { 2: 55 },
+    color: (c, v) => (c === 'Stock' ? (Number(v) <= 0 ? 'rosa' : 'verde') : null) });
+  toast('Excel guardado en Descargas');
+}
+async function exportarInventarioPDF(o){
+  if (!o || !o.l || !o.l.length) return toast('No hay productos en la lista.', true);
+  const adm = puede('prod');
+  const JS = await libPDF(); const doc = new JS({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = 297, H = 210, M = 10;
+  const cols = adm
+    ? [['Código', 22, 'l'], ['Producto', 92, 'l'], ['Marca', 30, 'l'], ['Categoría', 36, 'l'], ['Stock', 15, 'r'], ['PVP', 18, 'r'], ['Costo s/IVA', 20, 'r'], ['Costo c/IVA', 20, 'r'], ['Valor costo', 24, 'r']]
+    : [['Código', 24, 'l'], ['Producto', 130, 'l'], ['Marca', 40, 'l'], ['Categoría', 46, 'l'], ['Stock', 18, 'r'], ['PVP', 19, 'r']];
+  const E = cfg(); const tit = tituloInv(o); const tot = totalesInv(o.l);
+  let y = 0, pag = 0;
+  const cab = () => {
+    pag++; y = M;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(String(E.nombre || 'MASS FERRETERÍA') + ' · Reporte de inventario', M, y + 5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(tit, M, y + 10.5);
+    doc.text(fechaTxt(hoyISO()) + ' ' + horaTxt(Date.now()) + '  ·  Pág. ' + pag, W - M, y + 5, { align: 'right' });
+    y += 14; doc.setFillColor(26, 24, 20); doc.rect(M, y, W - 2 * M, 7, 'F'); doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+    let x = M; cols.forEach(([t, w, a]) => { doc.text(t, a === 'r' ? x + w - 1.5 : x + 1.5, y + 4.8, a === 'r' ? { align: 'right' } : undefined); x += w; });
+    doc.setTextColor(0); y += 7;
+  };
+  const corta = (t, w) => { t = String(t || ''); if (doc.getTextWidth(t) <= w - 3) return t; while (t.length > 1 && doc.getTextWidth(t + '…') > w - 3) t = t.slice(0, -1); return t + '…'; };
+  cab();
+  doc.setFontSize(8.5);
+  o.l.forEach((p, i) => {
+    if (y > H - M - 14) { doc.addPage(); cab(); doc.setFontSize(8.5); }
+    if (i % 2) { doc.setFillColor(246, 244, 238); doc.rect(M, y, W - 2 * M, 6, 'F'); }
+    const s = stockDe(p.id), co = Number(p.co) || 0, iv = ivaP(p);
+    const val = adm ? [p.id, p.n, p.m || '', p.c || '', numf(s), money(p.pv), co ? money4(co) : '—', co ? money4(co * (1 + iv / 100)) : '—', money(Math.max(0, s) * co)]
+      : [p.id, p.n, p.m || '', p.c || '', numf(s), money(p.pv)];
+    let x = M;
+    cols.forEach(([t, w, a], k) => {
+      const neg = t === 'Stock' && s <= 0;
+      doc.setFont('helvetica', k === 1 || t === 'Stock' ? 'bold' : 'normal'); if (neg) doc.setTextColor(177, 42, 24);
+      doc.text(corta(val[k], w), a === 'r' ? x + w - 1.5 : x + 1.5, y + 4.2, a === 'r' ? { align: 'right' } : undefined);
+      doc.setTextColor(0); x += w;
+    });
+    y += 6;
+  });
+  if (y > H - M - 16) { doc.addPage(); cab(); }
+  y += 3; doc.setDrawColor(201, 154, 46); doc.setLineWidth(0.6); doc.line(M, y, W - M, y); y += 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+  doc.text(tot.n + ' productos  ·  ' + numf(tot.und) + ' unidades en stock' + (adm ? '  ·  Valor a costo: ' + money(tot.vCo) : '') + '  ·  Valor a PVP: ' + money(tot.vPv), M, y);
+  const nom = 'Inventario ' + tit.replace(/Categoría: |Marca: |Búsqueda: /g, '').replace(/ · /g, ' - ').replace(/[^\w\- áéíóúñÁÉÍÓÚÑ]+/g, '_').slice(0, 70) + ' ' + hoyISO() + '.pdf';
+  descargar(doc.output('blob'), nom); toast('PDF guardado en Descargas');
 }
 async function exportarConteoXL(nombre, cab, filas){
   try { await exportarTablaXL({ nombre, cab, filas, tabla: true, texto: [0], color: colorStockXL, anchos: { 1: 48 } }); }
