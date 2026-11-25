@@ -461,6 +461,12 @@ nav#bottom a.on svg{outline:2.5px solid #F5C451;outline-offset:1px;stroke:#fff}
 .pedtbl td.nom{min-width:240px}.pedtbl td.nom b{display:block;font-size:14.5px}.pedtbl td.nom small{color:var(--muted)}
 .pedtbl td.acc{white-space:nowrap;text-align:right}.pedtbl td.acc .btn{min-height:34px}
 .pedtbl .lsub .mini{background:#E6F0FB;border-color:#8DB3E2;color:#12316E}.pedtbl .ltot .mini{background:#E3F6E9;border-color:#7CC79A;color:#14653A;font-weight:800}
+.pedac{position:fixed;z-index:200;background:var(--surface);border:1.5px solid var(--gold);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.25);max-height:320px;overflow:auto;padding:4px}
+.pedac .op{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+.pedac .op.sel,.pedac .op:hover{background:#FFF1D6}.pedac .op .c{color:#C07A10;font-weight:800;font-family:ui-monospace,Consolas,monospace;white-space:nowrap}
+.pedac .op .n{flex:1;font-weight:700;text-transform:uppercase}.pedac .op .st{border-radius:10px;padding:0 8px;font-weight:800;font-size:12.5px;background:#E3F6E9;color:#14653A}.pedac .op .st.z{background:#FBE3DE;color:#B12A18}
+.pedac .op .pr{font-weight:800;color:#1F3A93;white-space:nowrap}.pedac .vacio{padding:10px;color:var(--muted);font-size:13.5px}
+.pedtbl td.cod .in,.pedtbl td.nom .in{min-height:40px;font-weight:700}.pedtbl td.cod .in{width:110px;font-family:ui-monospace,Consolas,monospace}
 .plancred{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:6px}
 .plancred div{border:1.5px solid var(--line);border-radius:12px;padding:9px 12px;background:var(--surface)}
 .plancred span{display:block;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
@@ -565,7 +571,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25d';
+const APP_VER = '2026-11-25e';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -5242,7 +5248,10 @@ function verPedido(p0){
     const dis = bloqueado ? ' disabled' : '';
     m.q('#ppBody').innerHTML = P.it.length ? '<div class="tblwrap" style="border:0;border-radius:0"><table class="pedtbl"><thead><tr><th>Código</th><th>Producto</th><th class="n">Cant.</th><th class="n">IVA %</th><th class="n">P. sin IVA</th><th class="n">P. con IVA</th><th class="n">Subtotal</th><th class="n">Total</th><th></th></tr></thead><tbody>' +
       P.it.map((x, i) => { const k = calcPed(x);
-      return '<tr data-i="' + i + '"><td class="cod">' + h(x.p) + '</td><td class="nom"><b>' + h(x.n) + '</b><small>stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</small></td>' +
+      const edit = !bloqueado && (x.ed || x.nuevo);
+      return '<tr data-i="' + i + '">' + (edit
+        ? '<td class="cod"><input class="in" data-k="cod" data-ac="1" placeholder="Código" autocomplete="off" value="' + h(x.nuevo && /^NUEVO-/.test(x.p) ? '' : x.p) + '"></td><td class="nom"><input class="in" data-k="nom" data-ac="1" placeholder="Escribe el producto…" autocomplete="off" value="' + h(x.n) + '">' + (x.nuevo && x.n ? '<small style="color:#0f6b55">Producto nuevo: se crea al registrar la compra</small>' : '') + '</td>'
+        : '<td class="cod">' + h(x.p) + '</td><td class="nom"><b>' + h(x.n) + '</b><small>stock ' + numf(stockDe(x.p)) + (x.coU ? ' · último costo ' + money(x.coU) : '') + '</small></td>') +
         '<td style="width:84px"><input class="mini" data-k="q" inputmode="decimal" value="' + numf(x.q) + '"' + dis + '></td>' +
         '<td style="width:74px"><input class="mini pct ivain" data-k="iva" inputmode="decimal" value="' + numf(k.iva) + '"' + dis + '></td>' +
         '<td style="width:100px"><input class="mini" data-k="co" inputmode="decimal" value="' + (x.co ? r4(x.co) : '') + '"' + dis + '></td>' +
@@ -5262,8 +5271,60 @@ function verPedido(p0){
   }
   m.q('#ppDp').onchange = (e) => { P.dp = Math.min(100, Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0)); pintarPie(); };
   m.q('#ppDv').onchange = (e) => { const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const b = totPed(P.it, 0).bruto; P.dp = b ? Math.min(100, v / b * 100) : 0; pintarPie(); };
-  if (m.q('#ppAdd')) m.q('#ppAdd').onclick = () => agregarAlPedido(P, () => { pintar(); });
+  if (m.q('#ppAdd')) m.q('#ppAdd').onclick = () => {
+    const vacia = P.it.findIndex((x) => x.ed && !String(x.n || '').trim());
+    if (vacia < 0) P.it.push({ p: '', n: '', q: 1, co: 0, coU: 0, iva: Number(ls.get('pedIvaD', cfg().iva)), un: 'UND', ed: 1 });
+    pintar(); const i = vacia < 0 ? P.it.length - 1 : vacia; const el = m.q('tr[data-i="' + i + '"] [data-k="nom"]'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+  };
+  // ---- autocompletado en la fila: escribe nombre o código y elige del inventario ----
+  let ac = null, acSel = 0, acLista = [], acInp = null;
+  const acCerrar = () => { if (ac) { ac.remove(); ac = null; } acLista = []; acInp = null; };
+  const acElegir = (p) => {
+    const tr = acInp && acInp.closest('[data-i]'); if (!tr) return; const i = +tr.dataset.i; const x = P.it[i];
+    tr.querySelectorAll('[data-ac]').forEach((el) => el.removeAttribute('data-k'));   // que el 'change' al quitar la casilla no sobrescriba lo elegido
+    acCerrar();
+    const ya = P.it.findIndex((y, j) => j !== i && y.p === p.id);
+    if (ya >= 0) { P.it[ya].q = r2((Number(P.it[ya].q) || 0) + (Number(x.q) || 1)); P.it.splice(i, 1); pintar(); toast(p.n + ' ya estaba en el pedido: se sumó la cantidad.'); return; }
+    Object.assign(x, { p: p.id, n: p.n, co: Number(p.co) || 0, coU: Number(p.co) || 0, iva: p.iva == null ? cfg().iva : Number(p.iva), un: p.un || 'UND' }); delete x.ed; delete x.nuevo;
+    if (!m.q('#ppPr').value) { const hp = provHabitual(p.id); if (hp) m.q('#ppPr').value = hp; }
+    pintar(); const q = m.q('tr[data-i="' + i + '"] [data-k="q"]'); if (q) { q.focus(); q.select(); }
+  };
+  const acPintar = () => {
+    if (!ac) return;
+    ac.innerHTML = acLista.length ? acLista.map((p, k) => { const st = stockDe(p.id);
+      return '<div class="op' + (k === acSel ? ' sel' : '') + '" data-k="' + k + '"><span class="c">' + h(p.id) + '</span><span class="n">' + h(p.n) + '</span><span class="st' + (st > 0 ? '' : ' z') + '">' + numf(st) + '</span><span class="pr">' + money(Number(p.co) || 0) + '</span></div>'; }).join('')
+      : '<div class="vacio">No está en el inventario: se agregará como <b>producto nuevo</b> con lo que escribas.</div>';
+    const r = acInp.getBoundingClientRect(); ac.style.left = r.left + 'px'; ac.style.width = Math.max(r.width, 520) + 'px';
+    const abajo = window.innerHeight - r.bottom; if (abajo > 240) { ac.style.top = (r.bottom + 4) + 'px'; ac.style.bottom = ''; } else { ac.style.top = ''; ac.style.bottom = (window.innerHeight - r.top + 4) + 'px'; }
+    const sel = ac.querySelector('.op.sel'); if (sel) sel.scrollIntoView({ block: 'nearest' });
+  };
+  m.q('#ppBody').addEventListener('input', (e) => {
+    if (!e.target.dataset.ac) return; acInp = e.target; const t = e.target.value.trim();
+    if (!t) return acCerrar();
+    acLista = buscarProductos(t, 30); acSel = 0;
+    if (!ac) { ac = document.createElement('div'); ac.className = 'pedac'; m.el.appendChild(ac);
+      ac.addEventListener('mousedown', (ev) => { const o = ev.target.closest('.op'); if (!o) return; ev.preventDefault(); acElegir(acLista[+o.dataset.k]); }); }
+    acPintar();
+  });
+  m.q('#ppBody').addEventListener('keydown', (e) => {
+    if (!e.target.dataset.ac || !ac) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); acSel = Math.min(acLista.length - 1, acSel + 1); acPintar(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); acSel = Math.max(0, acSel - 1); acPintar(); }
+    else if (e.key === 'Enter') { if (acLista[acSel]) { e.preventDefault(); acElegir(acLista[acSel]); } }
+    else if (e.key === 'Escape') { e.preventDefault(); acCerrar(); }
+  });
+  m.q('#ppBody').addEventListener('focusout', (e) => { if (e.target.dataset.ac) setTimeout(() => { if (acInp === e.target) acCerrar(); }, 150); });
+  m.q('.sh-b').addEventListener('scroll', () => { if (ac && acInp) acPintar(); });
   m.q('#ppBody').onchange = (e) => { const tr = e.target.closest('[data-i]'); const k = e.target.dataset.k; if (!tr || !k) return; const x = P.it[+tr.dataset.i];
+    if (k === 'cod' || k === 'nom') {
+      const v = e.target.value.trim();
+      if (k === 'cod') {
+        const pe = v && porCodigo(v); if (pe && !pe._d) { acInp = e.target; return acElegir(pe); }
+        x.p = v || ('NUEVO-' + Date.now().toString(36).toUpperCase());
+      } else { x.n = v.toUpperCase(); e.target.value = x.n; if (!x.p) x.p = 'NUEVO-' + Date.now().toString(36).toUpperCase(); }
+      if (x.n) { x.nuevo = 1; }
+      return pintarPie();
+    }
     const v = Math.max(0, parseFloat(String(e.target.value).replace(',', '.')) || 0); const iv = calcPed(x).iva;
     if (k === 'q') x.q = v; else if (k === 'co') x.co = r4(v); else if (k === 'iva') x.iva = v; else if (k === 'ci') x.co = r4(v / (1 + iv / 100));
     else if (k === 'sub') x.co = x.q ? r4(v / x.q) : 0; else if (k === 'tot') x.co = x.q ? r4(v / x.q / (1 + iv / 100)) : 0;
@@ -5314,7 +5375,7 @@ function verPedido(p0){
       if (RUTA === 'compras' || RUTA === 'rep') render();
     };
   };
-  const guardar = async () => { leer(); if (!P.pr) { toast('Elige el proveedor.', true); return false; } if (!P.it.length) { toast('Agrega productos.', true); return false; }
+  const guardar = async () => { leer(); P.it = P.it.filter((x) => String(x.n || '').trim()); P.it.forEach((x) => { delete x.ed; }); pintar(); if (!P.pr) { toast('Elige el proveedor.', true); return false; } if (!P.it.length) { toast('Agrega productos.', true); return false; }
     await put('ped', Object.assign({}, P)); return true; };
   m.q('#ppX').onclick = () => m.close();
   m.q('#ppOk').onclick = async () => { if (await guardar()) { m.close(); toast('Pedido guardado'); if (RUTA === 'compras') render(); } };
