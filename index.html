@@ -518,6 +518,14 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
 .respaviso{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:0;background:#1E4FD8;color:#fff;font:inherit;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;animation:latido 1.6s infinite}
 .respaviso svg{width:18px;height:18px}
 @media (max-width:760px){.respaviso{bottom:150px}}
+@media (max-width:760px){
+.pedpend .li{display:grid !important;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:start}
+.pedpend .li .grow{min-width:0}.pedpend .li .t{overflow-wrap:anywhere;word-break:normal;white-space:normal}
+.pedpend .li .pmini{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.pedpend .li .pmini div{min-width:0;padding:4px 6px}.pedpend .li .pmini b{font-size:14px}
+.pedpend .li [data-rec]{grid-column:1/-1;width:100%;justify-content:center}
+.pedpend > .row .btn{flex:1}
+}
 .provbtn{border:1px dashed var(--line);background:transparent;color:inherit;border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;cursor:pointer;text-align:left;max-width:180px}
 .provbtn:hover{border-color:#C99A2E;background:rgba(201,154,46,.08)}
 .provbtn.vacio{color:var(--muted)}
@@ -576,7 +584,7 @@ tr.flash td{background:#FFF3C4 !important;transition:background .3s}
    POS MASS MF — Punto de venta de MASS FERRETERÍA
    Núcleo: utilidades, base local (IndexedDB), nube (Google), sesión
    ===================================================================== */
-const APP_VER = '2026-11-25h';
+const APP_VER = '2026-11-26a';
 const LIB = {
   xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   jspdf: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
